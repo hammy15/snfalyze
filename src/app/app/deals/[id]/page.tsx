@@ -157,12 +157,13 @@ export default function DealDetailPage() {
               setApiDocuments(docs);
 
               // Convert API documents to DealDocument format
+              const validCategories = ['financials', 'rent_roll', 'survey', 'license', 'lease', 'other'] as const;
               const dealDocs: DealDocument[] = docs.map((doc) => ({
                 id: doc.id,
                 deal_id: doc.dealId,
                 name: doc.filename,
                 type: doc.filename.endsWith('.pdf') ? 'pdf' : doc.filename.endsWith('.xlsx') || doc.filename.endsWith('.xls') ? 'excel' : 'other',
-                category: doc.type || 'other',
+                category: (validCategories.includes(doc.type as typeof validCategories[number]) ? doc.type : 'other') as 'financials' | 'rent_roll' | 'survey' | 'license' | 'lease' | 'other',
                 size: 0,
                 extracted: doc.status === 'complete',
                 extraction_confidence: doc.extractedData?.aiAnalysis?.confidence || 0,

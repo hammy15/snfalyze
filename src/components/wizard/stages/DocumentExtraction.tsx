@@ -43,15 +43,16 @@ export function DocumentExtraction({ stageData, onUpdate, dealId }: DocumentExtr
     const uploadedDocs = stageData.documentOrganization?.documents || [];
     const existingExtraction = stageData.documentExtraction?.documents || [];
 
-    const docs = uploadedDocs.map((doc) => {
+    const docs: ExtractionDoc[] = uploadedDocs.map((doc) => {
       const existing = existingExtraction.find((e) => e.id === doc.id);
-      return (
-        existing || {
-          id: doc.id,
-          filename: doc.filename,
-          status: 'pending' as const,
-        }
-      );
+      return {
+        id: doc.id,
+        filename: doc.filename,
+        status: existing?.status || 'pending',
+        extractedFields: existing?.extractedFields,
+        clarificationsCount: existing?.clarificationsCount,
+        clarificationsResolved: existing?.clarificationsResolved,
+      };
     });
 
     setDocuments(docs);

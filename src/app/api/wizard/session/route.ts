@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
       .insert(wizardSessions)
       .values({
         dealId: dealId || null,
-        currentStage: 'deal_structure_setup',
+        currentStage: 'document_upload',
         stageData: initialStageData || {},
         isComplete: false,
       })

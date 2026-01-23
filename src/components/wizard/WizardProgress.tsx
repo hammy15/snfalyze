@@ -4,11 +4,11 @@ import { cn } from '@/lib/utils';
 import { Check, CircleDot } from 'lucide-react';
 
 const WIZARD_STAGES = [
-  { id: 'deal_structure_setup', label: 'Deal Structure', description: 'Define deal type and structure' },
-  { id: 'facility_identification', label: 'Facilities', description: 'Identify and verify facilities' },
-  { id: 'document_organization', label: 'Documents', description: 'Upload and organize documents' },
-  { id: 'document_extraction', label: 'Extraction', description: 'Extract and validate data' },
-  { id: 'coa_mapping_review', label: 'COA Mapping', description: 'Map to chart of accounts' },
+  { id: 'document_upload', label: 'Upload', description: 'Upload deal documents for AI analysis' },
+  { id: 'review_analysis', label: 'Review', description: 'Review and confirm AI suggestions' },
+  { id: 'facility_verification', label: 'Verify', description: 'Verify facilities against CMS data' },
+  { id: 'document_extraction', label: 'Extract', description: 'Extract and validate financial data' },
+  { id: 'coa_mapping_review', label: 'Map', description: 'Map to chart of accounts' },
   { id: 'financial_consolidation', label: 'Financials', description: 'Review and generate proforma' },
 ];
 

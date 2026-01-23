@@ -4,9 +4,9 @@ import { eq } from 'drizzle-orm';
 
 // Wizard stages in order
 const WIZARD_STAGES = [
-  'deal_structure_setup',
-  'facility_identification',
-  'document_organization',
+  'document_upload',
+  'review_analysis',
+  'facility_verification',
   'document_extraction',
   'coa_mapping_review',
   'financial_consolidation',

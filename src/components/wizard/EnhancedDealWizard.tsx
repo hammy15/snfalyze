@@ -6,13 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { WizardProgress, WIZARD_STAGES } from './WizardProgress';
 import { StageConfirmation } from './StageConfirmation';
-import { DealStructureSetup } from './stages/DealStructureSetup';
+import { DocumentUploadAnalysis } from './stages/DocumentUploadAnalysis';
 import { FacilityIdentification } from './stages/FacilityIdentification';
-import { DocumentOrganization } from './stages/DocumentOrganization';
 import { DocumentExtraction } from './stages/DocumentExtraction';
 import { COAMappingReview } from './stages/COAMappingReview';
 import { FinancialConsolidation } from './stages/FinancialConsolidation';
-import { ChevronLeft, ChevronRight, Save, AlertCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Save, AlertCircle, CheckCircle2, Building2, FileText, Edit2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 // Debounce helper
 function useDebounce<T extends (...args: Parameters<T>) => void>(
@@ -112,6 +115,168 @@ interface WizardSession {
   currentStage: string;
   stageData: WizardStageData;
   isComplete: boolean;
+}
+
+// Review Analysis Summary Component
+function ReviewAnalysisSummary({
+  stageData,
+  onUpdate,
+}: {
+  stageData: WizardStageData;
+  onUpdate: (data: Partial<WizardStageData>) => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const dealStructure = stageData.dealStructure || {};
+  const facilities = stageData.facilityIdentification?.facilities || [];
+  const documents = stageData.documentOrganization?.documents || [];
+
+  const updateDealStructure = (updates: Partial<NonNullable<WizardStageData['dealStructure']>>) => {
+    onUpdate({
+      dealStructure: { ...dealStructure, ...updates },
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Deal Info */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Deal Summary</h3>
+        <Button variant="outline" size="sm" onClick={() => setIsEditing(!isEditing)}>
+          <Edit2 className="w-4 h-4 mr-1" />
+          {isEditing ? 'Done' : 'Edit'}
+        </Button>
+      </div>
+
+      <Card>
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label>Deal Name</Label>
+              {isEditing ? (
+                <Input
+                  value={dealStructure.dealName || ''}
+                  onChange={(e) => updateDealStructure({ dealName: e.target.value })}
+                />
+              ) : (
+                <p className="text-xl font-semibold">{dealStructure.dealName || 'Unnamed Deal'}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Transaction Type</Label>
+              {isEditing ? (
+                <Select
+                  value={dealStructure.dealStructure || 'purchase'}
+                  onValueChange={(v) => updateDealStructure({ dealStructure: v as 'purchase' | 'sale_leaseback' | 'acquisition_financing' })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="purchase">Direct Purchase</SelectItem>
+                    <SelectItem value="sale_leaseback">Sale-Leaseback</SelectItem>
+                    <SelectItem value="acquisition_financing">Acquisition Financing</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="font-medium capitalize">{(dealStructure.dealStructure || 'purchase').replace('_', '-')}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Asset Type</Label>
+              {isEditing ? (
+                <Select
+                  value={dealStructure.assetType || 'SNF'}
+                  onValueChange={(v) => updateDealStructure({ assetType: v as 'SNF' | 'ALF' | 'ILF' })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SNF">Skilled Nursing Facility</SelectItem>
+                    <SelectItem value="ALF">Assisted Living Facility</SelectItem>
+                    <SelectItem value="ILF">Independent Living Facility</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="font-medium">{dealStructure.assetType || 'SNF'}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Number of Facilities</Label>
+              <p className="font-medium">{facilities.length}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Facilities */}
+      <div className="space-y-3">
+        <h4 className="font-medium flex items-center gap-2">
+          <Building2 className="w-5 h-5 text-primary-500" />
+          Detected Facilities ({facilities.length})
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {facilities.map((facility, index) => (
+            <Card key={index} variant="flat">
+              <CardContent className="py-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-sm font-medium text-primary-600">
+                    {index + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{facility.name || `Facility ${index + 1}`}</p>
+                    {facility.city && facility.state && (
+                      <p className="text-sm text-surface-500">{facility.city}, {facility.state}</p>
+                    )}
+                  </div>
+                  {facility.licensedBeds && (
+                    <Badge variant="secondary">{facility.licensedBeds} beds</Badge>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Documents */}
+      <div className="space-y-3">
+        <h4 className="font-medium flex items-center gap-2">
+          <FileText className="w-5 h-5 text-primary-500" />
+          Uploaded Documents ({documents.length})
+        </h4>
+        <div className="space-y-2">
+          {documents.map((doc, index) => (
+            <div
+              key={index}
+              className="flex items-center gap-3 p-3 rounded-lg bg-surface-100 dark:bg-surface-800"
+            >
+              <FileText className="w-4 h-4 text-surface-400" />
+              <span className="flex-1 truncate text-sm">{doc.filename}</span>
+              <Badge variant="outline" className="text-xs">
+                {doc.type || 'other'}
+              </Badge>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Confirmation */}
+      <Card variant="glass">
+        <CardContent className="py-4">
+          <div className="flex items-center gap-3 text-primary-600 dark:text-primary-400">
+            <CheckCircle2 className="w-5 h-5" />
+            <p className="font-medium">
+              Review complete. Click Continue to verify facilities against CMS data.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 
 interface EnhancedDealWizardProps {
@@ -324,15 +489,14 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
   const getConfirmationMessage = () => {
     const stageData = localStageData;
     switch (session?.currentStage) {
-      case 'deal_structure_setup':
-        return `Creating ${stageData.dealStructure?.dealStructure?.replace('_', '-') || 'purchase'} deal "${stageData.dealStructure?.dealName}" with ${stageData.dealStructure?.facilityCount || 0} facilities. Proceed?`;
-      case 'facility_identification':
+      case 'document_upload':
+        return 'Documents uploaded and analyzed. Proceed to review?';
+      case 'review_analysis':
+        return `Creating ${stageData.dealStructure?.dealStructure?.replace('_', '-') || 'purchase'} deal "${stageData.dealStructure?.dealName}" with ${stageData.dealStructure?.facilityCount || 0} facilities. Proceed to verification?`;
+      case 'facility_verification':
         const facilities = stageData.facilityIdentification?.facilities || [];
         const verified = facilities.filter(f => f.isVerified).length;
-        return `All ${verified} facilities verified. Proceed to document organization?`;
-      case 'document_organization':
-        const docs = stageData.documentOrganization?.documents || [];
-        return `${docs.length} documents organized. Start extraction?`;
+        return `${verified} of ${facilities.length} facilities verified. Proceed to extraction?`;
       case 'document_extraction':
         return 'All extractions validated. Proceed to COA mapping?';
       case 'coa_mapping_review':
@@ -346,6 +510,12 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
     }
   };
 
+  // Handle analysis complete - auto advance to next stage
+  const handleAnalysisComplete = useCallback(() => {
+    // Auto advance when analysis is confirmed
+    navigateStage('next');
+  }, []);
+
   // Render current stage component
   const renderStage = () => {
     if (!session) return null;
@@ -357,12 +527,24 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
     };
 
     switch (session.currentStage) {
-      case 'deal_structure_setup':
-        return <DealStructureSetup {...commonProps} />;
-      case 'facility_identification':
+      case 'document_upload':
+        return (
+          <DocumentUploadAnalysis
+            {...commonProps}
+            sessionId={session.id}
+            onAnalysisComplete={handleAnalysisComplete}
+          />
+        );
+      case 'review_analysis':
+        // Show summary of AI analysis for final review
+        return (
+          <ReviewAnalysisSummary
+            stageData={localStageData}
+            onUpdate={updateStageData}
+          />
+        );
+      case 'facility_verification':
         return <FacilityIdentification {...commonProps} />;
-      case 'document_organization':
-        return <DocumentOrganization {...commonProps} />;
       case 'document_extraction':
         return <DocumentExtraction {...commonProps} />;
       case 'coa_mapping_review':

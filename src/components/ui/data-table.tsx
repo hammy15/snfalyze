@@ -1,320 +1,212 @@
-'use client';
+"use client"
 
-import { useState, useMemo, useCallback } from 'react';
-import { cn } from '@/lib/utils';
-import {
-  ChevronUp,
-  ChevronDown,
-  ChevronsUpDown,
-  Check,
-  Columns3,
-  MoreHorizontal,
-} from 'lucide-react';
+import { useState, ReactNode } from "react"
+import { cn } from "@/lib/utils"
 
-export interface Column<T> {
-  id: string;
-  header: string;
-  accessor: keyof T | ((row: T) => any);
-  width?: number;
-  minWidth?: number;
-  sortable?: boolean;
-  align?: 'left' | 'center' | 'right';
-  cell?: (value: any, row: T) => React.ReactNode;
+interface Column<T> {
+  key: keyof T | string
+  header: string
+  width?: string
+  align?: "left" | "center" | "right"
+  sortable?: boolean
+  render?: (value: any, row: T, index: number) => ReactNode
 }
 
 interface DataTableProps<T> {
-  data: T[];
-  columns: Column<T>[];
-  keyField: keyof T;
-
-  // Selection
-  selectable?: boolean;
-  selectedRows?: string[];
-  onSelectionChange?: (ids: string[]) => void;
-
-  // Sorting
-  sortColumn?: string;
-  sortDirection?: 'asc' | 'desc';
-  onSort?: (column: string, direction: 'asc' | 'desc') => void;
-
-  // Row interaction
-  onRowClick?: (row: T) => void;
-  activeRowId?: string;
-
-  // Display
-  loading?: boolean;
-  emptyMessage?: string;
-  className?: string;
+  columns: Column<T>[]
+  data: T[]
+  keyField: keyof T
+  onRowClick?: (row: T) => void
+  emptyMessage?: string
+  loading?: boolean
+  className?: string
+  striped?: boolean
+  hoverable?: boolean
 }
 
 export function DataTable<T extends Record<string, any>>({
-  data,
   columns,
+  data,
   keyField,
-  selectable = false,
-  selectedRows = [],
-  onSelectionChange,
-  sortColumn,
-  sortDirection,
-  onSort,
   onRowClick,
-  activeRowId,
+  emptyMessage = "No data available",
   loading = false,
-  emptyMessage = 'No data found',
   className,
+  striped = true,
+  hoverable = true
 }: DataTableProps<T>) {
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(
-    columns.map((c) => c.id)
-  );
-  const [showColumnPicker, setShowColumnPicker] = useState(false);
+  const [sortConfig, setSortConfig] = useState<{
+    key: string
+    direction: "asc" | "desc"
+  } | null>(null)
 
-  const getValue = useCallback((row: T, accessor: Column<T>['accessor']) => {
-    if (typeof accessor === 'function') {
-      return accessor(row);
-    }
-    return row[accessor];
-  }, []);
-
-  const handleSort = (columnId: string) => {
-    if (!onSort) return;
-
-    const column = columns.find((c) => c.id === columnId);
-    if (!column?.sortable) return;
-
-    if (sortColumn === columnId) {
-      onSort(columnId, sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      onSort(columnId, 'asc');
-    }
-  };
-
-  const handleSelectAll = () => {
-    if (!onSelectionChange) return;
-
-    if (selectedRows.length === data.length) {
-      onSelectionChange([]);
-    } else {
-      onSelectionChange(data.map((row) => String(row[keyField])));
-    }
-  };
-
-  const handleSelectRow = (id: string) => {
-    if (!onSelectionChange) return;
-
-    if (selectedRows.includes(id)) {
-      onSelectionChange(selectedRows.filter((r) => r !== id));
-    } else {
-      onSelectionChange([...selectedRows, id]);
-    }
-  };
-
-  const toggleColumn = (columnId: string) => {
-    if (visibleColumns.includes(columnId)) {
-      setVisibleColumns(visibleColumns.filter((c) => c !== columnId));
-    } else {
-      setVisibleColumns([...visibleColumns, columnId]);
-    }
-  };
-
-  const displayColumns = columns.filter((c) => visibleColumns.includes(c.id));
-
-  if (loading) {
-    return (
-      <div className={cn('card overflow-hidden', className)}>
-        <div className="overflow-x-auto">
-          <table className="data-table">
-            <thead>
-              <tr>
-                {selectable && <th style={{ width: 48 }}></th>}
-                {displayColumns.map((column) => (
-                  <th key={column.id} style={{ width: column.width, minWidth: column.minWidth }}>
-                    {column.header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {[1, 2, 3, 4, 5].map((i) => (
-                <tr key={i}>
-                  {selectable && (
-                    <td>
-                      <div className="skeleton w-4 h-4 rounded" />
-                    </td>
-                  )}
-                  {displayColumns.map((column) => (
-                    <td key={column.id}>
-                      <div className="skeleton skeleton-text" style={{ width: '80%' }} />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
+  const handleSort = (key: string) => {
+    setSortConfig((prev) => {
+      if (prev?.key === key) {
+        if (prev.direction === "asc") return { key, direction: "desc" }
+        if (prev.direction === "desc") return null
+      }
+      return { key, direction: "asc" }
+    })
   }
 
-  if (data.length === 0) {
-    return (
-      <div className={cn('card', className)}>
-        <div className="empty-state">
-          <div className="empty-state-title">{emptyMessage}</div>
-          <div className="empty-state-description">
-            Try adjusting your filters or search criteria.
-          </div>
-        </div>
-      </div>
-    );
+  const sortedData = [...data].sort((a, b) => {
+    if (!sortConfig) return 0
+    const aValue = a[sortConfig.key]
+    const bValue = b[sortConfig.key]
+    if (aValue < bValue) return sortConfig.direction === "asc" ? -1 : 1
+    if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1
+    return 0
+  })
+
+  const getValue = (row: T, key: string) => {
+    const keys = key.split(".")
+    let value: any = row
+    for (const k of keys) {
+      value = value?.[k]
+    }
+    return value
   }
 
   return (
-    <div className={cn('card overflow-hidden', className)}>
-      {/* Column Picker */}
-      <div className="flex items-center justify-end px-4 py-2 border-b border-[var(--color-border-muted)] bg-[var(--gray-25)]">
-        <div className="relative">
-          <button
-            onClick={() => setShowColumnPicker(!showColumnPicker)}
-            className="btn btn-ghost btn-sm"
-          >
-            <Columns3 className="w-4 h-4" />
-            Columns
-          </button>
-
-          {showColumnPicker && (
-            <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setShowColumnPicker(false)}
-              />
-              <div className="dropdown-menu right-0 left-auto z-20 w-48">
-                {columns.map((column) => (
-                  <button
-                    key={column.id}
-                    onClick={() => toggleColumn(column.id)}
-                    className="dropdown-item w-full text-left"
-                  >
-                    <span className={cn(
-                      'w-4 h-4 rounded border flex items-center justify-center',
-                      visibleColumns.includes(column.id)
-                        ? 'bg-[var(--accent-solid)] border-[var(--accent-solid)]'
-                        : 'border-[var(--color-border-default)]'
-                    )}>
-                      {visibleColumns.includes(column.id) && (
-                        <Check className="w-3 h-3 text-white" />
-                      )}
-                    </span>
-                    <span className="flex-1">{column.header}</span>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
+    <div className={cn("overflow-hidden rounded-xl border border-gray-200 dark:border-white/10", className)}>
       <div className="overflow-x-auto">
-        <table className="data-table">
+        <table className="w-full">
+          {/* Header */}
           <thead>
-            <tr>
-              {selectable && (
-                <th style={{ width: 48 }}>
-                  <input
-                    type="checkbox"
-                    checked={selectedRows.length === data.length && data.length > 0}
-                    onChange={handleSelectAll}
-                    className="w-4 h-4 rounded border-[var(--color-border-default)]"
-                  />
-                </th>
-              )}
-              {displayColumns.map((column) => (
+            <tr className="bg-gray-50 dark:bg-white/5">
+              {columns.map((column) => (
                 <th
-                  key={column.id}
-                  style={{ width: column.width, minWidth: column.minWidth }}
+                  key={String(column.key)}
+                  onClick={() => column.sortable && handleSort(String(column.key))}
                   className={cn(
-                    column.sortable && 'sortable',
-                    column.align === 'center' && 'text-center',
-                    column.align === 'right' && 'text-right'
+                    "px-4 py-3 text-xs font-semibold uppercase tracking-wider",
+                    "text-gray-500 dark:text-gray-400",
+                    "border-b border-gray-200 dark:border-white/10",
+                    column.sortable && "cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-white/5",
+                    column.align === "center" && "text-center",
+                    column.align === "right" && "text-right"
                   )}
-                  onClick={() => column.sortable && handleSort(column.id)}
+                  style={{ width: column.width }}
                 >
                   <div className={cn(
-                    'flex items-center gap-1',
-                    column.align === 'center' && 'justify-center',
-                    column.align === 'right' && 'justify-end'
+                    "flex items-center gap-1",
+                    column.align === "center" && "justify-center",
+                    column.align === "right" && "justify-end"
                   )}>
                     {column.header}
                     {column.sortable && (
-                      <span className="text-[var(--color-text-disabled)]">
-                        {sortColumn === column.id ? (
-                          sortDirection === 'asc' ? (
-                            <ChevronUp className="w-3.5 h-3.5" />
-                          ) : (
-                            <ChevronDown className="w-3.5 h-3.5" />
-                          )
-                        ) : (
-                          <ChevronsUpDown className="w-3.5 h-3.5" />
-                        )}
+                      <span className="inline-flex flex-col">
+                        <svg
+                          className={cn(
+                            "w-3 h-3 -mb-1",
+                            sortConfig?.key === column.key && sortConfig.direction === "asc"
+                              ? "text-teal-500"
+                              : "text-gray-300 dark:text-gray-600"
+                          )}
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z" />
+                        </svg>
+                        <svg
+                          className={cn(
+                            "w-3 h-3 -mt-1",
+                            sortConfig?.key === column.key && sortConfig.direction === "desc"
+                              ? "text-teal-500"
+                              : "text-gray-300 dark:text-gray-600"
+                          )}
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z" />
+                        </svg>
                       </span>
                     )}
                   </div>
                 </th>
               ))}
-              <th style={{ width: 48 }}></th>
             </tr>
           </thead>
-          <tbody>
-            {data.map((row) => {
-              const rowId = String(row[keyField]);
-              const isSelected = selectedRows.includes(rowId);
-              const isActive = activeRowId === rowId;
 
-              return (
-                <tr
-                  key={rowId}
-                  className={cn(
-                    isSelected && 'selected',
-                    isActive && 'active',
-                    onRowClick && 'cursor-pointer'
-                  )}
-                  onClick={() => onRowClick?.(row)}
-                >
-                  {selectable && (
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => handleSelectRow(rowId)}
-                        className="w-4 h-4 rounded border-[var(--color-border-default)]"
-                      />
+          {/* Body */}
+          <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+            {loading ? (
+              // Loading skeleton rows
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} className="animate-pulse">
+                  {columns.map((column, j) => (
+                    <td key={j} className="px-4 py-4">
+                      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded" />
                     </td>
+                  ))}
+                </tr>
+              ))
+            ) : sortedData.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length} className="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
+                  {emptyMessage}
+                </td>
+              </tr>
+            ) : (
+              sortedData.map((row, index) => (
+                <tr
+                  key={String(row[keyField])}
+                  onClick={() => onRowClick?.(row)}
+                  className={cn(
+                    "transition-colors",
+                    striped && index % 2 === 1 && "bg-gray-50/50 dark:bg-white/[0.02]",
+                    hoverable && "hover:bg-teal-50/50 dark:hover:bg-teal-500/5",
+                    onRowClick && "cursor-pointer"
                   )}
-                  {displayColumns.map((column) => {
-                    const value = getValue(row, column.accessor);
-
+                >
+                  {columns.map((column) => {
+                    const value = getValue(row, String(column.key))
                     return (
                       <td
-                        key={column.id}
+                        key={String(column.key)}
                         className={cn(
-                          column.align === 'center' && 'text-center',
-                          column.align === 'right' && 'text-right'
+                          "px-4 py-4 text-sm text-gray-700 dark:text-gray-200",
+                          column.align === "center" && "text-center",
+                          column.align === "right" && "text-right"
                         )}
                       >
-                        {column.cell ? column.cell(value, row) : value}
+                        {column.render ? column.render(value, row, index) : value}
                       </td>
-                    );
+                    )
                   })}
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <button className="btn btn-ghost btn-sm p-1">
-                      <MoreHorizontal className="w-4 h-4" />
-                    </button>
-                  </td>
                 </tr>
-              );
-            })}
+              ))
+            )}
           </tbody>
         </table>
       </div>
     </div>
-  );
+  )
+}
+
+// Status badge helper for tables
+export function StatusBadge({
+  status,
+  variant
+}: {
+  status: string
+  variant: "success" | "warning" | "danger" | "info" | "default"
+}) {
+  const variants = {
+    success: "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400",
+    warning: "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400",
+    danger: "bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400",
+    info: "bg-sky-100 dark:bg-sky-500/20 text-sky-700 dark:text-sky-400",
+    default: "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+  }
+
+  return (
+    <span className={cn(
+      "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
+      variants[variant]
+    )}>
+      {status}
+    </span>
+  )
 }

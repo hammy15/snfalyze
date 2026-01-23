@@ -377,14 +377,14 @@ export function DocumentOrganization({ stageData, onUpdate, dealId }: DocumentOr
                         {/* Facility assignment */}
                         {facilities.length > 1 && (
                           <Select
-                            value={doc.facilityId || ''}
-                            onValueChange={(value) => assignToFacility(doc.id, value)}
+                            value={doc.facilityId || 'all'}
+                            onValueChange={(value) => assignToFacility(doc.id, value === 'all' ? undefined : value)}
                           >
                             <SelectTrigger className="h-8 w-40 text-xs">
                               <SelectValue placeholder="Facility (optional)" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">All facilities</SelectItem>
+                              <SelectItem value="all">All facilities</SelectItem>
                               {facilities.map((f) => (
                                 <SelectItem key={f.slot} value={f.name || `Facility ${f.slot}`}>
                                   <span className="flex items-center gap-1">

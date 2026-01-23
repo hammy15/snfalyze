@@ -206,7 +206,7 @@ export function DealStructureSetup({ stageData, onUpdate }: DealStructureSetupPr
               <SelectValue placeholder={loadingPartners ? 'Loading partners...' : 'Select a buyer partner'} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">No specific partner yet</SelectItem>
+              <SelectItem value="none">No specific partner yet</SelectItem>
               {partners.map((partner) => (
                 <SelectItem key={partner.id} value={partner.id}>
                   {partner.name}

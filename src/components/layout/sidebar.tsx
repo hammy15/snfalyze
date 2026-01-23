@@ -34,11 +34,11 @@ const mainNavItems: NavItem[] = [
   { name: 'Dashboard', href: '/app', icon: LayoutDashboard },
   { name: 'Deal Pipeline', href: '/app/deals', icon: FolderKanban },
   { name: 'Facilities', href: '/app/facilities', icon: Building2 },
-  { name: 'Partners', href: '/app/partners', icon: Users },
+  { name: 'Partners', href: '/partners', icon: Users },
   { name: 'Sandbox', href: '/app/sandbox', icon: Calculator },
-  { name: 'Deal Memory', href: '/app/deal-memory', icon: Brain },
-  { name: 'Map', href: '/app/map', icon: Map },
-  { name: 'Reports', href: '/app/reports', icon: FileText },
+  { name: 'Deal Memory', href: '/app/deals/memory', icon: Brain },
+  { name: 'Map', href: '/map', icon: Map },
+  { name: 'Tools', href: '/app/tools', icon: Calculator },
 ];
 
 const bottomNavItems: NavItem[] = [

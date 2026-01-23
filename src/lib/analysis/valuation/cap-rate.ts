@@ -65,6 +65,7 @@ interface LocationAdjustment {
   urban: number;
   suburban: number;
   rural: number;
+  frontier?: number;
 }
 
 interface MarketAdjustment {
@@ -79,7 +80,7 @@ interface MarketAdjustment {
 // =============================================================================
 
 const DEFAULT_CAP_RATE_SETTINGS: Record<AssetType, CapRateSettings> = {
-  snf: {
+  SNF: {
     baseCapRate: 0.10, // 10% base cap rate
     adjustments: {
       quality: {
@@ -131,7 +132,7 @@ const DEFAULT_CAP_RATE_SETTINGS: Record<AssetType, CapRateSettings> = {
       },
     },
   },
-  alf: {
+  ALF: {
     baseCapRate: 0.07, // 7% base cap rate
     adjustments: {
       size: {
@@ -170,7 +171,7 @@ const DEFAULT_CAP_RATE_SETTINGS: Record<AssetType, CapRateSettings> = {
       },
     },
   },
-  ilf: {
+  ILF: {
     baseCapRate: 0.06, // 6% base cap rate
     adjustments: {
       age: {

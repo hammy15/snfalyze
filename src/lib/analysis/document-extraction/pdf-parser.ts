@@ -114,7 +114,13 @@ export class PDFParser {
       return input;
     }
     if (typeof Buffer !== 'undefined' && Buffer.isBuffer(input)) {
-      return input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength);
+      // Create a new ArrayBuffer from the Buffer data
+      const arrayBuffer = new ArrayBuffer(input.length);
+      const view = new Uint8Array(arrayBuffer);
+      for (let i = 0; i < input.length; i++) {
+        view[i] = input[i];
+      }
+      return arrayBuffer;
     }
     if (input instanceof File) {
       return input.arrayBuffer();

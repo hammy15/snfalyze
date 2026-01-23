@@ -10,6 +10,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "neu-button-primary",
+        primary: "neu-button-primary",
         secondary: "neu-button",
         ghost: "hover:bg-surface-200 dark:hover:bg-surface-800 hover:text-primary-600 dark:hover:text-primary-400",
         outline: "border-2 border-surface-300 dark:border-surface-700 hover:border-primary-500 hover:text-primary-600 dark:hover:text-primary-400 bg-transparent",

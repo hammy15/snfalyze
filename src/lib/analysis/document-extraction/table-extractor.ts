@@ -748,7 +748,7 @@ export class TableExtractor {
   /**
    * Detect the type of period from a string
    */
-  private detectPeriodType(periodLabel: string): NormalizedTable['period']['type'] {
+  private detectPeriodType(periodLabel: string): 'month' | 'quarter' | 'year' | 'trailing_12' {
     const lower = periodLabel.toLowerCase();
 
     if (/q[1-4]/i.test(lower)) return 'quarter';

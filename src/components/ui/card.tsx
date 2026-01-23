@@ -4,7 +4,7 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
-  variant?: "default" | "flat" | "glass"
+  variant?: "default" | "flat" | "glass" | "external" | "internal" | "cascadia"
   hover?: boolean
 }
 
@@ -14,6 +14,9 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
       default: "neu-card",
       flat: "bg-surface-100 dark:bg-surface-800 rounded-2xl p-6 border border-surface-200 dark:border-surface-700",
       glass: "glass rounded-2xl p-6",
+      external: "bg-sky-50 dark:bg-sky-950/30 rounded-2xl p-6 border border-sky-200 dark:border-sky-800",
+      internal: "bg-amber-50 dark:bg-amber-950/30 rounded-2xl p-6 border border-amber-200 dark:border-amber-800",
+      cascadia: "bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl p-6 border border-emerald-200 dark:border-emerald-800",
     }
 
     return (

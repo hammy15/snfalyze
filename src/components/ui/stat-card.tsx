@@ -4,26 +4,80 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 import { Card } from "./card"
 
-interface StatCardProps extends React.HTMLAttributes<HTMLDivElement> {
-  title: string
+export interface StatCardProps extends React.HTMLAttributes<HTMLDivElement> {
+  title?: string
+  label?: string // alias for title
   value: string | number
   change?: {
     value: number
     label?: string
   }
+  delta?: {
+    value: number
+    direction?: "up" | "down" | "neutral"
+    label?: string
+  }
   icon?: React.ReactNode
   trend?: "up" | "down" | "neutral"
+  size?: "sm" | "md" | "lg"
+  format?: "number" | "currency" | "percent" | "text"
+}
+
+function formatValue(value: string | number, format?: "number" | "currency" | "percent" | "text"): string {
+  if (typeof value === "string") return value
+
+  switch (format) {
+    case "currency":
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        notation: value >= 1000000 ? "compact" : "standard",
+        maximumFractionDigits: 0,
+      }).format(value)
+    case "percent":
+      return `${value.toFixed(1)}%`
+    case "number":
+      return new Intl.NumberFormat("en-US").format(value)
+    default:
+      return String(value)
+  }
 }
 
 export function StatCard({
   title,
+  label,
   value,
   change,
+  delta,
   icon,
   trend,
+  size = "md",
+  format,
   className,
   ...props
 }: StatCardProps) {
+  const displayTitle = title || label || ""
+  const displayValue = formatValue(value, format)
+
+  // Merge change and delta (delta takes precedence if both provided)
+  const displayChange = delta ? {
+    value: delta.value,
+    label: delta.label,
+  } : change
+
+  const displayTrend = trend || delta?.direction
+
+  const sizeClasses = {
+    sm: "p-3",
+    md: "p-4",
+    lg: "p-6",
+  }
+
+  const valueSizes = {
+    sm: "text-2xl",
+    md: "text-3xl",
+    lg: "text-4xl",
+  }
   const trendColors = {
     up: "text-emerald-500",
     down: "text-rose-500",
@@ -49,22 +103,22 @@ export function StatCard({
   }
 
   return (
-    <Card className={cn("relative overflow-hidden", className)} {...props}>
+    <Card className={cn("relative overflow-hidden", sizeClasses[size], className)} {...props}>
       <div className="flex items-start justify-between">
         <div className="space-y-2">
           <p className="text-sm font-medium text-surface-500 dark:text-surface-400">
-            {title}
+            {displayTitle}
           </p>
-          <p className="text-3xl font-bold text-surface-900 dark:text-surface-50">
-            {value}
+          <p className={cn("font-bold text-surface-900 dark:text-surface-50", valueSizes[size])}>
+            {displayValue}
           </p>
-          {change && (
-            <div className={cn("flex items-center gap-1 text-sm", trend && trendColors[trend])}>
-              {trend && trendIcons[trend]}
-              <span>{change.value > 0 ? "+" : ""}{change.value}%</span>
-              {change.label && (
+          {displayChange && (
+            <div className={cn("flex items-center gap-1 text-sm", displayTrend && trendColors[displayTrend])}>
+              {displayTrend && trendIcons[displayTrend]}
+              <span>{displayChange.value > 0 ? "+" : ""}{displayChange.value}%</span>
+              {displayChange.label && (
                 <span className="text-surface-400 dark:text-surface-500">
-                  {change.label}
+                  {displayChange.label}
                 </span>
               )}
             </div>

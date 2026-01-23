@@ -312,8 +312,8 @@ export interface NormalizationAdjustment {
 export interface ValuationInput {
   facility: FacilityProfile;
   cmsData?: CMSData;
-  operatingMetrics: OperatingMetrics;
-  financials: NormalizedFinancials;
+  operatingMetrics?: OperatingMetrics;
+  financials?: NormalizedFinancials;
   marketData?: MarketData;
   comparableSales?: ComparableSale[];
 }

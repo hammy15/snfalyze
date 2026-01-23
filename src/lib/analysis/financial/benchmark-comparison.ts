@@ -74,7 +74,7 @@ export interface FacilityBenchmarkReport {
 // =============================================================================
 
 export const SNF_BENCHMARKS: BenchmarkSet = {
-  assetType: 'snf',
+  assetType: 'SNF',
   source: 'Industry Composite 2024',
   effectiveDate: '2024-12-31',
   benchmarks: [
@@ -217,7 +217,7 @@ export const SNF_BENCHMARKS: BenchmarkSet = {
 };
 
 export const ALF_BENCHMARKS: BenchmarkSet = {
-  assetType: 'alf',
+  assetType: 'ALF',
   source: 'Industry Composite 2024',
   effectiveDate: '2024-12-31',
   benchmarks: [
@@ -276,7 +276,7 @@ export const ALF_BENCHMARKS: BenchmarkSet = {
 };
 
 export const ILF_BENCHMARKS: BenchmarkSet = {
-  assetType: 'ilf',
+  assetType: 'ILF',
   source: 'Industry Composite 2024',
   effectiveDate: '2024-12-31',
   benchmarks: [
@@ -335,9 +335,9 @@ export class BenchmarkComparator {
 
   constructor() {
     this.benchmarks = new Map([
-      ['snf', SNF_BENCHMARKS],
-      ['alf', ALF_BENCHMARKS],
-      ['ilf', ILF_BENCHMARKS],
+      ['SNF', SNF_BENCHMARKS],
+      ['ALF', ALF_BENCHMARKS],
+      ['ILF', ILF_BENCHMARKS],
     ]);
   }
 

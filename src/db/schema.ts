@@ -134,9 +134,9 @@ export const analysisStageTypeEnum = pgEnum('analysis_stage_type', [
 
 // Enhanced Wizard Stage Types
 export const wizardStageTypeEnum = pgEnum('wizard_stage_type', [
-  'deal_structure_setup',
-  'facility_identification',
-  'document_organization',
+  'document_upload',
+  'review_analysis',
+  'facility_verification',
   'document_extraction',
   'coa_mapping_review',
   'financial_consolidation',

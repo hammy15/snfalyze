@@ -46,10 +46,12 @@ import {
   ExternalLink,
   Upload,
   Plus,
+  ArrowLeftRight,
 } from 'lucide-react';
+import { SaleLeasebackDashboard } from '@/components/sale-leaseback/SaleLeasebackDashboard';
 
 // Mock deal data (in production, this would come from your API/database)
-const mockDeal: Deal = {
+const mockDeal: Deal & { dealStructure?: string } = {
   id: '1',
   deal_id: 'CAS-2024-001',
   name: 'Sunrise SNF Portfolio - Oregon',
@@ -72,6 +74,7 @@ const mockDeal: Deal = {
   updated_at: new Date(),
   created_by: 'Sarah Chen',
   assigned_to: ['Sarah Chen', 'Mike Rodriguez'],
+  dealStructure: 'sale_leaseback', // Enable sale-leaseback tab for demo
 };
 
 const mockStageProgress: AnalysisStageProgress[] = [
@@ -205,7 +208,7 @@ export default function DealDetailPage() {
   const router = useRouter();
   const dealId = params.id as string;
 
-  const [deal, setDeal] = useState<Deal>(mockDeal);
+  const [deal, setDeal] = useState<Deal & { dealStructure?: string }>(mockDeal);
   const [stageProgress, setStageProgress] = useState<AnalysisStageProgress[]>(mockStageProgress);
   const [assumptions, setAssumptions] = useState<DealAssumption[]>(mockAssumptions);
   const [documents, setDocuments] = useState<DealDocument[]>(mockDocuments);
@@ -359,6 +362,14 @@ export default function DealDetailPage() {
             <Edit className="h-4 w-4 mr-1" />
             Edit Deal
           </Button>
+          {deal.dealStructure === 'sale_leaseback' && (
+            <Link href={`/app/deals/${deal.id}/sale-leaseback`}>
+              <Button variant="outline">
+                <ArrowLeftRight className="h-4 w-4 mr-1" />
+                Full SLB Analysis
+              </Button>
+            </Link>
+          )}
           <Link href="/app/sandbox">
             <Button>
               <ExternalLink className="h-4 w-4 mr-1" />
@@ -437,6 +448,12 @@ export default function DealDetailPage() {
                 Risks ({risks.length})
               </TabsTrigger>
               <TabsTrigger value="synthesis">Synthesis</TabsTrigger>
+              {deal.dealStructure === 'sale_leaseback' && (
+                <TabsTrigger value="sale-leaseback" className="flex items-center gap-1">
+                  <ArrowLeftRight className="h-4 w-4" />
+                  Sale-Leaseback
+                </TabsTrigger>
+              )}
             </TabsList>
 
             {/* Overview Tab */}
@@ -653,6 +670,13 @@ export default function DealDetailPage() {
                 onSaveSynthesis={handleSaveSynthesis}
               />
             </TabsContent>
+
+            {/* Sale-Leaseback Tab */}
+            {deal.dealStructure === 'sale_leaseback' && (
+              <TabsContent value="sale-leaseback" className="mt-4">
+                <SaleLeasebackDashboard dealId={deal.id} />
+              </TabsContent>
+            )}
           </Tabs>
         </div>
       </div>

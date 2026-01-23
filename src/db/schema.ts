@@ -26,6 +26,55 @@ export const dealStatusEnum = pgEnum('deal_status', [
   'closed',
   'passed',
 ]);
+
+// AI Agent Enums
+export const agentSessionStatusEnum = pgEnum('agent_session_status', [
+  'active',
+  'paused',
+  'completed',
+  'error',
+]);
+export const agentToolStatusEnum = pgEnum('agent_tool_status', [
+  'pending',
+  'approved',
+  'rejected',
+  'executing',
+  'completed',
+  'failed',
+]);
+export const clarificationStatusEnum = pgEnum('clarification_status', [
+  'pending',
+  'resolved',
+  'skipped',
+  'auto_resolved',
+]);
+export const clarificationTypeEnum = pgEnum('clarification_type', [
+  'low_confidence',
+  'out_of_range',
+  'conflict',
+  'missing',
+  'validation_error',
+]);
+export const conflictResolutionEnum = pgEnum('conflict_resolution', [
+  'pending',
+  'use_first',
+  'use_second',
+  'use_average',
+  'manual_value',
+  'ignored',
+]);
+export const patternTypeEnum = pgEnum('pattern_type', [
+  'extraction',
+  'normalization',
+  'validation',
+  'classification',
+]);
+export const suggestionStatusEnum = pgEnum('suggestion_status', [
+  'pending',
+  'accepted',
+  'rejected',
+  'expired',
+]);
 export const documentTypeEnum = pgEnum('document_type', [
   'financial_statement',
   'rent_roll',
@@ -66,6 +115,30 @@ export const scenarioTypeEnum = pgEnum('scenario_type', [
   'custom',
 ]);
 
+// Sale-Leaseback Enums
+export const dealStructureEnum = pgEnum('deal_structure', [
+  'purchase',
+  'lease',
+  'sale_leaseback',
+  'acquisition_financing',
+]);
+
+export const analysisStageTypeEnum = pgEnum('analysis_stage_type', [
+  'document_upload',
+  'census_validation',
+  'revenue_analysis',
+  'expense_analysis',
+  'cms_integration',
+  'valuation_coverage',
+]);
+
+export const analysisStageStatusEnum = pgEnum('analysis_stage_status', [
+  'pending',
+  'in_progress',
+  'completed',
+  'blocked',
+]);
+
 // Tables
 export const deals = pgTable(
   'deals',
@@ -85,6 +158,14 @@ export const deals = pgTable(
     thesis: text('thesis'),
     confidenceScore: integer('confidence_score'),
     analysisNarrative: text('analysis_narrative'),
+    // AI Platform Enhancement Fields
+    extractionQualityScore: integer('extraction_quality_score'),
+    hasUnresolvedConflicts: boolean('has_unresolved_conflicts').default(false),
+    // Sale-Leaseback Fields
+    dealStructure: dealStructureEnum('deal_structure').default('purchase'),
+    isAllOrNothing: boolean('is_all_or_nothing').default(true),
+    buyerPartnerId: uuid('buyer_partner_id'),
+    specialCircumstances: text('special_circumstances'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
     analyzedAt: timestamp('analyzed_at', { withTimezone: true }),
@@ -94,6 +175,7 @@ export const deals = pgTable(
     statusIdx: index('idx_deals_status').on(table.status),
     assetTypeIdx: index('idx_deals_asset_type').on(table.assetType),
     primaryStateIdx: index('idx_deals_primary_state').on(table.primaryState),
+    dealStructureIdx: index('idx_deals_deal_structure').on(table.dealStructure),
   })
 );
 
@@ -146,10 +228,15 @@ export const documents = pgTable(
     extractedData: jsonb('extracted_data'),
     rawText: text('raw_text'),
     errors: text('errors').array(),
+    // AI Platform Enhancement Fields
+    clarificationStatus: clarificationStatusEnum('clarification_status'),
+    pendingClarifications: integer('pending_clarifications').default(0),
+    extractionConfidence: integer('extraction_confidence'),
   },
   (table) => ({
     dealIdIdx: index('idx_documents_deal_id').on(table.dealId),
     statusIdx: index('idx_documents_status').on(table.status),
+    clarificationStatusIdx: index('idx_documents_clarification_status').on(table.clarificationStatus),
   })
 );
 
@@ -263,6 +350,11 @@ export const capitalPartners = pgTable('capital_partners', {
   contactEmail: varchar('contact_email', { length: 255 }),
   notes: text('notes'),
   status: varchar('status', { length: 20 }).default('active'),
+  // Sale-Leaseback Partner Fields
+  minimumCoverageRatio: decimal('minimum_coverage_ratio', { precision: 5, scale: 4 }),
+  preferredDealStructures: text('preferred_deal_structures').array(),
+  leaseTermPreference: varchar('lease_term_preference', { length: 50 }),
+  rentEscalation: decimal('rent_escalation', { precision: 5, scale: 4 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
@@ -544,6 +636,72 @@ export const proformaScenarios = pgTable(
 );
 
 // ============================================================================
+// Sale-Leaseback Tables
+// ============================================================================
+
+export const saleLeaseback = pgTable(
+  'sale_leaseback',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    dealId: uuid('deal_id')
+      .references(() => deals.id, { onDelete: 'cascade' })
+      .notNull(),
+    facilityId: uuid('facility_id').references(() => facilities.id, { onDelete: 'cascade' }),
+
+    // Purchase calculation
+    propertyNoi: decimal('property_noi', { precision: 15, scale: 2 }),
+    appliedCapRate: decimal('applied_cap_rate', { precision: 5, scale: 4 }),
+    purchasePrice: decimal('purchase_price', { precision: 15, scale: 2 }),
+
+    // Lease terms
+    buyerYieldRequirement: decimal('buyer_yield_requirement', { precision: 5, scale: 4 }),
+    annualRent: decimal('annual_rent', { precision: 15, scale: 2 }),
+    leaseTermYears: integer('lease_term_years'),
+    rentEscalation: decimal('rent_escalation', { precision: 5, scale: 4 }),
+
+    // Coverage analysis
+    facilityEbitdar: decimal('facility_ebitdar', { precision: 15, scale: 2 }),
+    coverageRatio: decimal('coverage_ratio', { precision: 5, scale: 4 }),
+    coveragePassFail: boolean('coverage_pass_fail'),
+
+    // Operator economics
+    operatorCashFlowAfterRent: decimal('operator_cash_flow_after_rent', { precision: 15, scale: 2 }),
+    effectiveRentPerBed: decimal('effective_rent_per_bed', { precision: 10, scale: 2 }),
+
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    dealIdIdx: index('idx_sale_leaseback_deal_id').on(table.dealId),
+    facilityIdIdx: index('idx_sale_leaseback_facility_id').on(table.facilityId),
+  })
+);
+
+export const analysisStages = pgTable(
+  'analysis_stages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    dealId: uuid('deal_id')
+      .references(() => deals.id, { onDelete: 'cascade' })
+      .notNull(),
+    stage: analysisStageTypeEnum('stage').notNull(),
+    status: analysisStageStatusEnum('status').default('pending'),
+    order: integer('order').notNull(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    pendingClarifications: integer('pending_clarifications').default(0),
+    stageData: jsonb('stage_data'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    dealIdIdx: index('idx_analysis_stages_deal_id').on(table.dealId),
+    stageIdx: index('idx_analysis_stages_stage').on(table.stage),
+    statusIdx: index('idx_analysis_stages_status').on(table.status),
+  })
+);
+
+// ============================================================================
 // Portfolio Metrics Tables
 // ============================================================================
 
@@ -576,6 +734,350 @@ export const dealPortfolioMetrics = pgTable(
   })
 );
 
+// ============================================================================
+// AI Agent Tables
+// ============================================================================
+
+export const agentSessions = pgTable(
+  'agent_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    dealId: uuid('deal_id').references(() => deals.id, { onDelete: 'cascade' }),
+    userId: varchar('user_id', { length: 255 }),
+    status: agentSessionStatusEnum('status').default('active'),
+    context: jsonb('context'), // Accumulated context from conversation
+    systemPrompt: text('system_prompt'),
+    model: varchar('model', { length: 100 }).default('claude-sonnet-4-20250514'),
+    totalTokensUsed: integer('total_tokens_used').default(0),
+    messageCount: integer('message_count').default(0),
+    startedAt: timestamp('started_at', { withTimezone: true }).defaultNow(),
+    lastActiveAt: timestamp('last_active_at', { withTimezone: true }).defaultNow(),
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+    metadata: jsonb('metadata'),
+  },
+  (table) => ({
+    dealIdIdx: index('idx_agent_sessions_deal_id').on(table.dealId),
+    userIdIdx: index('idx_agent_sessions_user_id').on(table.userId),
+    statusIdx: index('idx_agent_sessions_status').on(table.status),
+  })
+);
+
+export const agentMessages = pgTable(
+  'agent_messages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id')
+      .references(() => agentSessions.id, { onDelete: 'cascade' })
+      .notNull(),
+    role: varchar('role', { length: 20 }).notNull(), // 'user', 'assistant', 'system', 'tool'
+    content: text('content').notNull(),
+    toolCalls: jsonb('tool_calls'), // Array of tool calls made by assistant
+    toolResults: jsonb('tool_results'), // Results from tool execution
+    tokensUsed: integer('tokens_used'),
+    latencyMs: integer('latency_ms'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    sessionIdIdx: index('idx_agent_messages_session_id').on(table.sessionId),
+    roleIdx: index('idx_agent_messages_role').on(table.role),
+    createdAtIdx: index('idx_agent_messages_created_at').on(table.createdAt),
+  })
+);
+
+export const agentToolExecutions = pgTable(
+  'agent_tool_executions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id')
+      .references(() => agentSessions.id, { onDelete: 'cascade' })
+      .notNull(),
+    messageId: uuid('message_id').references(() => agentMessages.id, { onDelete: 'cascade' }),
+    toolName: varchar('tool_name', { length: 100 }).notNull(),
+    toolInput: jsonb('tool_input').notNull(),
+    toolOutput: jsonb('tool_output'),
+    status: agentToolStatusEnum('status').default('pending'),
+    requiresConfirmation: boolean('requires_confirmation').default(false),
+    confirmedBy: varchar('confirmed_by', { length: 255 }),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    errorMessage: text('error_message'),
+    executionTimeMs: integer('execution_time_ms'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (table) => ({
+    sessionIdIdx: index('idx_tool_executions_session_id').on(table.sessionId),
+    toolNameIdx: index('idx_tool_executions_tool_name').on(table.toolName),
+    statusIdx: index('idx_tool_executions_status').on(table.status),
+  })
+);
+
+// ============================================================================
+// Clarification Tables
+// ============================================================================
+
+export const extractionClarifications = pgTable(
+  'extraction_clarifications',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    documentId: uuid('document_id')
+      .references(() => documents.id, { onDelete: 'cascade' })
+      .notNull(),
+    dealId: uuid('deal_id').references(() => deals.id, { onDelete: 'cascade' }),
+    fieldName: varchar('field_name', { length: 255 }).notNull(),
+    fieldPath: varchar('field_path', { length: 500 }), // JSON path to field
+    extractedValue: text('extracted_value'),
+    suggestedValues: jsonb('suggested_values'), // Array of possible values
+    benchmarkValue: text('benchmark_value'),
+    benchmarkRange: jsonb('benchmark_range'), // { min, max, median }
+    clarificationType: clarificationTypeEnum('clarification_type').notNull(),
+    status: clarificationStatusEnum('status').default('pending'),
+    confidenceScore: integer('confidence_score'),
+    reason: text('reason'), // Why clarification is needed
+    resolvedValue: text('resolved_value'),
+    resolvedBy: varchar('resolved_by', { length: 255 }),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    resolutionNotes: text('resolution_notes'),
+    priority: integer('priority').default(5), // 1-10, 10 being highest
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    documentIdIdx: index('idx_clarifications_document_id').on(table.documentId),
+    dealIdIdx: index('idx_clarifications_deal_id').on(table.dealId),
+    statusIdx: index('idx_clarifications_status').on(table.status),
+    priorityIdx: index('idx_clarifications_priority').on(table.priority),
+  })
+);
+
+export const documentConflicts = pgTable(
+  'document_conflicts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    dealId: uuid('deal_id')
+      .references(() => deals.id, { onDelete: 'cascade' })
+      .notNull(),
+    document1Id: uuid('document1_id')
+      .references(() => documents.id, { onDelete: 'cascade' })
+      .notNull(),
+    document2Id: uuid('document2_id')
+      .references(() => documents.id, { onDelete: 'cascade' })
+      .notNull(),
+    fieldName: varchar('field_name', { length: 255 }).notNull(),
+    value1: text('value1'),
+    value2: text('value2'),
+    variancePercent: decimal('variance_percent', { precision: 10, scale: 4 }),
+    resolution: conflictResolutionEnum('resolution').default('pending'),
+    resolvedValue: text('resolved_value'),
+    resolvedBy: varchar('resolved_by', { length: 255 }),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    resolutionRationale: text('resolution_rationale'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    dealIdIdx: index('idx_conflicts_deal_id').on(table.dealId),
+    resolutionIdx: index('idx_conflicts_resolution').on(table.resolution),
+  })
+);
+
+export const fieldCorrections = pgTable(
+  'field_corrections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    documentId: uuid('document_id').references(() => documents.id, { onDelete: 'cascade' }),
+    dealId: uuid('deal_id').references(() => deals.id, { onDelete: 'cascade' }),
+    documentType: documentTypeEnum('document_type'),
+    fieldName: varchar('field_name', { length: 255 }).notNull(),
+    originalValue: text('original_value'),
+    correctedValue: text('corrected_value').notNull(),
+    correctionSource: varchar('correction_source', { length: 100 }), // 'user', 'benchmark', 'cross_doc'
+    correctedBy: varchar('corrected_by', { length: 255 }),
+    correctedAt: timestamp('corrected_at', { withTimezone: true }).defaultNow(),
+    contextSnippet: text('context_snippet'), // Surrounding text for learning
+    wasPatternLearned: boolean('was_pattern_learned').default(false),
+    learnedPatternId: uuid('learned_pattern_id'),
+  },
+  (table) => ({
+    documentIdIdx: index('idx_corrections_document_id').on(table.documentId),
+    dealIdIdx: index('idx_corrections_deal_id').on(table.dealId),
+    fieldNameIdx: index('idx_corrections_field_name').on(table.fieldName),
+    documentTypeIdx: index('idx_corrections_document_type').on(table.documentType),
+  })
+);
+
+// ============================================================================
+// Learning Tables
+// ============================================================================
+
+export const learnedPatterns = pgTable(
+  'learned_patterns',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    patternType: patternTypeEnum('pattern_type').notNull(),
+    documentType: documentTypeEnum('document_type'),
+    fieldName: varchar('field_name', { length: 255 }),
+    pattern: text('pattern').notNull(), // Regex or semantic pattern
+    confidence: decimal('confidence', { precision: 5, scale: 4 }).default('0.5'),
+    occurrenceCount: integer('occurrence_count').default(1),
+    successCount: integer('success_count').default(0),
+    failureCount: integer('failure_count').default(0),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    exampleInputs: jsonb('example_inputs'), // Array of example inputs
+    exampleOutputs: jsonb('example_outputs'), // Corresponding outputs
+    metadata: jsonb('metadata'),
+    isActive: boolean('is_active').default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    patternTypeIdx: index('idx_patterns_pattern_type').on(table.patternType),
+    documentTypeIdx: index('idx_patterns_document_type').on(table.documentType),
+    fieldNameIdx: index('idx_patterns_field_name').on(table.fieldName),
+    confidenceIdx: index('idx_patterns_confidence').on(table.confidence),
+  })
+);
+
+export const extractionMetrics = pgTable(
+  'extraction_metrics',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    documentType: documentTypeEnum('document_type').notNull(),
+    fieldName: varchar('field_name', { length: 255 }).notNull(),
+    periodStart: date('period_start').notNull(),
+    periodEnd: date('period_end').notNull(),
+    totalExtractions: integer('total_extractions').default(0),
+    correctExtractions: integer('correct_extractions').default(0),
+    averageConfidence: decimal('average_confidence', { precision: 5, scale: 4 }),
+    clarificationsGenerated: integer('clarifications_generated').default(0),
+    clarificationsResolved: integer('clarifications_resolved').default(0),
+    correctionsApplied: integer('corrections_applied').default(0),
+    accuracyRate: decimal('accuracy_rate', { precision: 5, scale: 4 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    documentTypeFieldIdx: uniqueIndex('idx_metrics_doc_field_period').on(
+      table.documentType,
+      table.fieldName,
+      table.periodStart
+    ),
+  })
+);
+
+export const dealEmbeddings = pgTable(
+  'deal_embeddings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    dealId: uuid('deal_id')
+      .references(() => deals.id, { onDelete: 'cascade' })
+      .notNull(),
+    embeddingType: varchar('embedding_type', { length: 50 }).notNull(), // 'deal_summary', 'financials', 'risk_profile'
+    embedding: jsonb('embedding').notNull(), // Vector as JSON array (for non-pgvector setups)
+    embeddingModel: varchar('embedding_model', { length: 100 }),
+    textContent: text('text_content'), // Original text that was embedded
+    metadata: jsonb('metadata'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    dealIdIdx: index('idx_embeddings_deal_id').on(table.dealId),
+    typeIdx: index('idx_embeddings_type').on(table.embeddingType),
+  })
+);
+
+// ============================================================================
+// Algorithm Override Tables
+// ============================================================================
+
+export const settingsCategoryEnum = pgEnum('settings_category', [
+  'valuation',
+  'financial',
+  'risk',
+  'market',
+  'proforma',
+  'display',
+]);
+
+export const dealAlgorithmOverrides = pgTable(
+  'deal_algorithm_overrides',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    dealId: uuid('deal_id')
+      .references(() => deals.id, { onDelete: 'cascade' })
+      .notNull(),
+    category: settingsCategoryEnum('category').notNull(),
+    key: varchar('key', { length: 255 }).notNull(),
+    overrideValue: jsonb('override_value').notNull(),
+    originalValue: jsonb('original_value'),
+    reason: text('reason'),
+    source: varchar('source', { length: 50 }).default('manual'), // 'manual', 'ai_suggestion', 'preset'
+    suggestedBy: varchar('suggested_by', { length: 255 }),
+    appliedBy: varchar('applied_by', { length: 255 }),
+    appliedAt: timestamp('applied_at', { withTimezone: true }).defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    isActive: boolean('is_active').default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    dealIdIdx: index('idx_overrides_new_deal_id').on(table.dealId),
+    categoryKeyIdx: index('idx_overrides_category_key').on(table.category, table.key),
+    activeIdx: index('idx_overrides_active').on(table.isActive),
+  })
+);
+
+export const algorithmPresets = pgTable(
+  'algorithm_presets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: varchar('name', { length: 255 }).notNull(),
+    description: text('description'),
+    presetType: varchar('preset_type', { length: 50 }).notNull(), // 'market', 'risk_profile', 'asset_type', 'custom'
+    applicableAssetTypes: assetTypeEnum('applicable_asset_types').array(),
+    applicableStates: text('applicable_states').array(),
+    settings: jsonb('settings').notNull(), // Full settings object
+    usageCount: integer('usage_count').default(0),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    createdBy: varchar('created_by', { length: 255 }),
+    isPublic: boolean('is_public').default(false),
+    isActive: boolean('is_active').default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    nameIdx: index('idx_presets_name').on(table.name),
+    presetTypeIdx: index('idx_presets_type').on(table.presetType),
+    publicIdx: index('idx_presets_public').on(table.isPublic),
+  })
+);
+
+export const aiAdjustmentSuggestions = pgTable(
+  'ai_adjustment_suggestions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    dealId: uuid('deal_id')
+      .references(() => deals.id, { onDelete: 'cascade' })
+      .notNull(),
+    sessionId: uuid('session_id').references(() => agentSessions.id, { onDelete: 'set null' }),
+    suggestionType: varchar('suggestion_type', { length: 50 }).notNull(), // 'cap_rate', 'discount_rate', 'growth_rate', etc.
+    currentValue: jsonb('current_value'),
+    suggestedValue: jsonb('suggested_value').notNull(),
+    reasoning: text('reasoning').notNull(),
+    confidenceScore: integer('confidence_score'),
+    basedOnDeals: uuid('based_on_deals').array(), // Similar deals used for suggestion
+    marketFactors: jsonb('market_factors'), // External factors considered
+    status: suggestionStatusEnum('status').default('pending'),
+    reviewedBy: varchar('reviewed_by', { length: 255 }),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    reviewNotes: text('review_notes'),
+    impactEstimate: jsonb('impact_estimate'), // { valuation_change_percent, confidence_change }
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+  },
+  (table) => ({
+    dealIdIdx: index('idx_suggestions_deal_id').on(table.dealId),
+    statusIdx: index('idx_suggestions_status').on(table.status),
+    typeIdx: index('idx_suggestions_type').on(table.suggestionType),
+  })
+);
+
 // Relations
 export const dealsRelations = relations(deals, ({ one, many }) => ({
   facilities: many(facilities),
@@ -593,6 +1095,21 @@ export const dealsRelations = relations(deals, ({ one, many }) => ({
     fields: [deals.id],
     references: [dealPortfolioMetrics.dealId],
   }),
+  // AI Platform Enhancement Relations
+  agentSessions: many(agentSessions),
+  extractionClarifications: many(extractionClarifications),
+  documentConflicts: many(documentConflicts),
+  fieldCorrections: many(fieldCorrections),
+  dealEmbeddings: many(dealEmbeddings),
+  algorithmOverrides: many(dealAlgorithmOverrides),
+  aiSuggestions: many(aiAdjustmentSuggestions),
+  // Sale-Leaseback Relations
+  saleLeasebackRecords: many(saleLeaseback),
+  analysisStages: many(analysisStages),
+  buyerPartner: one(capitalPartners, {
+    fields: [deals.buyerPartnerId],
+    references: [capitalPartners.id],
+  }),
 }));
 
 export const facilitiesRelations = relations(facilities, ({ one, many }) => ({
@@ -606,6 +1123,7 @@ export const facilitiesRelations = relations(facilities, ({ one, many }) => ({
   capexItems: many(capexItems),
   surveyDeficiencies: many(surveyDeficiencies),
   proformaScenarios: many(proformaScenarios),
+  saleLeasebackRecords: many(saleLeaseback),
 }));
 
 export const capitalPartnersRelations = relations(capitalPartners, ({ many }) => ({
@@ -643,17 +1161,148 @@ export const dealPortfolioMetricsRelations = relations(dealPortfolioMetrics, ({ 
 }));
 
 // ============================================================================
-// Admin Settings Tables
+// AI Platform Enhancement Relations
 // ============================================================================
 
-export const settingsCategoryEnum = pgEnum('settings_category', [
-  'valuation',
-  'financial',
-  'risk',
-  'market',
-  'proforma',
-  'display',
-]);
+export const agentSessionsRelations = relations(agentSessions, ({ one, many }) => ({
+  deal: one(deals, {
+    fields: [agentSessions.dealId],
+    references: [deals.id],
+  }),
+  messages: many(agentMessages),
+  toolExecutions: many(agentToolExecutions),
+  suggestions: many(aiAdjustmentSuggestions),
+}));
+
+export const agentMessagesRelations = relations(agentMessages, ({ one, many }) => ({
+  session: one(agentSessions, {
+    fields: [agentMessages.sessionId],
+    references: [agentSessions.id],
+  }),
+  toolExecutions: many(agentToolExecutions),
+}));
+
+export const agentToolExecutionsRelations = relations(agentToolExecutions, ({ one }) => ({
+  session: one(agentSessions, {
+    fields: [agentToolExecutions.sessionId],
+    references: [agentSessions.id],
+  }),
+  message: one(agentMessages, {
+    fields: [agentToolExecutions.messageId],
+    references: [agentMessages.id],
+  }),
+}));
+
+export const extractionClarificationsRelations = relations(extractionClarifications, ({ one }) => ({
+  document: one(documents, {
+    fields: [extractionClarifications.documentId],
+    references: [documents.id],
+  }),
+  deal: one(deals, {
+    fields: [extractionClarifications.dealId],
+    references: [deals.id],
+  }),
+}));
+
+export const documentConflictsRelations = relations(documentConflicts, ({ one }) => ({
+  deal: one(deals, {
+    fields: [documentConflicts.dealId],
+    references: [deals.id],
+  }),
+  document1: one(documents, {
+    fields: [documentConflicts.document1Id],
+    references: [documents.id],
+    relationName: 'document1',
+  }),
+  document2: one(documents, {
+    fields: [documentConflicts.document2Id],
+    references: [documents.id],
+    relationName: 'document2',
+  }),
+}));
+
+export const fieldCorrectionsRelations = relations(fieldCorrections, ({ one }) => ({
+  document: one(documents, {
+    fields: [fieldCorrections.documentId],
+    references: [documents.id],
+  }),
+  deal: one(deals, {
+    fields: [fieldCorrections.dealId],
+    references: [deals.id],
+  }),
+  learnedPattern: one(learnedPatterns, {
+    fields: [fieldCorrections.learnedPatternId],
+    references: [learnedPatterns.id],
+  }),
+}));
+
+export const learnedPatternsRelations = relations(learnedPatterns, ({ many }) => ({
+  corrections: many(fieldCorrections),
+}));
+
+export const dealEmbeddingsRelations = relations(dealEmbeddings, ({ one }) => ({
+  deal: one(deals, {
+    fields: [dealEmbeddings.dealId],
+    references: [deals.id],
+  }),
+}));
+
+export const dealAlgorithmOverridesRelations = relations(dealAlgorithmOverrides, ({ one }) => ({
+  deal: one(deals, {
+    fields: [dealAlgorithmOverrides.dealId],
+    references: [deals.id],
+  }),
+}));
+
+export const aiAdjustmentSuggestionsRelations = relations(aiAdjustmentSuggestions, ({ one }) => ({
+  deal: one(deals, {
+    fields: [aiAdjustmentSuggestions.dealId],
+    references: [deals.id],
+  }),
+  session: one(agentSessions, {
+    fields: [aiAdjustmentSuggestions.sessionId],
+    references: [agentSessions.id],
+  }),
+}));
+
+// ============================================================================
+// Sale-Leaseback Relations
+// ============================================================================
+
+export const saleLeasebackRelations = relations(saleLeaseback, ({ one }) => ({
+  deal: one(deals, {
+    fields: [saleLeaseback.dealId],
+    references: [deals.id],
+  }),
+  facility: one(facilities, {
+    fields: [saleLeaseback.facilityId],
+    references: [facilities.id],
+  }),
+}));
+
+export const analysisStagesRelations = relations(analysisStages, ({ one }) => ({
+  deal: one(deals, {
+    fields: [analysisStages.dealId],
+    references: [deals.id],
+  }),
+}));
+
+export const documentsRelations = relations(documents, ({ one, many }) => ({
+  deal: one(deals, {
+    fields: [documents.dealId],
+    references: [deals.id],
+  }),
+  facility: one(facilities, {
+    fields: [documents.facilityId],
+    references: [facilities.id],
+  }),
+  clarifications: many(extractionClarifications),
+  corrections: many(fieldCorrections),
+}));
+
+// ============================================================================
+// Admin Settings Tables
+// ============================================================================
 
 export const algorithmSettings = pgTable(
   'algorithm_settings',

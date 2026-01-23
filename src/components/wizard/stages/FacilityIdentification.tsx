@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,7 @@ import {
   Star,
   Users,
   Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { WizardStageData } from '../EnhancedDealWizard';
@@ -39,6 +40,7 @@ interface FacilitySlot {
   cmsData?: Record<string, unknown>;
   assetType?: 'SNF' | 'ALF' | 'ILF';
   yearBuilt?: number;
+  cmsLookupStatus?: 'pending' | 'loading' | 'found' | 'not_found';
 }
 
 interface CMSProviderData {
@@ -88,15 +90,118 @@ export function FacilityIdentification({ stageData, onUpdate }: FacilityIdentifi
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<CMSProviderData[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [autoLookupRunning, setAutoLookupRunning] = useState(false);
+  const autoLookupRef = useRef(false);
 
-  // Sync facilities to parent when changed
+  // Auto-lookup facilities from CMS on initial load
   useEffect(() => {
-    onUpdate({
-      facilityIdentification: {
-        facilities,
-      },
-    });
-  }, [facilities, onUpdate]);
+    if (autoLookupRef.current) return;
+
+    const facilitiesWithNames = facilities.filter(f => f.name && !f.ccn && f.cmsLookupStatus !== 'found' && f.cmsLookupStatus !== 'not_found');
+    if (facilitiesWithNames.length === 0) return;
+
+    autoLookupRef.current = true;
+    setAutoLookupRunning(true);
+
+    const lookupFacilities = async () => {
+      for (const facility of facilitiesWithNames) {
+        // Mark as loading
+        setFacilities(prev => prev.map(f =>
+          f.slot === facility.slot ? { ...f, cmsLookupStatus: 'loading' } : f
+        ));
+
+        try {
+          // Search by name and state
+          const searchTerm = facility.name || '';
+          const state = facility.state || '';
+          const endpoint = state
+            ? `/api/cms/providers?name=${encodeURIComponent(searchTerm)}&state=${state}`
+            : `/api/cms/providers?name=${encodeURIComponent(searchTerm)}`;
+
+          const response = await fetch(endpoint);
+          const data = await response.json();
+
+          if (data.success && data.data && data.data.length > 0) {
+            // Find best match - prefer exact name match or same city
+            let bestMatch = data.data[0];
+            for (const provider of data.data) {
+              const nameMatch = provider.providerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                               searchTerm.toLowerCase().includes(provider.providerName?.toLowerCase());
+              const cityMatch = facility.city && provider.city?.toLowerCase() === facility.city.toLowerCase();
+
+              if (nameMatch && cityMatch) {
+                bestMatch = provider;
+                break;
+              } else if (nameMatch) {
+                bestMatch = provider;
+              }
+            }
+
+            // Update facility with CMS data
+            setFacilities(prev => prev.map(f =>
+              f.slot === facility.slot ? {
+                ...f,
+                ccn: bestMatch.ccn,
+                name: bestMatch.providerName || f.name,
+                address: bestMatch.address || f.address,
+                city: bestMatch.city || f.city,
+                state: bestMatch.state || f.state,
+                zipCode: bestMatch.zipCode || f.zipCode,
+                licensedBeds: bestMatch.numberOfBeds || f.licensedBeds,
+                certifiedBeds: bestMatch.numberOfBeds || f.certifiedBeds,
+                cmsRating: bestMatch.overallRating,
+                healthRating: bestMatch.healthInspectionRating,
+                staffingRating: bestMatch.staffingRating,
+                qualityRating: bestMatch.qualityMeasureRating,
+                isSff: bestMatch.isSff,
+                isSffWatch: bestMatch.isSffCandidate,
+                cmsData: bestMatch,
+                cmsLookupStatus: 'found',
+              } : f
+            ));
+          } else {
+            // Not found in CMS
+            setFacilities(prev => prev.map(f =>
+              f.slot === facility.slot ? { ...f, cmsLookupStatus: 'not_found' } : f
+            ));
+          }
+        } catch (err) {
+          console.error('CMS lookup failed for', facility.name, err);
+          setFacilities(prev => prev.map(f =>
+            f.slot === facility.slot ? { ...f, cmsLookupStatus: 'not_found' } : f
+          ));
+        }
+
+        // Small delay between requests
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+
+      setAutoLookupRunning(false);
+    };
+
+    lookupFacilities();
+  }, []);
+
+  // Sync facilities to parent when changed (with debounce)
+  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+    updateTimeoutRef.current = setTimeout(() => {
+      onUpdate({
+        facilityIdentification: {
+          facilities,
+        },
+      });
+    }, 500);
+
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+    };
+  }, [facilities]);
 
   // CMS lookup function
   const searchCMS = useCallback(async (query: string) => {

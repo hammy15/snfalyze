@@ -199,6 +199,40 @@ const COA_PATTERNS: Array<{
   { pattern: /gross.*profit|gross.*margin/i, code: 'M100', name: 'Gross Profit', category: 'statistic', subcategory: 'margin', proformaKey: 'calculated.grossProfit' },
   { pattern: /net.*operating.*income|noi/i, code: 'M200', name: 'Net Operating Income', category: 'statistic', subcategory: 'margin', proformaKey: 'calculated.netOperatingIncome' },
   { pattern: /ebitda|earnings.*before/i, code: 'M300', name: 'EBITDA', category: 'statistic', subcategory: 'margin', proformaKey: 'calculated.ebitda' },
+
+  // ADDITIONAL REVENUE PATTERNS
+  { pattern: /other.*income|misc.*revenue|sundry.*income/i, code: '4700', name: 'Other Income', category: 'revenue', subcategory: 'other_revenue', proformaKey: 'revenue.other' },
+  { pattern: /interest.*income|investment.*income/i, code: '4710', name: 'Interest Income', category: 'revenue', subcategory: 'other_revenue', proformaKey: 'revenue.other' },
+  { pattern: /rental.*income|lease.*income/i, code: '4720', name: 'Rental Income', category: 'revenue', subcategory: 'other_revenue', proformaKey: 'revenue.other' },
+  { pattern: /grant|donation|contribution/i, code: '4730', name: 'Grants & Donations', category: 'revenue', subcategory: 'other_revenue', proformaKey: 'revenue.other' },
+  { pattern: /contractual.*adjust|allowance|bad.*debt.*provision/i, code: '4800', name: 'Contractual Adjustments', category: 'revenue', subcategory: 'adjustment', proformaKey: 'revenue.other' },
+  { pattern: /net.*revenue|net.*patient/i, code: '4998', name: 'Net Revenue', category: 'revenue', subcategory: 'total', proformaKey: 'revenue.total' },
+
+  // ADDITIONAL EXPENSE PATTERNS - Catch common terms
+  { pattern: /professional.*fee|consulting.*fee|legal.*fee|accounting.*fee/i, code: '6850', name: 'Professional Fees', category: 'expense', subcategory: 'fees', proformaKey: 'expenses.administration' },
+  { pattern: /medical.*director|physician.*fee|dr\./i, code: '6855', name: 'Medical Director Fee', category: 'expense', subcategory: 'fees', proformaKey: 'expenses.administration' },
+  { pattern: /depreciat|amortiz/i, code: '7000', name: 'Depreciation', category: 'expense', subcategory: 'non_cash', proformaKey: 'expenses.other' },
+  { pattern: /interest.*expense|loan.*interest/i, code: '7100', name: 'Interest Expense', category: 'expense', subcategory: 'financing', proformaKey: 'expenses.other' },
+  { pattern: /rent.*expense|lease.*expense|building.*rent/i, code: '7200', name: 'Rent Expense', category: 'expense', subcategory: 'occupancy', proformaKey: 'expenses.plantOperations' },
+  { pattern: /marketing|advertising|promot/i, code: '6900', name: 'Marketing', category: 'expense', subcategory: 'admin', proformaKey: 'expenses.administration' },
+  { pattern: /travel.*expense|mileage|transportation/i, code: '6910', name: 'Travel Expense', category: 'expense', subcategory: 'admin', proformaKey: 'expenses.administration' },
+  { pattern: /training|education|seminar|conference/i, code: '6920', name: 'Training', category: 'expense', subcategory: 'admin', proformaKey: 'expenses.administration' },
+  { pattern: /license|permit|certification|regulatory/i, code: '6930', name: 'Licenses & Permits', category: 'expense', subcategory: 'admin', proformaKey: 'expenses.administration' },
+  { pattern: /telephone|phone|communication|internet|cable/i, code: '6940', name: 'Communications', category: 'expense', subcategory: 'admin', proformaKey: 'expenses.administration' },
+  { pattern: /office.*supplies|office.*expense|postage/i, code: '6950', name: 'Office Expenses', category: 'expense', subcategory: 'admin', proformaKey: 'expenses.administration' },
+  { pattern: /dues.*subscription|membership/i, code: '6960', name: 'Dues & Subscriptions', category: 'expense', subcategory: 'admin', proformaKey: 'expenses.administration' },
+  { pattern: /outside.*service|contracted.*service|service.*contract/i, code: '6970', name: 'Contracted Services', category: 'expense', subcategory: 'other_expense', proformaKey: 'expenses.other' },
+  { pattern: /otc|over.?the.?counter/i, code: '6980', name: 'OTC Supplies', category: 'expense', subcategory: 'supplies_medical', proformaKey: 'expenses.nursing' },
+  { pattern: /supply|supplies/i, code: '6985', name: 'General Supplies', category: 'expense', subcategory: 'supplies_general', proformaKey: 'expenses.other' },
+  { pattern: /other.*expense|misc.*expense|sundry|miscellaneous/i, code: '6990', name: 'Other Expenses', category: 'expense', subcategory: 'other_expense', proformaKey: 'expenses.other' },
+
+  // CATCH-ALL FOR ACCOUNT CODES IN LABELS (e.g., "5123 - Some Expense")
+  { pattern: /^4\d{3,4}\s*-/i, code: 'AUTO_REV', name: 'Other Revenue', category: 'revenue', subcategory: 'auto_mapped', proformaKey: 'revenue.other' },
+  { pattern: /^5\d{3,4}\s*-/i, code: 'AUTO_LAB', name: 'Labor Expense', category: 'expense', subcategory: 'labor_auto', proformaKey: 'expenses.nursing' },
+  { pattern: /^6\d{3,4}\s*-/i, code: 'AUTO_OPS', name: 'Operating Expense', category: 'expense', subcategory: 'operations_auto', proformaKey: 'expenses.other' },
+  { pattern: /^7\d{3,4}\s*-/i, code: 'AUTO_OCC', name: 'Occupancy Expense', category: 'expense', subcategory: 'occupancy_auto', proformaKey: 'expenses.plantOperations' },
+  { pattern: /^8\d{3,4}\s*-/i, code: 'AUTO_OTH', name: 'Other Expense', category: 'expense', subcategory: 'other_auto', proformaKey: 'expenses.other' },
+  { pattern: /^9\d{3,4}\s*-/i, code: 'AUTO_ADJ', name: 'Adjustments', category: 'expense', subcategory: 'adjustments', proformaKey: 'expenses.other' },
 ];
 
 // ============================================================================
@@ -261,23 +295,139 @@ function mapToCOA(label: string): { code: string | null; name: string | null; ca
     }
   }
 
-  // Infer category from label
+  // Enhanced fallback logic - infer category from label keywords
   const lowerLabel = label.toLowerCase();
+  const trimmedLabel = label.trim();
   let category: 'revenue' | 'expense' | 'census' | 'statistic' | 'other' = 'other';
   let subcategory = 'unmapped';
+  let code: string | null = null;
+  let name: string | null = null;
+  let proformaKey = '';
 
-  if (lowerLabel.includes('revenue') || lowerLabel.includes('income')) {
+  // REVENUE indicators
+  const revenueKeywords = ['revenue', 'income', 'receipt', 'reimburs', 'payment', 'billing', 'collection', 'charge'];
+  if (revenueKeywords.some(kw => lowerLabel.includes(kw))) {
     category = 'revenue';
     subcategory = 'other_revenue';
-  } else if (lowerLabel.includes('expense') || lowerLabel.includes('cost') || lowerLabel.includes('salary') || lowerLabel.includes('wage')) {
-    category = 'expense';
-    subcategory = 'other_expense';
-  } else if (lowerLabel.includes('census') || lowerLabel.includes('day') || lowerLabel.includes('occupancy')) {
-    category = 'census';
-    subcategory = 'other_census';
+    code = 'REV_OTHER';
+    name = 'Other Revenue';
+    proformaKey = 'revenue.other';
   }
 
-  return { code: null, name: null, category, subcategory, proformaKey: '' };
+  // EXPENSE indicators (check after revenue since some items could have both keywords)
+  const expenseKeywords = [
+    'expense', 'cost', 'salary', 'salaries', 'wage', 'wages', 'pay', 'payroll',
+    'benefit', 'benefits', 'insurance', 'tax', 'taxes', 'fee', 'fees',
+    'supplies', 'supply', 'equipment', 'repair', 'maintenance', 'maint',
+    'service', 'services', 'contract', 'vendor', 'purchased',
+    'utility', 'utilities', 'rent', 'lease', 'depreciation',
+    'travel', 'training', 'marketing', 'advertising', 'communication',
+    'professional', 'legal', 'accounting', 'consulting',
+    'food', 'dietary', 'nursing', 'housekeeping', 'laundry',
+    'admin', 'administrative', 'office', 'general', 'overhead'
+  ];
+  if (category === 'other' && expenseKeywords.some(kw => lowerLabel.includes(kw))) {
+    category = 'expense';
+    subcategory = 'other_expense';
+    code = 'EXP_OTHER';
+    name = 'Other Expense';
+    proformaKey = 'expenses.other';
+
+    // Further categorize expenses
+    if (lowerLabel.includes('salary') || lowerLabel.includes('wage') || lowerLabel.includes('payroll') || lowerLabel.includes('labor')) {
+      code = 'EXP_LABOR';
+      name = 'Labor Expense';
+      subcategory = 'labor_other';
+      proformaKey = 'expenses.nursing';
+    } else if (lowerLabel.includes('benefit') || lowerLabel.includes('fica') || lowerLabel.includes('401k') || lowerLabel.includes('health ins')) {
+      code = 'EXP_BENEFITS';
+      name = 'Benefits';
+      subcategory = 'labor_benefits';
+      proformaKey = 'expenses.nursing';
+    } else if (lowerLabel.includes('supply') || lowerLabel.includes('supplies')) {
+      code = 'EXP_SUPPLIES';
+      name = 'Supplies';
+      subcategory = 'supplies_general';
+      proformaKey = 'expenses.other';
+    } else if (lowerLabel.includes('utility') || lowerLabel.includes('utilities') || lowerLabel.includes('electric') || lowerLabel.includes('gas') || lowerLabel.includes('water')) {
+      code = 'EXP_UTIL';
+      name = 'Utilities';
+      subcategory = 'occupancy';
+      proformaKey = 'expenses.plantOperations';
+    } else if (lowerLabel.includes('rent') || lowerLabel.includes('lease')) {
+      code = 'EXP_RENT';
+      name = 'Rent/Lease';
+      subcategory = 'occupancy';
+      proformaKey = 'expenses.plantOperations';
+    } else if (lowerLabel.includes('insurance') && !lowerLabel.includes('health')) {
+      code = 'EXP_INS';
+      name = 'Insurance';
+      subcategory = 'occupancy';
+      proformaKey = 'expenses.insurance';
+    } else if (lowerLabel.includes('admin') || lowerLabel.includes('office') || lowerLabel.includes('g&a') || lowerLabel.includes('general')) {
+      code = 'EXP_ADMIN';
+      name = 'Administrative';
+      subcategory = 'admin';
+      proformaKey = 'expenses.administration';
+    }
+  }
+
+  // CENSUS indicators
+  const censusKeywords = ['census', 'day', 'days', 'occupancy', 'admission', 'discharge', 'patient', 'resident', 'bed'];
+  if (category === 'other' && censusKeywords.some(kw => lowerLabel.includes(kw))) {
+    category = 'census';
+    subcategory = 'other_census';
+    code = 'CENSUS_OTHER';
+    name = 'Census Data';
+    proformaKey = 'census.totalDays';
+  }
+
+  // STATISTIC/METRIC indicators
+  const statisticKeywords = ['rate', 'ratio', 'percentage', 'percent', 'per day', 'ppd', 'hppd', 'margin', 'fte', 'headcount'];
+  if (category === 'other' && statisticKeywords.some(kw => lowerLabel.includes(kw))) {
+    category = 'statistic';
+    subcategory = 'metric';
+    code = 'STAT_OTHER';
+    name = 'Statistic';
+  }
+
+  // Check for numeric prefix that looks like an account code (e.g., "5123 - Description")
+  const accountCodeMatch = trimmedLabel.match(/^(\d{4,5})\s*[-–]\s*(.+)/);
+  if (accountCodeMatch && category === 'other') {
+    const numCode = accountCodeMatch[1];
+    const firstDigit = numCode[0];
+
+    if (firstDigit === '4') {
+      category = 'revenue';
+      code = numCode;
+      name = accountCodeMatch[2].trim();
+      subcategory = 'mapped_by_code';
+      proformaKey = 'revenue.other';
+    } else if (firstDigit === '5' || firstDigit === '6' || firstDigit === '7' || firstDigit === '8') {
+      category = 'expense';
+      code = numCode;
+      name = accountCodeMatch[2].trim();
+      subcategory = 'mapped_by_code';
+      proformaKey = 'expenses.other';
+    }
+  }
+
+  // If still "other" but has a value in a financial context, default to expense
+  // (most unmapped line items in P&L statements are expenses)
+  // This is a last resort to ensure high mapping coverage
+  if (category === 'other' && trimmedLabel.length > 0 && !lowerLabel.includes('total') && !lowerLabel.includes('blank')) {
+    // Check if it looks like a label (has letters and isn't just numbers)
+    const hasLetters = /[a-zA-Z]/.test(trimmedLabel);
+    if (hasLetters) {
+      category = 'expense';
+      subcategory = 'unmapped_expense';
+      code = 'EXP_UNMAPPED';
+      name = 'Uncategorized Expense';
+      proformaKey = 'expenses.other';
+    }
+  }
+
+  return { code, name, category, subcategory, proformaKey };
 }
 
 /**

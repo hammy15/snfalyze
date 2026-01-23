@@ -3,7 +3,6 @@
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -34,7 +33,7 @@ export function StageConfirmation({
 }: StageConfirmationProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-700">
         <DialogHeader>
           <div className="flex items-center gap-3">
             {variant === 'warning' ? (
@@ -46,16 +45,19 @@ export function StageConfirmation({
                 <CheckCircle2 className="w-5 h-5 text-primary-600 dark:text-primary-400" />
               </div>
             )}
-            <DialogTitle>{title}</DialogTitle>
+            <DialogTitle className="text-surface-900 dark:text-surface-100">{title}</DialogTitle>
           </div>
-          <DialogDescription className="pt-2">{message}</DialogDescription>
+          {/* Use a regular p tag instead of DialogDescription for better contrast */}
+          <p className="pt-3 text-base text-surface-700 dark:text-surface-300 leading-relaxed">
+            {message}
+          </p>
         </DialogHeader>
-        <DialogFooter className="flex gap-2 sm:gap-0">
+        <DialogFooter className="flex gap-3 sm:gap-2 mt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {cancelLabel}
           </Button>
           <Button
-            variant={variant === 'warning' ? 'destructive' : 'primary'}
+            variant={variant === 'warning' ? 'destructive' : 'default'}
             onClick={() => {
               onConfirm();
               onOpenChange(false);

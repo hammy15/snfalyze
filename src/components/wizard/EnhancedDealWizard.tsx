@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,12 +17,18 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-// Debounce helper
+// Debounce helper with stable reference
 function useDebounce<T extends (...args: Parameters<T>) => void>(
   callback: T,
   delay: number
 ): T {
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const callbackRef = useRef(callback);
+
+  // Keep the callback ref updated
+  useEffect(() => {
+    callbackRef.current = callback;
+  }, [callback]);
 
   return useCallback(
     ((...args: Parameters<T>) => {
@@ -30,11 +36,11 @@ function useDebounce<T extends (...args: Parameters<T>) => void>(
         clearTimeout(timeoutRef.current);
       }
       timeoutRef.current = setTimeout(() => {
-        callback(...args);
+        callbackRef.current(...args);
       }, delay);
     }) as T,
-    [callback, delay]
-  );
+    [delay]
+  ) as T;
 }
 
 export interface WizardStageData {
@@ -340,10 +346,20 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
     initSession();
   }, [sessionId, dealId, router]);
 
+  // Track if we're in the middle of a save operation
+  const isSavingRef = useRef(false);
+  const pendingDataRef = useRef<WizardStageData | null>(null);
+
   // Save stage data to API (called by debounced function)
   const saveToApi = useCallback(async (data: WizardStageData) => {
     if (!session) return;
+    if (isSavingRef.current) {
+      // Store pending data to save after current save completes
+      pendingDataRef.current = data;
+      return;
+    }
 
+    isSavingRef.current = true;
     setSaving(true);
     try {
       const response = await fetch(`/api/wizard/session/${session.id}`, {
@@ -361,12 +377,20 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
     } catch (err) {
       console.error('Failed to save stage data:', err);
     } finally {
+      isSavingRef.current = false;
       setSaving(false);
+
+      // If there's pending data, save it
+      if (pendingDataRef.current) {
+        const pendingData = pendingDataRef.current;
+        pendingDataRef.current = null;
+        saveToApi(pendingData);
+      }
     }
   }, [session]);
 
-  // Debounced save (500ms delay)
-  const debouncedSave = useDebounce(saveToApi, 500);
+  // Debounced save (1500ms delay - longer to prevent constant saving)
+  const debouncedSave = useDebounce(saveToApi, 1500);
 
   // Update local state immediately, then debounce API save
   const updateStageData = useCallback((data: Partial<WizardStageData>) => {

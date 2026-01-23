@@ -33,9 +33,15 @@ export function TopBar({ sidebarCollapsed }: TopBarProps) {
 
   return (
     <header
-      className="topbar"
+      className={cn(
+        'fixed top-0 right-0 h-14 z-40',
+        'flex items-center px-4',
+        'bg-white/95 dark:bg-surface-900/95 backdrop-blur-sm',
+        'border-b border-surface-200 dark:border-surface-800',
+        'transition-[left] duration-200'
+      )}
       style={{
-        left: sidebarCollapsed ? 'var(--sidebar-collapsed-width)' : 'var(--sidebar-width)',
+        left: sidebarCollapsed ? '4rem' : '15rem',
       }}
     >
       {/* Global Search */}

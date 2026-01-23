@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   CheckCircle2,
   AlertCircle,
@@ -16,6 +15,10 @@ import {
   FileText,
   Building2,
   Sparkles,
+  DollarSign,
+  TrendingUp,
+  Users,
+  SkipForward,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { WizardStageData } from '../EnhancedDealWizard';
@@ -29,6 +32,7 @@ interface COAMapping {
   facilityName?: string;
   coaCode?: string;
   coaName?: string;
+  category?: 'revenue' | 'expense' | 'census' | 'statistic' | 'other' | 'skipped';
   mappingConfidence?: number;
   isMapped: boolean;
   proformaDestination?: string;
@@ -41,6 +45,7 @@ const COA_CATEGORIES = [
   { code: '4300', name: 'Managed Care Revenue', category: 'Revenue', proforma: 'revenue.managed_care' },
   { code: '4400', name: 'Private Pay Revenue', category: 'Revenue', proforma: 'revenue.private_pay' },
   { code: '4500', name: 'Other Revenue', category: 'Revenue', proforma: 'revenue.other' },
+  { code: '4999', name: 'Total Revenue', category: 'Revenue', proforma: 'revenue.total' },
   { code: '5100', name: 'Nursing Salaries', category: 'Labor', proforma: 'expenses.labor.nursing' },
   { code: '5110', name: 'RN Salaries', category: 'Labor', proforma: 'expenses.labor.nursing' },
   { code: '5120', name: 'LPN Salaries', category: 'Labor', proforma: 'expenses.labor.nursing' },
@@ -49,12 +54,29 @@ const COA_CATEGORIES = [
   { code: '5300', name: 'Housekeeping Staff', category: 'Labor', proforma: 'expenses.labor.housekeeping' },
   { code: '5400', name: 'Administrative Staff', category: 'Labor', proforma: 'expenses.labor.admin' },
   { code: '5500', name: 'Contract/Agency Labor', category: 'Labor', proforma: 'expenses.labor.agency' },
+  { code: '5950', name: 'Employee Benefits', category: 'Labor', proforma: 'expenses.labor.benefits' },
   { code: '6100', name: 'Food Costs', category: 'Operations', proforma: 'expenses.operations.food' },
   { code: '6200', name: 'Medical Supplies', category: 'Operations', proforma: 'expenses.operations.supplies' },
   { code: '6300', name: 'Utilities', category: 'Operations', proforma: 'expenses.operations.utilities' },
   { code: '6400', name: 'Insurance', category: 'Operations', proforma: 'expenses.operations.insurance' },
   { code: '6500', name: 'Management Fee', category: 'Operations', proforma: 'expenses.operations.management' },
-  { code: '6600', name: 'Other Operating', category: 'Operations', proforma: 'expenses.operations.other' },
+  { code: '6600', name: 'Professional Fees', category: 'Operations', proforma: 'expenses.operations.professional' },
+  { code: '6700', name: 'Repairs & Maintenance', category: 'Operations', proforma: 'expenses.operations.maintenance' },
+  { code: '6800', name: 'Other Operating', category: 'Operations', proforma: 'expenses.operations.other' },
+  { code: '6999', name: 'Total Expenses', category: 'Operations', proforma: 'expenses.total' },
+  { code: 'C100', name: 'Medicare Days', category: 'Census', proforma: 'census.medicareDays' },
+  { code: 'C200', name: 'Medicaid Days', category: 'Census', proforma: 'census.medicaidDays' },
+  { code: 'C300', name: 'Private Days', category: 'Census', proforma: 'census.privateDays' },
+  { code: 'C500', name: 'Total Patient Days', category: 'Census', proforma: 'census.totalDays' },
+  { code: 'C600', name: 'Average Daily Census', category: 'Census', proforma: 'census.avgDailyCensus' },
+];
+
+// Quick category buttons for unmapped items
+const QUICK_CATEGORIES = [
+  { id: 'revenue', label: 'Revenue', icon: TrendingUp, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200' },
+  { id: 'expense', label: 'Expense', icon: DollarSign, color: 'text-rose-600 bg-rose-50 dark:bg-rose-900/30 border-rose-200' },
+  { id: 'census', label: 'Census', icon: Users, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/30 border-blue-200' },
+  { id: 'skipped', label: 'Skip', icon: SkipForward, color: 'text-surface-500 bg-surface-50 dark:bg-surface-800 border-surface-200' },
 ];
 
 interface COAMappingReviewProps {
@@ -69,47 +91,85 @@ export function COAMappingReview({ stageData, onUpdate, dealId }: COAMappingRevi
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [showGuidedFlow, setShowGuidedFlow] = useState(false);
+  const initRef = useRef(false);
 
-  // Load mappings from API
+  // Initialize mappings from extraction data in stageData
   useEffect(() => {
+    if (initRef.current) return;
+    initRef.current = true;
+
     const loadMappings = async () => {
-      if (!dealId) {
+      // First try to get from extraction data stored in stageData
+      const extraction = (stageData as any).extraction;
+      if (extraction && extraction.lineItems && extraction.lineItems.length > 0) {
+        // Convert line items to COA mappings
+        const items: COAMapping[] = extraction.lineItems.map((item: any, idx: number) => ({
+          id: `item-${idx}`,
+          sourceLabel: item.originalLabel || item.label,
+          sourceValue: item.annualized || item.values?.[0]?.value || 0,
+          sourceMonth: item.values?.[0]?.period,
+          facilityName: item.facility,
+          coaCode: item.coaCode,
+          coaName: item.coaName,
+          category: item.category,
+          mappingConfidence: item.confidence || 0.8,
+          isMapped: !!item.coaCode && item.coaCode !== 'EXP_UNMAPPED' && item.coaCode !== 'REV_OTHER' && item.category !== 'other',
+          proformaDestination: item.proformaKey,
+        }));
+
+        setMappings(items);
         setLoading(false);
         return;
       }
 
-      try {
-        const response = await fetch(`/api/deals/${dealId}/coa-mappings`);
-        const data = await response.json();
+      // Fallback: try to load from API if dealId exists
+      if (dealId) {
+        try {
+          const response = await fetch(`/api/deals/${dealId}/coa-mappings`);
+          const data = await response.json();
 
-        if (data.success) {
-          setMappings(data.data.mappings || []);
+          if (data.success && data.data.mappings?.length > 0) {
+            setMappings(data.data.mappings);
+          }
+        } catch (err) {
+          console.error('Failed to load mappings:', err);
         }
-      } catch (err) {
-        console.error('Failed to load mappings:', err);
-      } finally {
-        setLoading(false);
       }
+
+      setLoading(false);
     };
 
     loadMappings();
-  }, [dealId]);
+  }, []);
 
-  // Sync summary to parent
+  // Sync summary to parent (debounced)
+  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
-    const totalItems = mappings.length;
-    const mappedItems = mappings.filter((m) => m.isMapped).length;
-    const reviewedItems = mappings.filter((m) => m.coaCode).length;
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+    updateTimeoutRef.current = setTimeout(() => {
+      const totalItems = mappings.length;
+      const mappedCount = mappings.filter((m) => m.isMapped).length;
+      const reviewedItems = mappings.filter((m) => m.coaCode).length;
 
-    onUpdate({
-      coaMappingReview: {
-        totalItems,
-        mappedItems,
-        unmappedItems: totalItems - mappedItems,
-        reviewedItems,
-      },
-    });
-  }, [mappings, onUpdate]);
+      onUpdate({
+        coaMappingReview: {
+          totalItems,
+          mappedItems: mappedCount,
+          unmappedItems: totalItems - mappedCount,
+          reviewedItems,
+          mappings: mappings, // Store the full mapping data
+        },
+      });
+    }, 500);
+
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+    };
+  }, [mappings]);
 
   // Apply mapping to an item
   const applyMapping = async (mappingId: string, coaCode: string) => {
@@ -132,7 +192,7 @@ export function COAMappingReview({ stageData, onUpdate, dealId }: COAMappingRevi
       )
     );
 
-    // Save to API
+    // Save to API if dealId exists
     if (dealId) {
       try {
         await fetch(`/api/deals/${dealId}/coa-mappings/${mappingId}`, {
@@ -148,6 +208,93 @@ export function COAMappingReview({ stageData, onUpdate, dealId }: COAMappingRevi
         console.error('Failed to save mapping:', err);
       }
     }
+  };
+
+  // Quick categorize an item
+  const quickCategorize = (mappingId: string, category: 'revenue' | 'expense' | 'census' | 'skipped') => {
+    let coaCode = '';
+    let coaName = '';
+    let proforma = '';
+
+    switch (category) {
+      case 'revenue':
+        coaCode = '4500';
+        coaName = 'Other Revenue';
+        proforma = 'revenue.other';
+        break;
+      case 'expense':
+        coaCode = '6800';
+        coaName = 'Other Operating';
+        proforma = 'expenses.operations.other';
+        break;
+      case 'census':
+        coaCode = 'C600';
+        coaName = 'Census Data';
+        proforma = 'census.other';
+        break;
+      case 'skipped':
+        coaCode = 'SKIP';
+        coaName = 'Skipped';
+        proforma = '';
+        break;
+    }
+
+    setMappings((prev) =>
+      prev.map((m) =>
+        m.id === mappingId
+          ? {
+              ...m,
+              coaCode,
+              coaName,
+              proformaDestination: proforma,
+              category,
+              isMapped: true,
+              mappingConfidence: 1.0,
+            }
+          : m
+      )
+    );
+
+    // Move to next item
+    skipItem();
+  };
+
+  // Auto-map all unmapped items to their best category
+  const autoMapAll = () => {
+    setMappings((prev) =>
+      prev.map((m) => {
+        if (m.isMapped) return m;
+
+        // Determine category based on source label
+        const label = m.sourceLabel.toLowerCase();
+        let coaCode = '6800';
+        let coaName = 'Other Operating';
+        let proforma = 'expenses.operations.other';
+        let category: COAMapping['category'] = 'expense';
+
+        if (label.includes('revenue') || label.includes('income') || label.includes('reimburse')) {
+          coaCode = '4500';
+          coaName = 'Other Revenue';
+          proforma = 'revenue.other';
+          category = 'revenue';
+        } else if (label.includes('census') || label.includes('day') || label.includes('occupancy') || label.includes('bed')) {
+          coaCode = 'C600';
+          coaName = 'Census Data';
+          proforma = 'census.other';
+          category = 'census';
+        }
+
+        return {
+          ...m,
+          coaCode,
+          coaName,
+          proformaDestination: proforma,
+          category,
+          isMapped: true,
+          mappingConfidence: 0.7,
+        };
+      })
+    );
   };
 
   // Skip an item (move to next in guided flow)
@@ -239,10 +386,15 @@ export function COAMappingReview({ stageData, onUpdate, dealId }: COAMappingRevi
 
       {/* Guided flow or list view */}
       {unmappedItems.length > 0 && !showGuidedFlow && (
-        <Button onClick={() => setShowGuidedFlow(true)} className="w-full">
-          <Sparkles className="w-4 h-4 mr-2" />
-          Start Guided Mapping ({unmappedItems.length} items)
-        </Button>
+        <div className="flex gap-3">
+          <Button onClick={() => setShowGuidedFlow(true)} className="flex-1">
+            <Sparkles className="w-4 h-4 mr-2" />
+            Start Guided Mapping ({unmappedItems.length} items)
+          </Button>
+          <Button variant="outline" onClick={autoMapAll}>
+            Auto-Map All
+          </Button>
+        </div>
       )}
 
       {showGuidedFlow && currentUnmapped && (
@@ -304,9 +456,32 @@ export function COAMappingReview({ stageData, onUpdate, dealId }: COAMappingRevi
               </div>
             )}
 
+            {/* Quick categorize buttons */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Quick Categorize</Label>
+              <div className="grid grid-cols-4 gap-2">
+                {QUICK_CATEGORIES.map((cat) => {
+                  const Icon = cat.icon;
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => quickCategorize(currentUnmapped.id, cat.id as any)}
+                      className={cn(
+                        'p-3 rounded-lg border flex flex-col items-center gap-1 transition-all hover:scale-105',
+                        cat.color
+                      )}
+                    >
+                      <Icon className="w-5 h-5" />
+                      <span className="text-xs font-medium">{cat.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* COA selector */}
             <div className="space-y-2">
-              <Label>Select COA Account</Label>
+              <Label>Or select specific COA Account</Label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
                 <Input
@@ -316,7 +491,7 @@ export function COAMappingReview({ stageData, onUpdate, dealId }: COAMappingRevi
                   className="pl-10"
                 />
               </div>
-              <div className="max-h-48 overflow-y-auto border rounded-lg divide-y">
+              <div className="max-h-40 overflow-y-auto border rounded-lg divide-y">
                 {filteredCOA.map((coa) => (
                   <button
                     key={coa.code}

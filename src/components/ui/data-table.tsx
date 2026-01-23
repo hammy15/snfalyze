@@ -33,6 +33,7 @@ interface DataTableProps<T> {
   sortDirection?: 'asc' | 'desc'
   onSort?: (column: string, direction: 'asc' | 'desc') => void
   hoverable?: boolean
+  activeRowId?: string
 }
 
 export function DataTable<T extends Record<string, any>>({

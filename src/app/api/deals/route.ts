@@ -35,16 +35,21 @@ export async function POST(request: NextRequest) {
     const {
       name,
       assetType,
+      assetTypes, // Support both singular and array format
       askingPrice,
       beds,
       primaryState,
       brokerName,
       brokerFirm,
       sellerName,
+      status,
     } = body;
 
+    // Handle asset type - accept either singular or array
+    const resolvedAssetType = assetType || (Array.isArray(assetTypes) ? assetTypes[0] : assetTypes);
+
     // Validate required fields
-    if (!name || !assetType) {
+    if (!name || !resolvedAssetType) {
       return NextResponse.json(
         { success: false, error: 'Name and asset type are required' },
         { status: 400 }
@@ -56,14 +61,14 @@ export async function POST(request: NextRequest) {
       .insert(deals)
       .values({
         name,
-        assetType,
+        assetType: resolvedAssetType,
         askingPrice,
         beds,
         primaryState,
         brokerName,
         brokerFirm,
         sellerName,
-        status: 'new',
+        status: status || 'new',
       })
       .returning();
 

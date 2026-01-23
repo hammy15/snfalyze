@@ -43,9 +43,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
+  // Public routes that don't require authentication
+  const publicRoutes = ['/login', '/design-demo'];
+
   // Redirect to login if not authenticated
   useEffect(() => {
-    if (!isLoading && !user && pathname !== '/login') {
+    if (!isLoading && !user && !publicRoutes.includes(pathname)) {
       router.push('/login');
     }
   }, [user, isLoading, pathname, router]);

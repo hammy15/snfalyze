@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -12,45 +13,29 @@ import {
   FolderKanban,
   Building2,
   TrendingUp,
-  AlertTriangle,
   CheckCircle,
   Clock,
   ArrowRight,
+  FileText,
 } from 'lucide-react';
 
-// Mock data for demonstration
-const recentDeals = [
-  {
-    id: '1',
-    name: 'Sunrise Gardens SNF',
-    status: 'analyzing',
-    assetType: 'SNF',
-    beds: 120,
-    state: 'WA',
-    confidence: 72,
-    valueBase: 8500000,
-  },
-  {
-    id: '2',
-    name: 'Pacific Assisted Living Portfolio',
-    status: 'reviewed',
-    assetType: 'ALF',
-    beds: 85,
-    state: 'OR',
-    confidence: 85,
-    valueBase: 12200000,
-  },
-  {
-    id: '3',
-    name: 'Evergreen Care Center',
-    status: 'under_loi',
-    assetType: 'SNF',
-    beds: 150,
-    state: 'CA',
-    confidence: 78,
-    valueBase: 15800000,
-  },
-];
+interface Deal {
+  id: string;
+  name: string;
+  status: string;
+  assetType: string;
+  beds: number;
+  state: string;
+  confidence: number;
+  valueBase: number;
+}
+
+interface DashboardStats {
+  activeDeals: number;
+  underLOI: number;
+  awaitingReview: number;
+  pipelineValue: number;
+}
 
 const statusConfig: Record<string, { label: string; variant: 'default' | 'success' | 'warning' | 'info' }> = {
   new: { label: 'New', variant: 'info' },
@@ -63,6 +48,53 @@ const statusConfig: Record<string, { label: string; variant: 'default' | 'succes
 };
 
 export default function Dashboard() {
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [stats, setStats] = useState<DashboardStats>({
+    activeDeals: 0,
+    underLOI: 0,
+    awaitingReview: 0,
+    pipelineValue: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchDashboardData() {
+      try {
+        const response = await fetch('/api/deals');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data) {
+            setDeals(data.data.slice(0, 5).map((deal: Record<string, unknown>) => ({
+              id: deal.id as string,
+              name: deal.name as string,
+              status: deal.status as string || 'new',
+              assetType: deal.dealStructure as string || 'SNF',
+              beds: 0,
+              state: '',
+              confidence: 0,
+              valueBase: 0,
+            })));
+
+            // Calculate stats from real data
+            const allDeals = data.data;
+            setStats({
+              activeDeals: allDeals.length,
+              underLOI: allDeals.filter((d: Record<string, unknown>) => d.status === 'under_loi').length,
+              awaitingReview: allDeals.filter((d: Record<string, unknown>) => d.status === 'analyzing' || d.status === 'new').length,
+              pipelineValue: 0, // Will be calculated from facility valuations
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchDashboardData();
+  }, []);
+
   return (
     <div className="space-y-8 animate-fade-in">
       <PageHeader
@@ -87,7 +119,7 @@ export default function Dashboard() {
                 <FolderKanban className="w-6 h-6 text-accent" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-cascadia-900">12</p>
+                <p className="text-2xl font-bold text-cascadia-900">{stats.activeDeals}</p>
                 <p className="text-sm text-cascadia-500">Active Deals</p>
               </div>
             </div>
@@ -101,7 +133,7 @@ export default function Dashboard() {
                 <CheckCircle className="w-6 h-6 text-status-success" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-cascadia-900">3</p>
+                <p className="text-2xl font-bold text-cascadia-900">{stats.underLOI}</p>
                 <p className="text-sm text-cascadia-500">Under LOI</p>
               </div>
             </div>
@@ -115,7 +147,7 @@ export default function Dashboard() {
                 <Clock className="w-6 h-6 text-status-warning" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-cascadia-900">5</p>
+                <p className="text-2xl font-bold text-cascadia-900">{stats.awaitingReview}</p>
                 <p className="text-sm text-cascadia-500">Awaiting Review</p>
               </div>
             </div>
@@ -129,7 +161,9 @@ export default function Dashboard() {
                 <TrendingUp className="w-6 h-6 text-blue-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-cascadia-900">$156M</p>
+                <p className="text-2xl font-bold text-cascadia-900">
+                  {stats.pipelineValue > 0 ? `$${(stats.pipelineValue / 1000000).toFixed(0)}M` : '$0'}
+                </p>
                 <p className="text-sm text-cascadia-500">Pipeline Value</p>
               </div>
             </div>
@@ -207,43 +241,69 @@ export default function Dashboard() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {recentDeals.map((deal) => {
-              const status = statusConfig[deal.status];
-              return (
-                <Link
-                  key={deal.id}
-                  href={`/deals/${deal.id}`}
-                  className="block p-4 rounded-lg border border-cascadia-200 hover:border-accent/50 hover:bg-cascadia-50/50 transition-all"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h4 className="font-medium text-cascadia-900">{deal.name}</h4>
-                        <Badge variant={status.variant}>{status.label}</Badge>
+          {loading ? (
+            <div className="py-12 text-center">
+              <div className="animate-pulse text-cascadia-500">Loading...</div>
+            </div>
+          ) : deals.length === 0 ? (
+            <div className="py-12 text-center">
+              <div className="mx-auto w-16 h-16 rounded-full bg-cascadia-100 flex items-center justify-center mb-4">
+                <FileText className="w-8 h-8 text-cascadia-400" />
+              </div>
+              <h3 className="text-lg font-medium text-cascadia-900 mb-2">No deals yet</h3>
+              <p className="text-sm text-cascadia-500 mb-4">
+                Upload your first deal to start the analysis process
+              </p>
+              <Link href="/upload">
+                <Button>
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload Deal
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {deals.map((deal) => {
+                const status = statusConfig[deal.status] || statusConfig.new;
+                return (
+                  <Link
+                    key={deal.id}
+                    href={`/deals/${deal.id}`}
+                    className="block p-4 rounded-lg border border-cascadia-200 hover:border-accent/50 hover:bg-cascadia-50/50 transition-all"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h4 className="font-medium text-cascadia-900">{deal.name}</h4>
+                          <Badge variant={status.variant}>{status.label}</Badge>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-cascadia-500">
+                          <span>{deal.assetType}</span>
+                          {deal.beds > 0 && <span>{deal.beds} beds</span>}
+                          {deal.state && <span>{deal.state}</span>}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-4 text-sm text-cascadia-500">
-                        <span>{deal.assetType}</span>
-                        <span>{deal.beds} beds</span>
-                        <span>{deal.state}</span>
-                      </div>
+                      {deal.valueBase > 0 && (
+                        <div className="flex items-center gap-6">
+                          <div className="text-right">
+                            <p className="text-sm text-cascadia-500">Base Value</p>
+                            <p className="font-semibold text-cascadia-900 tabular-nums">
+                              {formatCurrency(deal.valueBase, true)}
+                            </p>
+                          </div>
+                          {deal.confidence > 0 && (
+                            <div className="w-32">
+                              <ConfidenceIndicator score={deal.confidence} showLabel={false} size="sm" />
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-6">
-                      <div className="text-right">
-                        <p className="text-sm text-cascadia-500">Base Value</p>
-                        <p className="font-semibold text-cascadia-900 tabular-nums">
-                          {formatCurrency(deal.valueBase, true)}
-                        </p>
-                      </div>
-                      <div className="w-32">
-                        <ConfidenceIndicator score={deal.confidence} showLabel={false} size="sm" />
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -1,13 +1,12 @@
 'use client';
 
 import * as React from 'react';
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { formatCurrency, formatPercent } from '@/lib/utils';
 import {
   Plus,
@@ -21,96 +20,23 @@ import {
   TrendingUp,
   CheckCircle,
   XCircle,
+  Handshake,
 } from 'lucide-react';
 
-// Mock capital partners data
-const partners = [
-  {
-    id: '1',
-    name: 'Northwest Healthcare REIT',
-    type: 'reit',
-    assetTypes: ['SNF', 'ALF'],
-    geographies: ['WA', 'OR', 'ID'],
-    minDealSize: 5000000,
-    maxDealSize: 25000000,
-    targetYield: 0.11,
-    maxLtv: 0.70,
-    riskTolerance: 'moderate',
-    preferredStructure: 'Sale-Leaseback',
-    dealsClosed: 4,
-    dealsInProgress: 1,
-    lastDealDate: '2023-12-15',
-    status: 'active',
-  },
-  {
-    id: '2',
-    name: 'Pacific Senior Lending',
-    type: 'lender',
-    assetTypes: ['SNF', 'ALF', 'ILF'],
-    geographies: ['WA', 'OR', 'CA'],
-    minDealSize: 3000000,
-    maxDealSize: 50000000,
-    targetYield: 0.095,
-    maxLtv: 0.75,
-    riskTolerance: 'conservative',
-    preferredStructure: 'Senior Debt',
-    dealsClosed: 8,
-    dealsInProgress: 2,
-    lastDealDate: '2024-01-10',
-    status: 'active',
-  },
-  {
-    id: '3',
-    name: 'Cascade Capital Partners',
-    type: 'equity',
-    assetTypes: ['SNF'],
-    geographies: ['WA', 'OR', 'CA', 'AZ'],
-    minDealSize: 10000000,
-    maxDealSize: 100000000,
-    targetYield: 0.15,
-    maxLtv: null,
-    riskTolerance: 'aggressive',
-    preferredStructure: 'JV Equity',
-    dealsClosed: 2,
-    dealsInProgress: 0,
-    lastDealDate: '2023-09-20',
-    status: 'active',
-  },
-  {
-    id: '4',
-    name: 'Mountain States Healthcare Finance',
-    type: 'lender',
-    assetTypes: ['SNF', 'ALF'],
-    geographies: ['CO', 'UT', 'MT', 'WY'],
-    minDealSize: 2000000,
-    maxDealSize: 20000000,
-    targetYield: 0.10,
-    maxLtv: 0.72,
-    riskTolerance: 'moderate',
-    preferredStructure: 'Senior Debt',
-    dealsClosed: 3,
-    dealsInProgress: 0,
-    lastDealDate: '2023-11-05',
-    status: 'inactive',
-  },
-  {
-    id: '5',
-    name: 'Golden State Senior Housing REIT',
-    type: 'reit',
-    assetTypes: ['ALF', 'ILF'],
-    geographies: ['CA', 'AZ', 'NV'],
-    minDealSize: 8000000,
-    maxDealSize: 40000000,
-    targetYield: 0.105,
-    maxLtv: 0.68,
-    riskTolerance: 'conservative',
-    preferredStructure: 'Sale-Leaseback',
-    dealsClosed: 5,
-    dealsInProgress: 1,
-    lastDealDate: '2024-01-05',
-    status: 'active',
-  },
-];
+interface Partner {
+  id: string;
+  name: string;
+  type: string;
+  assetTypes: string[];
+  geographies: string[];
+  minDealSize: number;
+  maxDealSize: number;
+  targetYield: number;
+  maxLtv: number | null;
+  riskTolerance: string;
+  preferredStructure: string;
+  status: string;
+}
 
 const typeConfig: Record<string, { label: string; color: string }> = {
   lender: { label: 'Lender', color: 'bg-blue-100 text-blue-700' },
@@ -125,19 +51,124 @@ const riskConfig: Record<string, { label: string; variant: 'default' | 'success'
 };
 
 export default function PartnersPage() {
+  const [partners, setPartners] = useState<Partner[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('All');
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const filteredPartners = partners.filter((partner) => {
-    const matchesSearch = partner.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = selectedType === 'All' || partner.type === selectedType.toLowerCase();
-    return matchesSearch && matchesType;
-  });
+  // Fetch partners from API
+  useEffect(() => {
+    async function fetchPartners() {
+      try {
+        const response = await fetch('/api/partners');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data) {
+            setPartners(data.data);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch partners:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchPartners();
+  }, []);
 
-  const activePartners = partners.filter((p) => p.status === 'active').length;
-  const totalDealsClosed = partners.reduce((sum, p) => sum + p.dealsClosed, 0);
-  const avgTargetYield = partners.reduce((sum, p) => sum + p.targetYield, 0) / partners.length;
+  const filteredPartners = useMemo(() => {
+    return partners.filter((partner) => {
+      const matchesSearch = partner.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesType = selectedType === 'All' || partner.type === selectedType.toLowerCase();
+      return matchesSearch && matchesType;
+    });
+  }, [partners, searchQuery, selectedType]);
+
+  const stats = useMemo(() => {
+    const activePartners = partners.filter((p) => p.status === 'active').length;
+    const avgTargetYield = partners.length > 0
+      ? partners.reduce((sum, p) => sum + (p.targetYield || 0), 0) / partners.length
+      : 0;
+    return {
+      total: partners.length,
+      active: activePartners,
+      avgYield: avgTargetYield,
+    };
+  }, [partners]);
+
+  if (loading) {
+    return (
+      <div className="space-y-8 animate-fade-in">
+        <PageHeader
+          title="Capital Partners"
+          description="Lender, REIT, and equity partner profiles for deal simulation"
+        />
+        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <div className="animate-pulse text-gray-500">Loading partners...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (partners.length === 0) {
+    return (
+      <div className="space-y-8 animate-fade-in">
+        <PageHeader
+          title="Capital Partners"
+          description="Lender, REIT, and equity partner profiles for deal simulation"
+          actions={
+            <Button onClick={() => setShowAddModal(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Partner
+            </Button>
+          }
+        />
+        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <div className="mx-auto w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+            <Handshake className="w-8 h-8 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No capital partners yet</h3>
+          <p className="text-sm text-gray-500 mb-4">
+            Add capital partners to simulate deal financing scenarios
+          </p>
+          <Button onClick={() => setShowAddModal(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Your First Partner
+          </Button>
+        </div>
+
+        {/* Partner Simulation Info */}
+        <Card>
+          <CardHeader>
+            <CardTitle>How Partner Simulation Works</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+              <div className="space-y-2">
+                <h4 className="font-medium text-cascadia-900">Profile Matching</h4>
+                <p className="text-cascadia-600">
+                  Each deal is tested against partner profiles based on geography, asset type, deal size, and risk tolerance.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <h4 className="font-medium text-cascadia-900">Yield Analysis</h4>
+                <p className="text-cascadia-600">
+                  Expected yields are calculated based on partner requirements and deal characteristics to identify best economics.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <h4 className="font-medium text-cascadia-900">Close Probability</h4>
+                <p className="text-cascadia-600">
+                  Historical deal data and partner behavior inform probability of close estimates for each match.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -161,7 +192,7 @@ export default function PartnersPage() {
                 <Building className="w-6 h-6 text-accent" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-cascadia-900">{partners.length}</p>
+                <p className="text-2xl font-bold text-cascadia-900">{stats.total}</p>
                 <p className="text-sm text-cascadia-500">Total Partners</p>
               </div>
             </div>
@@ -175,22 +206,8 @@ export default function PartnersPage() {
                 <CheckCircle className="w-6 h-6 text-status-success" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-cascadia-900">{activePartners}</p>
+                <p className="text-2xl font-bold text-cascadia-900">{stats.active}</p>
                 <p className="text-sm text-cascadia-500">Active Partners</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-lg bg-blue-100">
-                <TrendingUp className="w-6 h-6 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-cascadia-900">{totalDealsClosed}</p>
-                <p className="text-sm text-cascadia-500">Deals Closed</p>
               </div>
             </div>
           </CardContent>
@@ -203,8 +220,24 @@ export default function PartnersPage() {
                 <Target className="w-6 h-6 text-purple-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-cascadia-900">{formatPercent(avgTargetYield, 1)}</p>
+                <p className="text-2xl font-bold text-cascadia-900">
+                  {stats.avgYield > 0 ? formatPercent(stats.avgYield, 1) : '—'}
+                </p>
                 <p className="text-sm text-cascadia-500">Avg Target Yield</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-lg bg-blue-100">
+                <Handshake className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-cascadia-900">—</p>
+                <p className="text-sm text-cascadia-500">Deals Closed</p>
               </div>
             </div>
           </CardContent>
@@ -250,8 +283,8 @@ export default function PartnersPage() {
       {/* Partners Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {filteredPartners.map((partner) => {
-          const type = typeConfig[partner.type];
-          const risk = riskConfig[partner.riskTolerance];
+          const type = typeConfig[partner.type] || { label: partner.type, color: 'bg-gray-100 text-gray-700' };
+          const risk = riskConfig[partner.riskTolerance] || { label: partner.riskTolerance, variant: 'default' as const };
 
           return (
             <Card key={partner.id} className="hover:border-accent/50 transition-colors">
@@ -266,10 +299,12 @@ export default function PartnersPage() {
                           {type.label}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-cascadia-500">
-                        <MapPin className="w-3 h-3" />
-                        {partner.geographies.join(', ')}
-                      </div>
+                      {partner.geographies && partner.geographies.length > 0 && (
+                        <div className="flex items-center gap-2 text-sm text-cascadia-500">
+                          <MapPin className="w-3 h-3" />
+                          {partner.geographies.join(', ')}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-1">
                       <span
@@ -286,13 +321,15 @@ export default function PartnersPage() {
                     <div>
                       <p className="text-xs text-cascadia-500">Deal Size Range</p>
                       <p className="text-sm font-medium text-cascadia-900">
-                        {formatCurrency(partner.minDealSize, true)} - {formatCurrency(partner.maxDealSize, true)}
+                        {partner.minDealSize && partner.maxDealSize
+                          ? `${formatCurrency(partner.minDealSize, true)} - ${formatCurrency(partner.maxDealSize, true)}`
+                          : '—'}
                       </p>
                     </div>
                     <div>
                       <p className="text-xs text-cascadia-500">Target Yield</p>
                       <p className="text-sm font-medium text-cascadia-900">
-                        {formatPercent(partner.targetYield, 1)}
+                        {partner.targetYield ? formatPercent(partner.targetYield, 1) : '—'}
                       </p>
                     </div>
                     <div>
@@ -304,7 +341,7 @@ export default function PartnersPage() {
                     <div>
                       <p className="text-xs text-cascadia-500">Preferred Structure</p>
                       <p className="text-sm font-medium text-cascadia-900">
-                        {partner.preferredStructure}
+                        {partner.preferredStructure || '—'}
                       </p>
                     </div>
                   </div>
@@ -314,31 +351,21 @@ export default function PartnersPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-cascadia-500">Asset Types:</span>
                       <div className="flex gap-1">
-                        {partner.assetTypes.map((type) => (
+                        {partner.assetTypes && partner.assetTypes.map((assetType) => (
                           <span
-                            key={type}
+                            key={assetType}
                             className="px-2 py-0.5 text-xs bg-cascadia-100 text-cascadia-600 rounded"
                           >
-                            {type}
+                            {assetType}
                           </span>
                         ))}
                       </div>
                     </div>
-                    <Badge variant={risk.variant}>{risk.label}</Badge>
+                    {partner.riskTolerance && <Badge variant={risk.variant}>{risk.label}</Badge>}
                   </div>
 
-                  {/* Track Record */}
-                  <div className="flex items-center justify-between pt-2 border-t border-cascadia-100">
-                    <div className="flex items-center gap-4 text-sm">
-                      <span className="text-cascadia-500">
-                        <strong className="text-cascadia-900">{partner.dealsClosed}</strong> deals closed
-                      </span>
-                      {partner.dealsInProgress > 0 && (
-                        <span className="text-accent">
-                          <strong>{partner.dealsInProgress}</strong> in progress
-                        </span>
-                      )}
-                    </div>
+                  {/* Actions */}
+                  <div className="flex items-center justify-end pt-2 border-t border-cascadia-100">
                     <div className="flex gap-1">
                       <Button variant="ghost" size="sm">
                         <Edit2 className="w-4 h-4" />

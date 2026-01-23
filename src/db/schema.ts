@@ -132,6 +132,40 @@ export const analysisStageTypeEnum = pgEnum('analysis_stage_type', [
   'valuation_coverage',
 ]);
 
+// Enhanced Wizard Stage Types
+export const wizardStageTypeEnum = pgEnum('wizard_stage_type', [
+  'deal_structure_setup',
+  'facility_identification',
+  'document_organization',
+  'document_extraction',
+  'coa_mapping_review',
+  'financial_consolidation',
+]);
+
+// Document Folder Types
+export const folderTypeEnum = pgEnum('folder_type', [
+  'financial',
+  'census',
+  'survey',
+  'legal',
+  'other',
+]);
+
+// Extraction Stage Types
+export const extractionStageEnum = pgEnum('extraction_stage', [
+  'pending',
+  'in_progress',
+  'review_needed',
+  'complete',
+]);
+
+// COA Mapping Methods
+export const mappingMethodEnum = pgEnum('mapping_method', [
+  'auto',
+  'suggested',
+  'manual',
+]);
+
 export const analysisStageStatusEnum = pgEnum('analysis_stage_status', [
   'pending',
   'in_progress',
@@ -204,11 +238,17 @@ export const facilities = pgTable(
     isSff: boolean('is_sff').default(false),
     isSffWatch: boolean('is_sff_watch').default(false),
     hasImmediateJeopardy: boolean('has_immediate_jeopardy').default(false),
+    // Wizard Enhancement Fields
+    isVerified: boolean('is_verified').default(false),
+    verifiedAt: timestamp('verified_at', { withTimezone: true }),
+    verifiedBy: varchar('verified_by', { length: 255 }),
+    cmsDataSnapshot: jsonb('cms_data_snapshot'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   },
   (table) => ({
     dealIdIdx: index('idx_facilities_deal_id').on(table.dealId),
     ccnIdx: index('idx_facilities_ccn').on(table.ccn),
+    isVerifiedIdx: index('idx_facilities_is_verified').on(table.isVerified),
   })
 );
 
@@ -232,11 +272,18 @@ export const documents = pgTable(
     clarificationStatus: clarificationStatusEnum('clarification_status'),
     pendingClarifications: integer('pending_clarifications').default(0),
     extractionConfidence: integer('extraction_confidence'),
+    // Wizard Enhancement Fields
+    folderId: uuid('folder_id'),
+    userConfirmedType: boolean('user_confirmed_type').default(false),
+    extractionStage: extractionStageEnum('extraction_stage'),
+    ocrQualityScore: integer('ocr_quality_score'),
   },
   (table) => ({
     dealIdIdx: index('idx_documents_deal_id').on(table.dealId),
     statusIdx: index('idx_documents_status').on(table.status),
     clarificationStatusIdx: index('idx_documents_clarification_status').on(table.clarificationStatus),
+    folderIdIdx: index('idx_documents_folder_id').on(table.folderId),
+    extractionStageIdx: index('idx_documents_extraction_stage').on(table.extractionStage),
   })
 );
 
@@ -1110,6 +1157,10 @@ export const dealsRelations = relations(deals, ({ one, many }) => ({
     fields: [deals.buyerPartnerId],
     references: [capitalPartners.id],
   }),
+  // Wizard Enhancement Relations
+  wizardSessions: many(wizardSessions),
+  documentFolders: many(documentFolders),
+  coaMappings: many(dealCoaMappings),
 }));
 
 export const facilitiesRelations = relations(facilities, ({ one, many }) => ({
@@ -1296,8 +1347,13 @@ export const documentsRelations = relations(documents, ({ one, many }) => ({
     fields: [documents.facilityId],
     references: [facilities.id],
   }),
+  folder: one(documentFolders, {
+    fields: [documents.folderId],
+    references: [documentFolders.id],
+  }),
   clarifications: many(extractionClarifications),
   corrections: many(fieldCorrections),
+  coaMappings: many(dealCoaMappings),
 }));
 
 // ============================================================================
@@ -1357,3 +1413,107 @@ export const settingsSnapshots = pgTable(
     nameIdx: index('idx_snapshot_name').on(table.name),
   })
 );
+
+// ============================================================================
+// Enhanced Deal Wizard Tables
+// ============================================================================
+
+export const wizardSessions = pgTable(
+  'wizard_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    dealId: uuid('deal_id').references(() => deals.id, { onDelete: 'set null' }),
+    currentStage: wizardStageTypeEnum('current_stage').default('deal_structure_setup').notNull(),
+    stageData: jsonb('stage_data').default('{}'),
+    isComplete: boolean('is_complete').default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    dealIdIdx: index('idx_wizard_sessions_deal_id').on(table.dealId),
+    stageIdx: index('idx_wizard_sessions_stage').on(table.currentStage),
+  })
+);
+
+export const documentFolders = pgTable(
+  'document_folders',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    dealId: uuid('deal_id')
+      .references(() => deals.id, { onDelete: 'cascade' })
+      .notNull(),
+    name: varchar('name', { length: 255 }).notNull(),
+    folderType: folderTypeEnum('folder_type').notNull(),
+    displayOrder: integer('display_order').default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    dealIdIdx: index('idx_document_folders_deal_id').on(table.dealId),
+    folderTypeIdx: index('idx_document_folders_type').on(table.folderType),
+  })
+);
+
+export const dealCoaMappings = pgTable(
+  'deal_coa_mappings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    dealId: uuid('deal_id')
+      .references(() => deals.id, { onDelete: 'cascade' })
+      .notNull(),
+    facilityId: uuid('facility_id').references(() => facilities.id, { onDelete: 'set null' }),
+    documentId: uuid('document_id').references(() => documents.id, { onDelete: 'set null' }),
+    sourceLabel: varchar('source_label', { length: 500 }).notNull(),
+    sourceValue: decimal('source_value', { precision: 15, scale: 2 }),
+    sourceMonth: varchar('source_month', { length: 20 }),
+    coaCode: varchar('coa_code', { length: 20 }),
+    coaName: varchar('coa_name', { length: 255 }),
+    mappingConfidence: decimal('mapping_confidence', { precision: 5, scale: 4 }),
+    mappingMethod: mappingMethodEnum('mapping_method'),
+    isMapped: boolean('is_mapped').default(false),
+    proformaDestination: varchar('proforma_destination', { length: 100 }),
+    reviewedBy: varchar('reviewed_by', { length: 255 }),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    dealIdIdx: index('idx_deal_coa_mappings_deal_id').on(table.dealId),
+    facilityIdIdx: index('idx_deal_coa_mappings_facility_id').on(table.facilityId),
+    documentIdIdx: index('idx_deal_coa_mappings_document_id').on(table.documentId),
+    isMappedIdx: index('idx_deal_coa_mappings_is_mapped').on(table.isMapped),
+    coaCodeIdx: index('idx_deal_coa_mappings_coa_code').on(table.coaCode),
+  })
+);
+
+// ============================================================================
+// Wizard Relations
+// ============================================================================
+
+export const wizardSessionsRelations = relations(wizardSessions, ({ one }) => ({
+  deal: one(deals, {
+    fields: [wizardSessions.dealId],
+    references: [deals.id],
+  }),
+}));
+
+export const documentFoldersRelations = relations(documentFolders, ({ one, many }) => ({
+  deal: one(deals, {
+    fields: [documentFolders.dealId],
+    references: [deals.id],
+  }),
+  documents: many(documents),
+}));
+
+export const dealCoaMappingsRelations = relations(dealCoaMappings, ({ one }) => ({
+  deal: one(deals, {
+    fields: [dealCoaMappings.dealId],
+    references: [deals.id],
+  }),
+  facility: one(facilities, {
+    fields: [dealCoaMappings.facilityId],
+    references: [facilities.id],
+  }),
+  document: one(documents, {
+    fields: [dealCoaMappings.documentId],
+    references: [documents.id],
+  }),
+}));

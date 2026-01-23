@@ -50,171 +50,137 @@ import {
 } from 'lucide-react';
 import { SaleLeasebackDashboard } from '@/components/sale-leaseback/SaleLeasebackDashboard';
 
-// Mock deal data (in production, this would come from your API/database)
-const mockDeal: Deal & { dealStructure?: string } = {
-  id: '1',
-  deal_id: 'CAS-2024-001',
-  name: 'Sunrise SNF Portfolio - Oregon',
-  asset_types: ['snf'],
-  is_portfolio: true,
-  facility_count: 3,
-  total_beds: 360,
-  states: ['OR'],
-  source: 'broker',
-  source_name: 'Marcus & Millichap',
-  received_date: new Date('2024-01-15'),
-  response_deadline: new Date('2024-02-15'),
-  initial_hypothesis: 'turnaround',
-  current_hypothesis: 'turnaround',
-  hypothesis_notes: 'Portfolio shows declining census but strong market fundamentals. Believe we can improve operations.',
+// Default deal data (used as fallback)
+const defaultDeal: Deal & { dealStructure?: string } = {
+  id: '',
+  deal_id: '',
+  name: 'Loading...',
+  asset_types: [],
+  is_portfolio: false,
+  facility_count: 0,
+  total_beds: 0,
+  states: [],
+  source: '',
+  source_name: '',
+  received_date: new Date(),
+  response_deadline: new Date(),
+  initial_hypothesis: 'stabilized',
+  current_hypothesis: 'stabilized',
+  hypothesis_notes: '',
   status: 'active',
-  current_stage: 'financial_reconstruction',
-  asking_price: 45000000,
-  created_at: new Date('2024-01-15'),
+  current_stage: 'document_understanding',
+  asking_price: 0,
+  created_at: new Date(),
   updated_at: new Date(),
-  created_by: 'Sarah Chen',
-  assigned_to: ['Sarah Chen', 'Mike Rodriguez'],
-  dealStructure: 'sale_leaseback', // Enable sale-leaseback tab for demo
+  created_by: '',
+  assigned_to: [],
+  dealStructure: undefined,
 };
 
-const mockStageProgress: AnalysisStageProgress[] = [
-  {
-    id: '1',
-    deal_id: '1',
-    stage: 'document_understanding',
-    status: 'completed',
-    started_at: new Date('2024-01-16'),
-    completed_at: new Date('2024-01-18'),
-    completed_by: 'Sarah Chen',
-    notes: 'All key documents received. Missing detailed payroll records for Q3.',
-  },
-  {
-    id: '2',
-    deal_id: '1',
-    stage: 'financial_reconstruction',
-    status: 'in_progress',
-    started_at: new Date('2024-01-19'),
-    notes: 'Working on normalizing T12. Some questions about management fee structure.',
-  },
-];
-
-const mockAssumptions: DealAssumption[] = [
-  {
-    id: '1',
-    deal_id: '1',
-    stage: 'financial_reconstruction',
-    type: 'census',
-    description: 'Census will stabilize at 85% within 12 months',
-    value: '85% by Month 12',
-    rationale: 'Market average is 88%, new DON has strong track record',
-    confidence: 'medium',
-    impact: 'high',
-    created_at: new Date(),
-    created_by: 'Sarah Chen',
-  },
-  {
-    id: '2',
-    deal_id: '1',
-    stage: 'financial_reconstruction',
-    type: 'labor',
-    description: 'Can reduce agency usage by 50% within 6 months',
-    value: '50% reduction',
-    rationale: 'Local labor market improving, competitive wages budgeted',
-    confidence: 'low',
-    impact: 'high',
-    created_at: new Date(),
-    created_by: 'Mike Rodriguez',
-  },
-  {
-    id: '3',
-    deal_id: '1',
-    stage: 'document_understanding',
-    type: 'minor',
-    description: 'Q3 payroll data comparable to Q4',
-    value: 'Using Q4 as proxy',
-    rationale: 'No significant staffing changes reported',
-    confidence: 'high',
-    impact: 'low',
-    created_at: new Date(),
-    created_by: 'Sarah Chen',
-  },
-];
-
-const mockDocuments: DealDocument[] = [
-  {
-    id: '1',
-    deal_id: '1',
-    name: 'Financial Package 2023.pdf',
-    type: 'pdf',
-    category: 'financials',
-    size: 2500000,
-    extracted: true,
-    extraction_confidence: 0.92,
-    uploaded_at: new Date('2024-01-16'),
-    uploaded_by: 'Sarah Chen',
-  },
-  {
-    id: '2',
-    deal_id: '1',
-    name: 'Rent Roll - January 2024.xlsx',
-    type: 'excel',
-    category: 'rent_roll',
-    size: 450000,
-    extracted: true,
-    extraction_confidence: 0.98,
-    uploaded_at: new Date('2024-01-16'),
-    uploaded_by: 'Sarah Chen',
-  },
-  {
-    id: '3',
-    deal_id: '1',
-    name: 'Survey Results 2023.pdf',
-    type: 'pdf',
-    category: 'survey',
-    size: 1200000,
-    extracted: false,
-    uploaded_at: new Date('2024-01-17'),
-    uploaded_by: 'Mike Rodriguez',
-  },
-];
-
-const mockRisks: DealRisk[] = [
-  {
-    id: '1',
-    deal_id: '1',
-    category: 'regulatory',
-    severity: 'medium',
-    title: 'Recent survey deficiencies',
-    description: 'One facility had 5 deficiencies on last survey including one G-level',
-    mitigation: 'Review POC and verify corrections. May need additional CapEx.',
-    is_deal_breaker: false,
-    created_at: new Date(),
-  },
-  {
-    id: '2',
-    deal_id: '1',
-    category: 'operational',
-    severity: 'high',
-    title: 'High agency dependency',
-    description: 'Currently at 35% agency staffing across portfolio',
-    mitigation: 'Budget for recruitment bonuses and wage increases',
-    is_deal_breaker: false,
-    created_at: new Date(),
-  },
-];
+// Type for API document response
+interface ApiDocument {
+  id: string;
+  dealId: string;
+  filename: string;
+  type: string | null;
+  status: string;
+  rawText: string | null;
+  extractedData: {
+    aiAnalysis?: {
+      summary: string;
+      keyFindings: string[];
+      confidence: number;
+      documentType: string;
+    };
+    fields?: Record<string, { value: any; confidence: number; source?: string }>;
+    sheets?: Record<string, any[][]>;
+    values?: Array<{ field: string; value: any; confidence: number }>;
+  } | null;
+  processedAt: string | null;
+  createdAt: string;
+}
 
 export default function DealDetailPage() {
   const params = useParams();
   const router = useRouter();
   const dealId = params.id as string;
 
-  const [deal, setDeal] = useState<Deal & { dealStructure?: string }>(mockDeal);
-  const [stageProgress, setStageProgress] = useState<AnalysisStageProgress[]>(mockStageProgress);
-  const [assumptions, setAssumptions] = useState<DealAssumption[]>(mockAssumptions);
-  const [documents, setDocuments] = useState<DealDocument[]>(mockDocuments);
-  const [risks, setRisks] = useState<DealRisk[]>(mockRisks);
+  const [deal, setDeal] = useState<Deal & { dealStructure?: string }>(defaultDeal);
+  const [stageProgress, setStageProgress] = useState<AnalysisStageProgress[]>([]);
+  const [assumptions, setAssumptions] = useState<DealAssumption[]>([]);
+  const [documents, setDocuments] = useState<DealDocument[]>([]);
+  const [apiDocuments, setApiDocuments] = useState<ApiDocument[]>([]);
+  const [risks, setRisks] = useState<DealRisk[]>([]);
   const [synthesis, setSynthesis] = useState<DealSynthesis | undefined>(undefined);
   const [activeTab, setActiveTab] = useState('overview');
+  const [loading, setLoading] = useState(true);
+
+  // Fetch deal data from API
+  useEffect(() => {
+    async function fetchDealData() {
+      try {
+        // Fetch deal details
+        const dealResponse = await fetch(`/api/deals/${dealId}`);
+        if (dealResponse.ok) {
+          const dealData = await dealResponse.json();
+          if (dealData.success && dealData.data) {
+            const apiDeal = dealData.data;
+            setDeal({
+              id: apiDeal.id,
+              deal_id: apiDeal.dealId || `CAS-${new Date().getFullYear()}-${apiDeal.id.slice(0, 4).toUpperCase()}`,
+              name: apiDeal.name,
+              asset_types: apiDeal.assetTypes || [],
+              is_portfolio: (apiDeal.facilityCount || 0) > 1,
+              facility_count: apiDeal.facilityCount || 1,
+              total_beds: apiDeal.beds || 0,
+              states: apiDeal.primaryState ? [apiDeal.primaryState] : [],
+              source: 'broker',
+              source_name: apiDeal.brokerFirm || apiDeal.brokerName || '',
+              received_date: new Date(apiDeal.createdAt),
+              response_deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+              initial_hypothesis: 'stabilized',
+              current_hypothesis: 'stabilized',
+              hypothesis_notes: '',
+              status: apiDeal.status || 'active',
+              current_stage: apiDeal.status === 'analyzing' ? 'document_understanding' : 'financial_reconstruction',
+              asking_price: apiDeal.askingPrice || 0,
+              created_at: new Date(apiDeal.createdAt),
+              updated_at: new Date(apiDeal.updatedAt || apiDeal.createdAt),
+              created_by: 'System',
+              assigned_to: [],
+              dealStructure: apiDeal.dealStructure || undefined,
+            });
+
+            // Fetch documents for this deal
+            if (dealData.data.documents && dealData.data.documents.length > 0) {
+              const docs: ApiDocument[] = dealData.data.documents;
+              setApiDocuments(docs);
+
+              // Convert API documents to DealDocument format
+              const dealDocs: DealDocument[] = docs.map((doc) => ({
+                id: doc.id,
+                deal_id: doc.dealId,
+                name: doc.filename,
+                type: doc.filename.endsWith('.pdf') ? 'pdf' : doc.filename.endsWith('.xlsx') || doc.filename.endsWith('.xls') ? 'excel' : 'other',
+                category: doc.type || 'other',
+                size: 0,
+                extracted: doc.status === 'complete',
+                extraction_confidence: doc.extractedData?.aiAnalysis?.confidence || 0,
+                uploaded_at: new Date(doc.createdAt),
+                uploaded_by: 'System',
+              }));
+              setDocuments(dealDocs);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch deal data:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchDealData();
+  }, [dealId]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -315,6 +281,55 @@ export default function DealDetailPage() {
       created_at: synthesis?.created_at || new Date(),
     });
   };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div className="animate-pulse">
+            <div className="h-8 w-64 bg-muted rounded mb-2"></div>
+            <div className="h-4 w-96 bg-muted rounded"></div>
+          </div>
+        </div>
+        <div className="grid grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i}>
+              <CardContent className="pt-6">
+                <div className="animate-pulse">
+                  <div className="h-4 w-24 bg-muted rounded mb-2"></div>
+                  <div className="h-8 w-32 bg-muted rounded"></div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Deal not found
+  if (!deal.id) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold">Deal Not Found</h1>
+            <p className="text-muted-foreground">The deal you're looking for doesn't exist.</p>
+          </div>
+        </div>
+        <Link href="/app/deals">
+          <Button>Back to Deals</Button>
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -522,47 +537,125 @@ export default function DealDetailPage() {
                     <div>
                       <CardTitle>Documents</CardTitle>
                       <CardDescription>
-                        Uploaded deal materials and extracted data
+                        Uploaded deal materials and AI-extracted data
                       </CardDescription>
                     </div>
-                    <Button>
-                      <Upload className="h-4 w-4 mr-1" />
-                      Upload Document
-                    </Button>
+                    <Link href="/upload">
+                      <Button>
+                        <Upload className="h-4 w-4 mr-1" />
+                        Upload Document
+                      </Button>
+                    </Link>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    {documents.map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="flex items-center justify-between p-3 border rounded-lg"
-                      >
-                        <div className="flex items-center gap-3">
-                          <FileText className="h-8 w-8 text-muted-foreground" />
-                          <div>
-                            <p className="font-medium">{doc.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {doc.category} · {(doc.size / 1000000).toFixed(1)}MB ·{' '}
-                              Uploaded {doc.uploaded_at.toLocaleDateString()}
-                            </p>
+                  {documents.length === 0 ? (
+                    <div className="text-center py-8">
+                      <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">No documents uploaded yet</p>
+                      <Link href="/upload">
+                        <Button variant="outline" className="mt-4">
+                          <Upload className="h-4 w-4 mr-1" />
+                          Upload Documents
+                        </Button>
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {apiDocuments.map((doc) => {
+                        const aiAnalysis = doc.extractedData?.aiAnalysis;
+                        const fields = doc.extractedData?.fields;
+
+                        return (
+                          <div
+                            key={doc.id}
+                            className="border rounded-lg overflow-hidden"
+                          >
+                            {/* Document Header */}
+                            <div className="flex items-center justify-between p-3 bg-muted/30">
+                              <div className="flex items-center gap-3">
+                                <FileText className="h-8 w-8 text-muted-foreground" />
+                                <div>
+                                  <p className="font-medium">{doc.filename}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {doc.type || 'Unknown type'} · Status: {doc.status} ·{' '}
+                                    Uploaded {new Date(doc.createdAt).toLocaleDateString()}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {doc.status === 'complete' && aiAnalysis ? (
+                                  <Badge className="bg-green-100 text-green-800">
+                                    AI Analyzed ({Math.round((aiAnalysis.confidence || 0) * 100)}%)
+                                  </Badge>
+                                ) : doc.status === 'analyzing' ? (
+                                  <Badge className="bg-blue-100 text-blue-800">
+                                    Analyzing...
+                                  </Badge>
+                                ) : doc.status === 'error' ? (
+                                  <Badge variant="destructive">
+                                    Error
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline">{doc.status}</Badge>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* AI Analysis Results */}
+                            {doc.status === 'complete' && aiAnalysis && (
+                              <div className="p-4 border-t space-y-4">
+                                {/* Summary */}
+                                <div>
+                                  <h4 className="text-sm font-medium mb-1">AI Summary</h4>
+                                  <p className="text-sm text-muted-foreground">{aiAnalysis.summary}</p>
+                                </div>
+
+                                {/* Key Findings */}
+                                {aiAnalysis.keyFindings && aiAnalysis.keyFindings.length > 0 && (
+                                  <div>
+                                    <h4 className="text-sm font-medium mb-2">Key Findings</h4>
+                                    <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+                                      {aiAnalysis.keyFindings.map((finding, i) => (
+                                        <li key={i}>{finding}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+
+                                {/* Extracted Fields */}
+                                {fields && Object.keys(fields).length > 0 && (
+                                  <div>
+                                    <h4 className="text-sm font-medium mb-2">Extracted Data</h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                      {Object.entries(fields).slice(0, 12).map(([key, data]) => (
+                                        <div key={key} className="bg-muted/30 rounded p-2">
+                                          <p className="text-xs text-muted-foreground truncate">{key.replace(/_/g, ' ')}</p>
+                                          <p className="text-sm font-medium truncate">
+                                            {typeof data.value === 'number'
+                                              ? data.value.toLocaleString()
+                                              : String(data.value || '—')}
+                                          </p>
+                                          <p className="text-xs text-muted-foreground">
+                                            {Math.round((data.confidence || 0) * 100)}% confidence
+                                          </p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    {Object.keys(fields).length > 12 && (
+                                      <p className="text-xs text-muted-foreground mt-2">
+                                        +{Object.keys(fields).length - 12} more fields extracted
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {doc.extracted ? (
-                            <Badge className="bg-green-100 text-green-800">
-                              Extracted ({Math.round((doc.extraction_confidence || 0) * 100)}%)
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline">Not extracted</Badge>
-                          )}
-                          <Button variant="ghost" size="sm">
-                            View
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>

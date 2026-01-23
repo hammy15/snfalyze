@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, deals, facilities, valuations, financialPeriods, assumptions, capexItems, partnerMatches, riskFactors } from '@/db';
+import { db, deals, facilities, valuations, financialPeriods, assumptions, capexItems, partnerMatches, riskFactors, documents } from '@/db';
 import { eq } from 'drizzle-orm';
 
 export async function GET(
@@ -20,6 +20,7 @@ export async function GET(
         assumptions: true,
         partnerMatches: true,
         riskFactors: true,
+        documents: true,
       },
     });
 

@@ -29,15 +29,25 @@ interface FacilityMapProps {
   showILF: boolean;
   showCascadia: boolean;
   showPotential: boolean;
+  showDealLabels?: boolean;
   onFacilityClick?: (facility: MapFacility) => void;
 }
 
-// Asset type colors
+// Asset type colors for potential deals (non-Cascadia)
 const ASSET_COLORS = {
   SNF: '#1E40AF', // Blue
-  ALF: '#059669', // Green (Cascadia green)
+  ALF: '#059669', // Green
   ILF: '#7C3AED', // Purple
 };
+
+// Cascadia-specific colors (smaller markers with turquoise ring)
+const CASCADIA_COLORS = {
+  SNF: '#166534', // Dark Green
+  ALF: '#C2410C', // Dark Orange
+  ILF: '#CA8A04', // Dark Yellow
+};
+
+const TURQUOISE_RING = '#14B8A6'; // Turquoise for Cascadia ring
 
 export function FacilityMap({
   facilities,
@@ -46,11 +56,13 @@ export function FacilityMap({
   showILF,
   showCascadia,
   showPotential,
+  showDealLabels = false,
   onFacilityClick,
 }: FacilityMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
+  const labelsRef = useRef<any[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Filter facilities based on toggles
@@ -107,43 +119,71 @@ export function FacilityMap({
     const updateMarkers = async () => {
       const L = (await import('leaflet')).default;
 
-      // Clear existing markers
+      // Clear existing markers and labels
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
+      labelsRef.current.forEach((label) => label.remove());
+      labelsRef.current = [];
 
       // Add new markers
       filteredFacilities.forEach((facility) => {
-        const color = ASSET_COLORS[facility.assetType];
-        const borderStyle = facility.isCascadia ? '3px solid #FFD700' : '2px solid white';
-        const size = facility.isCascadia ? 32 : 28;
+        // Use different colors and sizes for Cascadia vs potential deals
+        const isCascadia = facility.isCascadia;
+        const color = isCascadia
+          ? CASCADIA_COLORS[facility.assetType]
+          : ASSET_COLORS[facility.assetType];
 
-        const icon = L.divIcon({
-          className: 'custom-marker',
-          html: `
-            <div style="
-              background-color: ${color};
-              width: ${size}px;
-              height: ${size}px;
-              border-radius: 50% 50% 50% 0;
-              transform: rotate(-45deg);
-              border: ${borderStyle};
-              box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-              display: flex;
-              align-items: center;
-              justify-content: center;
-            ">
-              <span style="
-                transform: rotate(45deg);
-                color: white;
-                font-size: 10px;
-                font-weight: bold;
-              ">${facility.assetType[0]}</span>
-            </div>
-          `,
-          iconSize: [size, size],
-          iconAnchor: [size / 2, size],
-          popupAnchor: [0, -size],
-        });
+        // Cascadia markers are smaller circles with turquoise ring
+        // Potential deals are larger pin markers
+        const size = isCascadia ? 16 : 28;
+        const borderStyle = isCascadia
+          ? `3px solid ${TURQUOISE_RING}`
+          : '2px solid white';
+
+        const icon = isCascadia
+          ? L.divIcon({
+              className: 'custom-marker cascadia-marker',
+              html: `
+                <div style="
+                  background-color: ${color};
+                  width: ${size}px;
+                  height: ${size}px;
+                  border-radius: 50%;
+                  border: ${borderStyle};
+                  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                "></div>
+              `,
+              iconSize: [size + 6, size + 6],
+              iconAnchor: [(size + 6) / 2, (size + 6) / 2],
+              popupAnchor: [0, -(size + 6) / 2],
+            })
+          : L.divIcon({
+              className: 'custom-marker deal-marker',
+              html: `
+                <div style="
+                  background-color: ${color};
+                  width: ${size}px;
+                  height: ${size}px;
+                  border-radius: 50% 50% 50% 0;
+                  transform: rotate(-45deg);
+                  border: ${borderStyle};
+                  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                ">
+                  <span style="
+                    transform: rotate(45deg);
+                    color: white;
+                    font-size: 10px;
+                    font-weight: bold;
+                  ">${facility.assetType[0]}</span>
+                </div>
+              `,
+              iconSize: [size, size],
+              iconAnchor: [size / 2, size],
+              popupAnchor: [0, -size],
+            });
 
         const marker = L.marker([facility.lat, facility.lng], { icon }).addTo(
           mapInstanceRef.current
@@ -210,6 +250,24 @@ export function FacilityMap({
         });
 
         markersRef.current.push(marker);
+
+        // Add deal label if showDealLabels is enabled and facility has a deal name
+        if (showDealLabels && facility.dealName && !facility.isCascadia) {
+          const labelIcon = L.divIcon({
+            className: 'deal-label-icon',
+            html: `<div class="deal-label">${facility.dealName}</div>`,
+            iconSize: [100, 20],
+            iconAnchor: [50, -5],
+          });
+
+          const label = L.marker([facility.lat, facility.lng], {
+            icon: labelIcon,
+            interactive: false,
+            zIndexOffset: 1000,
+          }).addTo(mapInstanceRef.current);
+
+          labelsRef.current.push(label);
+        }
       });
 
       // Fit bounds if we have markers
@@ -222,14 +280,83 @@ export function FacilityMap({
     };
 
     updateMarkers();
-  }, [filteredFacilities, isLoaded, onFacilityClick]);
+  }, [filteredFacilities, isLoaded, onFacilityClick, showDealLabels]);
 
   return (
-    <div className="relative w-full h-full">
+    <div className="relative w-full h-full" style={{ overflow: 'visible' }}>
+      {/* CSS to fix popup z-index and marker styling */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        .leaflet-container {
+          z-index: 1;
+          overflow: visible !important;
+        }
+        .leaflet-map-pane {
+          z-index: 1;
+        }
+        .leaflet-pane {
+          z-index: 400;
+        }
+        .leaflet-tile-pane {
+          z-index: 200;
+        }
+        .leaflet-overlay-pane {
+          z-index: 400;
+        }
+        .leaflet-shadow-pane {
+          z-index: 500;
+        }
+        .leaflet-marker-pane {
+          z-index: 600;
+        }
+        .leaflet-tooltip-pane {
+          z-index: 650;
+        }
+        .leaflet-popup-pane {
+          z-index: 700 !important;
+          overflow: visible !important;
+        }
+        .leaflet-popup {
+          z-index: 1000 !important;
+          position: absolute !important;
+        }
+        .leaflet-popup-content-wrapper {
+          z-index: 1000 !important;
+          background: white;
+          border-radius: 8px;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+        }
+        .leaflet-popup-tip-container {
+          z-index: 1000 !important;
+        }
+        .leaflet-control {
+          z-index: 800;
+        }
+        .custom-marker {
+          background: transparent !important;
+          border: none !important;
+        }
+        .cascadia-marker {
+          z-index: 100 !important;
+        }
+        .deal-marker {
+          z-index: 200 !important;
+        }
+        .deal-label {
+          background: rgba(255, 255, 255, 0.95);
+          border: 1px solid #e5e7eb;
+          border-radius: 4px;
+          padding: 2px 6px;
+          font-size: 11px;
+          font-weight: 500;
+          color: #374151;
+          white-space: nowrap;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+      `}} />
       <div
         ref={mapRef}
         className="w-full h-full"
-        style={{ minHeight: '500px' }}
+        style={{ minHeight: '500px', overflow: 'visible' }}
       />
       {!isLoaded && (
         <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
@@ -249,33 +376,73 @@ export function MapLegend() {
     <div className="bg-white rounded-lg shadow-md p-4">
       <h4 className="text-sm font-semibold text-gray-900 mb-3">Legend</h4>
 
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <span
-            className="w-4 h-4 rounded-full"
-            style={{ backgroundColor: ASSET_COLORS.SNF }}
-          />
-          <span className="text-sm text-gray-700">Skilled Nursing (SNF)</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span
-            className="w-4 h-4 rounded-full"
-            style={{ backgroundColor: ASSET_COLORS.ALF }}
-          />
-          <span className="text-sm text-gray-700">Assisted Living (ALF)</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span
-            className="w-4 h-4 rounded-full"
-            style={{ backgroundColor: ASSET_COLORS.ILF }}
-          />
-          <span className="text-sm text-gray-700">Independent Living (ILF)</span>
+      <div className="space-y-3">
+        {/* Potential Deals Section */}
+        <div>
+          <div className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+            Potential Deals
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span
+                className="w-4 h-4 rounded-full"
+                style={{ backgroundColor: ASSET_COLORS.SNF }}
+              />
+              <span className="text-sm text-gray-700">SNF</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className="w-4 h-4 rounded-full"
+                style={{ backgroundColor: ASSET_COLORS.ALF }}
+              />
+              <span className="text-sm text-gray-700">ALF</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className="w-4 h-4 rounded-full"
+                style={{ backgroundColor: ASSET_COLORS.ILF }}
+              />
+              <span className="text-sm text-gray-700">ILF</span>
+            </div>
+          </div>
         </div>
 
-        <div className="border-t border-gray-200 my-2 pt-2">
-          <div className="flex items-center gap-2">
-            <span className="w-4 h-4 rounded-full border-2 border-yellow-400 bg-gray-400" />
-            <span className="text-sm text-gray-700">Cascadia Owned</span>
+        {/* Cascadia Section */}
+        <div className="border-t border-gray-200 pt-3">
+          <div className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+            Cascadia Owned
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span
+                className="w-3 h-3 rounded-full"
+                style={{
+                  backgroundColor: CASCADIA_COLORS.SNF,
+                  border: `2px solid ${TURQUOISE_RING}`,
+                }}
+              />
+              <span className="text-sm text-gray-700">SNF</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className="w-3 h-3 rounded-full"
+                style={{
+                  backgroundColor: CASCADIA_COLORS.ALF,
+                  border: `2px solid ${TURQUOISE_RING}`,
+                }}
+              />
+              <span className="text-sm text-gray-700">ALF</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className="w-3 h-3 rounded-full"
+                style={{
+                  backgroundColor: CASCADIA_COLORS.ILF,
+                  border: `2px solid ${TURQUOISE_RING}`,
+                }}
+              />
+              <span className="text-sm text-gray-700">ILF</span>
+            </div>
           </div>
         </div>
       </div>
@@ -290,17 +457,20 @@ interface MapFiltersProps {
   showILF: boolean;
   showCascadia: boolean;
   showPotential: boolean;
+  showDealLabels?: boolean;
   onToggleSNF: () => void;
   onToggleALF: () => void;
   onToggleILF: () => void;
   onToggleCascadia: () => void;
   onTogglePotential: () => void;
+  onToggleDealLabels?: () => void;
   facilityCounts: {
     snf: number;
     alf: number;
     ilf: number;
     cascadia: number;
     potential: number;
+    deals?: number;
   };
 }
 
@@ -310,11 +480,13 @@ export function MapFilters({
   showILF,
   showCascadia,
   showPotential,
+  showDealLabels = false,
   onToggleSNF,
   onToggleALF,
   onToggleILF,
   onToggleCascadia,
   onTogglePotential,
+  onToggleDealLabels,
   facilityCounts,
 }: MapFiltersProps) {
   return (
@@ -381,9 +553,12 @@ export function MapFilters({
               type="checkbox"
               checked={showCascadia}
               onChange={onToggleCascadia}
-              className="w-4 h-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-400"
+              className="w-4 h-4 rounded border-gray-300 text-teal-500 focus:ring-teal-400"
             />
-            <span className="w-3 h-3 rounded-full border-2 border-yellow-400 bg-gray-300" />
+            <span
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: CASCADIA_COLORS.SNF, border: `2px solid ${TURQUOISE_RING}` }}
+            />
             <span className="text-sm text-gray-700 flex-1">Cascadia Owned</span>
             <span className="text-xs text-gray-400">{facilityCounts.cascadia}</span>
           </label>
@@ -400,6 +575,41 @@ export function MapFilters({
             <span className="text-xs text-gray-400">{facilityCounts.potential}</span>
           </label>
         </div>
+
+        {/* Display Options */}
+        {onToggleDealLabels && (
+          <div className="border-t border-gray-200 my-3 pt-3">
+            <div className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
+              Display
+            </div>
+
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showDealLabels}
+                onChange={onToggleDealLabels}
+                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <svg
+                className="w-3 h-3 text-gray-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+                />
+              </svg>
+              <span className="text-sm text-gray-700 flex-1">Show Deal Names</span>
+              {facilityCounts.deals !== undefined && (
+                <span className="text-xs text-gray-400">{facilityCounts.deals}</span>
+              )}
+            </label>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,317 +1,158 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { FacilityMap, MapFacility, MapFilters, MapLegend } from '@/components/map/facility-map';
-import { Search, Download, Filter } from 'lucide-react';
-
-// Sample facility data - in production this would come from the database/API
-const SAMPLE_FACILITIES: MapFacility[] = [
-  // Cascadia-owned facilities
-  {
-    id: 'c1',
-    name: 'Cascadia Gardens SNF',
-    address: '123 Healthcare Way',
-    city: 'Seattle',
-    state: 'WA',
-    assetType: 'SNF',
-    beds: 120,
-    lat: 47.6062,
-    lng: -122.3321,
-    isCascadia: true,
-    cmsRating: 4,
-    occupancy: 0.88,
-  },
-  {
-    id: 'c2',
-    name: 'Cascadia Meadows ALF',
-    address: '456 Senior Lane',
-    city: 'Portland',
-    state: 'OR',
-    assetType: 'ALF',
-    beds: 85,
-    lat: 45.5152,
-    lng: -122.6784,
-    isCascadia: true,
-    cmsRating: 5,
-    occupancy: 0.92,
-  },
-  {
-    id: 'c3',
-    name: 'Cascadia Pines ILF',
-    address: '789 Independence Blvd',
-    city: 'Boise',
-    state: 'ID',
-    assetType: 'ILF',
-    beds: 150,
-    lat: 43.615,
-    lng: -116.2023,
-    isCascadia: true,
-    occupancy: 0.95,
-  },
-  {
-    id: 'c4',
-    name: 'Cascadia Valley SNF',
-    address: '321 Care Circle',
-    city: 'Spokane',
-    state: 'WA',
-    assetType: 'SNF',
-    beds: 100,
-    lat: 47.6588,
-    lng: -117.426,
-    isCascadia: true,
-    cmsRating: 3,
-    occupancy: 0.82,
-  },
-  {
-    id: 'c5',
-    name: 'Cascadia Springs ALF',
-    address: '555 Wellness Dr',
-    city: 'Eugene',
-    state: 'OR',
-    assetType: 'ALF',
-    beds: 65,
-    lat: 44.0521,
-    lng: -123.0868,
-    isCascadia: true,
-    cmsRating: 4,
-    occupancy: 0.89,
-  },
-
-  // Potential acquisition targets
-  {
-    id: 'p1',
-    name: 'Sunrise Senior Care',
-    address: '100 Elder Ave',
-    city: 'Sacramento',
-    state: 'CA',
-    assetType: 'SNF',
-    beds: 140,
-    lat: 38.5816,
-    lng: -121.4944,
-    isCascadia: false,
-    cmsRating: 3,
-    occupancy: 0.78,
-    dealId: 'd1',
-    dealName: 'Sunrise Portfolio',
-    askingPrice: 18500000,
-  },
-  {
-    id: 'p2',
-    name: 'Golden Years ALF',
-    address: '200 Retirement Rd',
-    city: 'San Francisco',
-    state: 'CA',
-    assetType: 'ALF',
-    beds: 90,
-    lat: 37.7749,
-    lng: -122.4194,
-    isCascadia: false,
-    cmsRating: 4,
-    occupancy: 0.85,
-    dealId: 'd2',
-    dealName: 'Bay Area ALF',
-    askingPrice: 22000000,
-  },
-  {
-    id: 'p3',
-    name: 'Mountain View ILF',
-    address: '300 Vista Way',
-    city: 'Denver',
-    state: 'CO',
-    assetType: 'ILF',
-    beds: 200,
-    lat: 39.7392,
-    lng: -104.9903,
-    isCascadia: false,
-    occupancy: 0.91,
-    dealId: 'd3',
-    dealName: 'Colorado ILF',
-    askingPrice: 35000000,
-  },
-  {
-    id: 'p4',
-    name: 'Desert Palms SNF',
-    address: '400 Oasis Blvd',
-    city: 'Phoenix',
-    state: 'AZ',
-    assetType: 'SNF',
-    beds: 110,
-    lat: 33.4484,
-    lng: -112.074,
-    isCascadia: false,
-    cmsRating: 2,
-    occupancy: 0.72,
-    dealId: 'd4',
-    dealName: 'Arizona SNF',
-    askingPrice: 12000000,
-  },
-  {
-    id: 'p5',
-    name: 'Pacific Breeze ALF',
-    address: '500 Coast Highway',
-    city: 'San Diego',
-    state: 'CA',
-    assetType: 'ALF',
-    beds: 75,
-    lat: 32.7157,
-    lng: -117.1611,
-    isCascadia: false,
-    cmsRating: 5,
-    occupancy: 0.94,
-    dealId: 'd5',
-    dealName: 'SoCal ALF Premium',
-    askingPrice: 28000000,
-  },
-  {
-    id: 'p6',
-    name: 'Lakeside Manor SNF',
-    address: '600 Lake Dr',
-    city: 'Salt Lake City',
-    state: 'UT',
-    assetType: 'SNF',
-    beds: 95,
-    lat: 40.7608,
-    lng: -111.891,
-    isCascadia: false,
-    cmsRating: 3,
-    occupancy: 0.8,
-    dealId: 'd6',
-    dealName: 'Utah Healthcare',
-    askingPrice: 14500000,
-  },
-  {
-    id: 'p7',
-    name: 'Emerald City ILF',
-    address: '700 Green St',
-    city: 'Tacoma',
-    state: 'WA',
-    assetType: 'ILF',
-    beds: 180,
-    lat: 47.2529,
-    lng: -122.4443,
-    isCascadia: false,
-    occupancy: 0.88,
-    dealId: 'd7',
-    dealName: 'Puget Sound ILF',
-    askingPrice: 32000000,
-  },
-  {
-    id: 'p8',
-    name: 'Valley Care SNF',
-    address: '800 Valley Rd',
-    city: 'Fresno',
-    state: 'CA',
-    assetType: 'SNF',
-    beds: 130,
-    lat: 36.7378,
-    lng: -119.7871,
-    isCascadia: false,
-    cmsRating: 2,
-    occupancy: 0.68,
-    dealId: 'd8',
-    dealName: 'Central CA SNF',
-    askingPrice: 11000000,
-  },
-  {
-    id: 'p9',
-    name: 'Redwood ALF',
-    address: '900 Forest Lane',
-    city: 'Oakland',
-    state: 'CA',
-    assetType: 'ALF',
-    beds: 70,
-    lat: 37.8044,
-    lng: -122.2712,
-    isCascadia: false,
-    cmsRating: 4,
-    occupancy: 0.86,
-    dealName: 'East Bay ALF',
-    askingPrice: 19000000,
-  },
-  {
-    id: 'p10',
-    name: 'Cascade View SNF',
-    address: '1000 Mountain Way',
-    city: 'Bend',
-    state: 'OR',
-    assetType: 'SNF',
-    beds: 85,
-    lat: 44.0582,
-    lng: -121.3153,
-    isCascadia: false,
-    cmsRating: 4,
-    occupancy: 0.84,
-    dealName: 'Central Oregon SNF',
-    askingPrice: 13500000,
-  },
-  {
-    id: 'p11',
-    name: 'Silver Lake ILF',
-    address: '1100 Silver Blvd',
-    city: 'Las Vegas',
-    state: 'NV',
-    assetType: 'ILF',
-    beds: 220,
-    lat: 36.1699,
-    lng: -115.1398,
-    isCascadia: false,
-    occupancy: 0.92,
-    dealName: 'Vegas Retirement',
-    askingPrice: 42000000,
-  },
-  {
-    id: 'p12',
-    name: 'Harbor Health SNF',
-    address: '1200 Harbor Dr',
-    city: 'Long Beach',
-    state: 'CA',
-    assetType: 'SNF',
-    beds: 150,
-    lat: 33.77,
-    lng: -118.1937,
-    isCascadia: false,
-    cmsRating: 3,
-    occupancy: 0.76,
-    dealName: 'LA Harbor SNF',
-    askingPrice: 21000000,
-  },
-];
+import { Search, Download, Filter, Building2 } from 'lucide-react';
 
 export default function MapPage() {
+  const [facilities, setFacilities] = useState<MapFacility[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showSNF, setShowSNF] = useState(true);
   const [showALF, setShowALF] = useState(true);
   const [showILF, setShowILF] = useState(true);
   const [showCascadia, setShowCascadia] = useState(true);
   const [showPotential, setShowPotential] = useState(true);
+  const [showDealLabels, setShowDealLabels] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFacility, setSelectedFacility] = useState<MapFacility | null>(null);
   const [showFilters, setShowFilters] = useState(true);
 
-  // Calculate facility counts
-  const facilityCounts = useMemo(() => {
-    return {
-      snf: SAMPLE_FACILITIES.filter((f) => f.assetType === 'SNF').length,
-      alf: SAMPLE_FACILITIES.filter((f) => f.assetType === 'ALF').length,
-      ilf: SAMPLE_FACILITIES.filter((f) => f.assetType === 'ILF').length,
-      cascadia: SAMPLE_FACILITIES.filter((f) => f.isCascadia).length,
-      potential: SAMPLE_FACILITIES.filter((f) => !f.isCascadia).length,
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch facilities from API with timeout
+  useEffect(() => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+    async function fetchFacilities() {
+      try {
+        const response = await fetch('/api/facilities', {
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data) {
+            // Transform API data to MapFacility format
+            const mapFacilities: MapFacility[] = data.data.map((f: Record<string, unknown>) => ({
+              id: f.id as string,
+              name: f.name as string,
+              address: f.address as string || '',
+              city: f.city as string || '',
+              state: f.state as string || '',
+              assetType: f.assetType as 'SNF' | 'ALF' | 'ILF',
+              beds: f.licensedBeds as number || 0,
+              lat: getLatForState(f.state as string, f.city as string),
+              lng: getLngForState(f.state as string, f.city as string),
+              isCascadia: true, // All facilities in our DB are Cascadia
+              cmsRating: f.cmsRating as number || undefined,
+              occupancy: f.occupancy as number || undefined,
+            }));
+            setFacilities(mapFacilities);
+          }
+        } else {
+          setError('Failed to load facilities');
+        }
+      } catch (err) {
+        clearTimeout(timeoutId);
+        if (err instanceof Error && err.name === 'AbortError') {
+          setError('Request timed out. Database may be unavailable.');
+        } else {
+          console.error('Failed to fetch facilities:', err);
+          setError('Failed to connect to server');
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchFacilities();
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
     };
   }, []);
 
+  // Approximate coordinates based on city/state (in production would use geocoding)
+  function getLatForState(state: string, city: string): number {
+    const coords: Record<string, Record<string, number>> = {
+      ID: {
+        Orofino: 46.4766, 'Coeur d\'Alene': 47.6777, Bellevue: 43.4635, Grangeville: 45.9260,
+        Lewiston: 46.4165, 'Idaho Falls': 43.4917, Silverton: 47.2893, Moscow: 46.7324,
+        Boise: 43.6150, Nampa: 43.5407, Caldwell: 43.6629, Kellogg: 47.5377,
+        Weiser: 44.2510, 'Twin Falls': 42.5558, Emmett: 43.8735, Payette: 44.0782,
+        default: 44.0682
+      },
+      MT: { Libby: 48.3883, Eureka: 48.8797, Helena: 46.5958, default: 47.0527 },
+      OR: {
+        'Wood Village': 45.5335, Brookings: 42.0526, Eugene: 44.0521, Gresham: 45.4987,
+        Portland: 45.5152, default: 43.8041
+      },
+      WA: {
+        'Battle Ground': 45.7807, Colville: 48.5471, Bellingham: 48.7519, Snohomish: 47.9129,
+        'Spokane Valley': 47.6733, Blaine: 48.9937, Vancouver: 45.6387, Clarkston: 46.4165,
+        Colfax: 46.8799, default: 47.7511
+      },
+      AZ: { 'Sun City': 33.5978, Phoenix: 33.4484, default: 34.0489 },
+    };
+
+    const stateCoords = coords[state] || {};
+    return stateCoords[city] || stateCoords.default || 45.0;
+  }
+
+  function getLngForState(state: string, city: string): number {
+    const coords: Record<string, Record<string, number>> = {
+      ID: {
+        Orofino: -116.2551, 'Coeur d\'Alene': -116.7805, Bellevue: -114.2611, Grangeville: -116.1224,
+        Lewiston: -117.0177, 'Idaho Falls': -112.0339, Silverton: -115.9952, Moscow: -117.0002,
+        Boise: -116.2023, Nampa: -116.5635, Caldwell: -116.6874, Kellogg: -116.1213,
+        Weiser: -116.9693, 'Twin Falls': -114.4609, Emmett: -116.4996, Payette: -116.9340,
+        default: -114.7420
+      },
+      MT: { Libby: -115.5561, Eureka: -115.0533, Helena: -112.0391, default: -109.6333 },
+      OR: {
+        'Wood Village': -122.4179, Brookings: -124.2839, Eugene: -123.0868, Gresham: -122.4310,
+        Portland: -122.6784, default: -120.5542
+      },
+      WA: {
+        'Battle Ground': -122.5343, Colville: -117.9053, Bellingham: -122.4781, Snohomish: -122.0982,
+        'Spokane Valley': -117.2394, Blaine: -122.7468, Vancouver: -122.6615, Clarkston: -117.0455,
+        Colfax: -117.3636, default: -120.7401
+      },
+      AZ: { 'Sun City': -112.2716, Phoenix: -112.0740, default: -111.0937 },
+    };
+
+    const stateCoords = coords[state] || {};
+    return stateCoords[city] || stateCoords.default || -115.0;
+  }
+
+  // Calculate facility counts
+  const facilityCounts = useMemo(() => {
+    return {
+      snf: facilities.filter((f) => f.assetType === 'SNF').length,
+      alf: facilities.filter((f) => f.assetType === 'ALF').length,
+      ilf: facilities.filter((f) => f.assetType === 'ILF').length,
+      cascadia: facilities.filter((f) => f.isCascadia).length,
+      potential: facilities.filter((f) => !f.isCascadia).length,
+      deals: facilities.filter((f) => f.dealName).length,
+    };
+  }, [facilities]);
+
   // Filter by search
   const filteredFacilities = useMemo(() => {
-    if (!searchQuery.trim()) return SAMPLE_FACILITIES;
+    if (!searchQuery.trim()) return facilities;
 
     const query = searchQuery.toLowerCase();
-    return SAMPLE_FACILITIES.filter(
+    return facilities.filter(
       (f) =>
         f.name.toLowerCase().includes(query) ||
         f.city.toLowerCase().includes(query) ||
         f.state.toLowerCase().includes(query) ||
         f.dealName?.toLowerCase().includes(query)
     );
-  }, [searchQuery]);
+  }, [facilities, searchQuery]);
 
   // Stats summary
   const visibleCount = useMemo(() => {
@@ -324,6 +165,67 @@ export default function MapPage() {
       return true;
     }).length;
   }, [filteredFacilities, showSNF, showALF, showILF, showCascadia, showPotential]);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Facility Map"
+          description="Geographic view of Cascadia facilities and potential acquisition targets"
+        />
+        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <div className="w-8 h-8 border-4 border-cascadia-green border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="text-gray-500">Loading facilities...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Facility Map"
+          description="Geographic view of Cascadia facilities and potential acquisition targets"
+        />
+        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <div className="mx-auto w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mb-4">
+            <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Unable to Load Map</h3>
+          <p className="text-sm text-gray-500 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-cascadia-green text-white rounded-lg hover:bg-green-700 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (facilities.length === 0) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Facility Map"
+          description="Geographic view of Cascadia facilities and potential acquisition targets"
+        />
+        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <div className="mx-auto w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+            <Building2 className="w-8 h-8 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No facilities yet</h3>
+          <p className="text-sm text-gray-500">
+            Facilities will appear here once they are added to the system
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -375,20 +277,24 @@ export default function MapPage() {
             <span className="ml-2 font-semibold text-gray-900">{visibleCount} facilities</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-blue-700"></span>
+            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: '#1E40AF' }}></span>
             <span className="text-gray-600">{facilityCounts.snf} SNF</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-green-600"></span>
+            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: '#059669' }}></span>
             <span className="text-gray-600">{facilityCounts.alf} ALF</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-purple-600"></span>
+            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: '#7C3AED' }}></span>
             <span className="text-gray-600">{facilityCounts.ilf} ILF</span>
           </div>
-          <div className="border-l border-gray-300 pl-6">
+          <div className="border-l border-gray-300 pl-6 flex items-center gap-2">
+            <span
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: '#166534', border: '2px solid #14B8A6' }}
+            ></span>
             <span className="text-gray-500">Cascadia:</span>
-            <span className="ml-2 font-semibold text-cascadia-green">{facilityCounts.cascadia}</span>
+            <span className="font-semibold text-teal-600">{facilityCounts.cascadia}</span>
           </div>
           <div>
             <span className="text-gray-500">Potential:</span>
@@ -408,11 +314,13 @@ export default function MapPage() {
               showILF={showILF}
               showCascadia={showCascadia}
               showPotential={showPotential}
+              showDealLabels={showDealLabels}
               onToggleSNF={() => setShowSNF(!showSNF)}
               onToggleALF={() => setShowALF(!showALF)}
               onToggleILF={() => setShowILF(!showILF)}
               onToggleCascadia={() => setShowCascadia(!showCascadia)}
               onTogglePotential={() => setShowPotential(!showPotential)}
+              onToggleDealLabels={() => setShowDealLabels(!showDealLabels)}
               facilityCounts={facilityCounts}
             />
 
@@ -420,10 +328,24 @@ export default function MapPage() {
           </div>
         )}
 
-        {/* Map container */}
-        <div className="flex-1">
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <div className="h-[600px]">
+        {/* Map container - no overflow clipping to allow popups */}
+        <div className="flex-1 relative" style={{ zIndex: 1 }}>
+          <div
+            className="bg-white border border-gray-200"
+            style={{
+              borderRadius: '0.5rem',
+              overflow: 'visible',
+              position: 'relative',
+              zIndex: 1,
+            }}
+          >
+            <div
+              className="h-[600px] relative"
+              style={{
+                overflow: 'visible',
+                borderRadius: '0.5rem',
+              }}
+            >
               <FacilityMap
                 facilities={filteredFacilities}
                 showSNF={showSNF}
@@ -431,6 +353,7 @@ export default function MapPage() {
                 showILF={showILF}
                 showCascadia={showCascadia}
                 showPotential={showPotential}
+                showDealLabels={showDealLabels}
                 onFacilityClick={setSelectedFacility}
               />
             </div>
@@ -444,12 +367,17 @@ export default function MapPage() {
           <div
             className="h-2"
             style={{
-              backgroundColor:
-                selectedFacility.assetType === 'SNF'
-                  ? '#1E40AF'
+              backgroundColor: selectedFacility.isCascadia
+                ? selectedFacility.assetType === 'SNF'
+                  ? '#166534'
                   : selectedFacility.assetType === 'ALF'
-                  ? '#059669'
-                  : '#7C3AED',
+                  ? '#C2410C'
+                  : '#CA8A04'
+                : selectedFacility.assetType === 'SNF'
+                ? '#1E40AF'
+                : selectedFacility.assetType === 'ALF'
+                ? '#059669'
+                : '#7C3AED',
             }}
           />
           <div className="p-4">

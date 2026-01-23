@@ -8,10 +8,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
   const pathname = usePathname();
 
-  // Don't show navigation on login page
-  const isLoginPage = pathname === '/login';
+  // Public pages that don't need navigation
+  const publicPages = ['/login', '/design-demo'];
+  const isPublicPage = publicPages.includes(pathname);
 
-  if (isLoginPage || !isAuthenticated) {
+  if (isPublicPage || !isAuthenticated) {
     return <>{children}</>;
   }
 

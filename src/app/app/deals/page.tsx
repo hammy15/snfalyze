@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { DataTable, Column } from '@/components/ui/data-table';
@@ -23,6 +23,7 @@ import {
   Building2,
   Target,
   BookOpen,
+  FileText,
 } from 'lucide-react';
 
 type DealStage = 'target' | 'contacted' | 'loi' | 'diligence' | 'psa' | 'closed' | 'dead';
@@ -55,126 +56,6 @@ interface Deal {
   notes?: string;
 }
 
-// Mock deal data
-const mockDeals: Deal[] = [
-  {
-    id: '1',
-    name: 'Sunrise Portfolio',
-    stage: 'diligence',
-    value: 45000000,
-    beds: 360,
-    facilities: [
-      { id: '1', name: 'Sunrise Care Center' },
-      { id: '2', name: 'Sunrise East' },
-      { id: '3', name: 'Sunrise West' },
-    ],
-    assignee: 'Sarah Chen',
-    createdAt: new Date('2024-01-15'),
-    lastActivity: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-    nextAction: 'Financial review meeting',
-    nextActionDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-    probability: 75,
-    notes: 'Strong portfolio in growing market. Seller motivated.',
-  },
-  {
-    id: '2',
-    name: 'Valley Acquisition',
-    stage: 'loi',
-    value: 12000000,
-    beds: 85,
-    facilities: [{ id: '2', name: 'Valley View SNF' }],
-    assignee: 'Mike Rodriguez',
-    createdAt: new Date('2024-02-01'),
-    lastActivity: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-    nextAction: 'LOI negotiation call',
-    nextActionDate: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000),
-    probability: 60,
-  },
-  {
-    id: '3',
-    name: 'Harbor Health',
-    stage: 'target',
-    value: 18000000,
-    beds: 150,
-    facilities: [{ id: '3', name: 'Harbor Health Facility' }],
-    assignee: 'You',
-    createdAt: new Date('2024-03-01'),
-    lastActivity: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-    nextAction: 'Initial outreach',
-    nextActionDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-    probability: 30,
-  },
-  {
-    id: '4',
-    name: 'Maple Grove ALF',
-    stage: 'contacted',
-    value: 8200000,
-    beds: 65,
-    facilities: [{ id: '5', name: 'Maple Grove ALF' }],
-    assignee: 'Sarah Chen',
-    createdAt: new Date('2024-03-10'),
-    lastActivity: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-    nextAction: 'Follow-up call',
-    nextActionDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
-    probability: 40,
-  },
-  {
-    id: '5',
-    name: 'Golden State Portfolio',
-    stage: 'psa',
-    value: 32000000,
-    beds: 240,
-    facilities: [
-      { id: '8', name: 'Golden State SNF' },
-      { id: '9', name: 'Golden State East' },
-    ],
-    assignee: 'Mike Rodriguez',
-    createdAt: new Date('2023-11-01'),
-    lastActivity: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-    nextAction: 'PSA review with legal',
-    nextActionDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    probability: 90,
-  },
-  {
-    id: '6',
-    name: 'Desert Palms',
-    stage: 'target',
-    value: 9500000,
-    beds: 95,
-    facilities: [{ id: '4', name: 'Desert Palms SNF' }],
-    assignee: 'You',
-    createdAt: new Date('2024-03-15'),
-    lastActivity: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-    probability: 20,
-  },
-  {
-    id: '7',
-    name: 'Evergreen Care',
-    stage: 'contacted',
-    value: 7500000,
-    beds: 75,
-    facilities: [{ id: '7', name: 'Evergreen Care Home' }],
-    assignee: 'Sarah Chen',
-    createdAt: new Date('2024-02-20'),
-    lastActivity: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
-    nextAction: 'Site visit scheduled',
-    nextActionDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
-    probability: 35,
-  },
-  {
-    id: '8',
-    name: 'Lakeside Portfolio',
-    stage: 'closed',
-    value: 22000000,
-    beds: 180,
-    facilities: [{ id: '6', name: 'Lakeside Senior Living' }],
-    assignee: 'Mike Rodriguez',
-    createdAt: new Date('2023-08-01'),
-    lastActivity: new Date('2024-01-15'),
-    probability: 100,
-  },
-];
-
 const stageConfig: { stage: DealStage; label: string; color: string }[] = [
   { stage: 'target', label: 'Target', color: 'var(--stage-target)' },
   { stage: 'contacted', label: 'Contacted', color: 'var(--stage-contacted)' },
@@ -186,6 +67,8 @@ const stageConfig: { stage: DealStage; label: string; color: string }[] = [
 
 export default function DealsPage() {
   const router = useRouter();
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('kanban');
   const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -194,6 +77,53 @@ export default function DealsPage() {
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  // Fetch deals from API
+  useEffect(() => {
+    async function fetchDeals() {
+      try {
+        const response = await fetch('/api/deals');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data) {
+            // Transform API data to Deal format
+            const transformedDeals: Deal[] = data.data.map((deal: Record<string, unknown>) => ({
+              id: deal.id as string,
+              name: deal.name as string,
+              stage: mapStatusToStage(deal.status as string),
+              value: 0,
+              beds: 0,
+              facilities: [],
+              assignee: 'Unassigned',
+              createdAt: new Date(deal.createdAt as string),
+              lastActivity: new Date(deal.updatedAt as string || deal.createdAt as string),
+              probability: 50,
+            }));
+            setDeals(transformedDeals);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch deals:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchDeals();
+  }, []);
+
+  // Map database status to legacy stage
+  function mapStatusToStage(status: string): DealStage {
+    const statusToStageMap: Record<string, DealStage> = {
+      new: 'target',
+      analyzing: 'contacted',
+      under_loi: 'loi',
+      due_diligence: 'diligence',
+      reviewed: 'psa',
+      closed: 'closed',
+      passed: 'dead',
+    };
+    return statusToStageMap[status] || 'target';
+  }
 
   const handleCreateDeal = (newDeal: Partial<DealFramework>) => {
     console.log('Creating deal:', newDeal);
@@ -204,7 +134,7 @@ export default function DealsPage() {
 
   // Filter and sort data
   const filteredDeals = useMemo(() => {
-    let result = [...mockDeals];
+    let result = [...deals];
 
     // Apply search
     if (searchQuery) {
@@ -262,7 +192,7 @@ export default function DealsPage() {
     });
 
     return result;
-  }, [mockDeals, searchQuery, activeFilters, sortColumn, sortDirection]);
+  }, [deals, searchQuery, activeFilters, sortColumn, sortDirection]);
 
   // Group deals by stage for kanban
   const dealsByStage = useMemo(() => {
@@ -317,11 +247,11 @@ export default function DealsPage() {
 
   // Handler for kanban deal click - find original deal data
   const handleKanbanDealClick = useCallback((kanbanDeal: KanbanDeal) => {
-    const originalDeal = mockDeals.find((d) => d.id === kanbanDeal.id);
+    const originalDeal = deals.find((d) => d.id === kanbanDeal.id);
     if (originalDeal) {
       setSelectedDeal(originalDeal);
     }
-  }, []);
+  }, [deals]);
 
   // Handler for adding a deal from kanban column
   const handleAddDeal = useCallback((status: DealStatus) => {
@@ -541,7 +471,27 @@ export default function DealsPage() {
       </div>
 
       {/* Content */}
-      {viewMode === 'kanban' ? (
+      {loading ? (
+        <div className="card p-12 text-center">
+          <div className="animate-pulse text-[var(--color-text-secondary)]">Loading deals...</div>
+        </div>
+      ) : deals.length === 0 ? (
+        <div className="card p-12 text-center">
+          <div className="mx-auto w-16 h-16 rounded-full bg-[var(--gray-100)] flex items-center justify-center mb-4">
+            <FileText className="w-8 h-8 text-[var(--color-text-tertiary)]" />
+          </div>
+          <h3 className="text-lg font-medium text-[var(--color-text-primary)] mb-2">No deals yet</h3>
+          <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+            Upload your first deal to start tracking your pipeline
+          </p>
+          <Link href="/upload">
+            <button className="btn btn-primary btn-sm">
+              <Plus className="w-4 h-4" />
+              Upload Deal
+            </button>
+          </Link>
+        </div>
+      ) : viewMode === 'kanban' ? (
         <KanbanBoard
           deals={kanbanDeals}
           onDealClick={handleKanbanDealClick}

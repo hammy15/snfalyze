@@ -92,7 +92,7 @@ export async function POST(
     await db
       .update(documents)
       .set({
-        status: clarifications.length > 0 ? 'needs_review' : 'completed',
+        status: 'complete',
         processedAt: new Date(),
       })
       .where(eq(documents.id, documentId));

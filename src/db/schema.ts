@@ -1423,7 +1423,7 @@ export const wizardSessions = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     dealId: uuid('deal_id').references(() => deals.id, { onDelete: 'set null' }),
-    currentStage: wizardStageTypeEnum('current_stage').default('deal_structure_setup').notNull(),
+    currentStage: wizardStageTypeEnum('current_stage').default('document_upload').notNull(),
     stageData: jsonb('stage_data').default('{}'),
     isComplete: boolean('is_complete').default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),

@@ -584,8 +584,9 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
     <div className="max-w-6xl mx-auto p-6 space-y-6">
       {/* Progress indicator */}
       <WizardProgress
-        currentStage={session?.currentStage || 'deal_structure_setup'}
+        currentStage={session?.currentStage || 'document_upload'}
         completedStages={WIZARD_STAGES.slice(0, currentStageIndex).map(s => s.id)}
+        className="mb-6"
       />
 
       {/* Stage content */}

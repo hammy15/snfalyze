@@ -47,7 +47,8 @@ export async function POST(request: NextRequest) {
     await writeFile(filePath, buffer);
 
     // Determine file type based on extension
-    let fileType = 'other';
+    type DocumentType = 'financial_statement' | 'rent_roll' | 'census_report' | 'staffing_report' | 'survey_report' | 'cost_report' | 'om_package' | 'lease_agreement' | 'appraisal' | 'environmental' | 'other';
+    let fileType: DocumentType = 'other';
     const lowerName = file.name.toLowerCase();
     if (lowerName.includes('financial') || lowerName.includes('income') || lowerName.includes('p&l') || lowerName.includes('pnl')) {
       fileType = 'financial_statement';
@@ -72,9 +73,6 @@ export async function POST(request: NextRequest) {
         id: fileId,
         dealId,
         filename: file.name,
-        fileUrl: `/uploads/wizard/${filename}`,
-        fileSize: file.size,
-        mimeType: file.type,
         type: fileType,
         status: 'uploaded',
         uploadedAt: new Date(),

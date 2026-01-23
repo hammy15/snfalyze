@@ -18,6 +18,13 @@ import {
   Edit2,
   X,
   AlertCircle,
+  DollarSign,
+  TrendingUp,
+  Users,
+  PieChart,
+  BarChart3,
+  CheckSquare,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { WizardStageData } from '../EnhancedDealWizard';
@@ -28,6 +35,45 @@ interface UploadedFile {
   size: number;
   type: string;
   status: 'uploading' | 'uploaded' | 'analyzing' | 'done' | 'error';
+}
+
+interface ExtractionSummary {
+  totalRevenue: number;
+  totalExpenses: number;
+  totalNOI: number;
+  avgOccupancy: number;
+  totalBeds: number;
+  dataQuality: number;
+  periodsExtracted: string[];
+  warnings: string[];
+}
+
+interface ExtractionMetadata {
+  extractedAt: string;
+  filesProcessed: string[];
+  totalRowsProcessed: number;
+  mappedItems: number;
+  unmappedItems: number;
+}
+
+interface ExtractedLineItem {
+  category: string;
+  subcategory: string;
+  label: string;
+  originalLabel: string;
+  coaCode: string | null;
+  coaName: string | null;
+  annualized: number | null;
+  percentOfRevenue: number | null;
+  facility: string;
+  confidence: number;
+}
+
+interface FacilityMetrics {
+  avgDailyCensus: number | null;
+  occupancyRate: number | null;
+  netOperatingIncome: number | null;
+  ebitdaMargin: number | null;
 }
 
 interface AIAnalysis {
@@ -42,13 +88,44 @@ interface AIAnalysis {
     beds?: number;
     type?: string;
     confidence: number;
+    sourceSheet?: string;
+    metrics?: FacilityMetrics;
   }>;
   documentTypes: Array<{
     filename: string;
     suggestedType: string;
     confidence: number;
+    sheetsFound?: string[];
   }>;
   confidence: number;
+  analysisDetails?: {
+    totalSheetsParsed: number;
+    totalRowsAnalyzed: number;
+    facilityIndicatorsFound: string[];
+    companyName?: string | null;
+    dateRange?: string | null;
+  };
+  extraction?: {
+    facilities: Array<{
+      name: string;
+      entityName: string | null;
+      metrics: FacilityMetrics & {
+        payorMix: {
+          medicare: number | null;
+          medicaid: number | null;
+          private: number | null;
+          other: number | null;
+        };
+        revenuePPD: number | null;
+        expensePPD: number | null;
+        laborPPD: number | null;
+        ebitda: number | null;
+      };
+    }>;
+    lineItems: ExtractedLineItem[];
+    summary: ExtractionSummary;
+    metadata: ExtractionMetadata;
+  };
 }
 
 interface DocumentUploadAnalysisProps {
@@ -411,6 +488,220 @@ export function DocumentUploadAnalysis({
               </Button>
             </div>
 
+            {/* Analysis Stats */}
+            {analysis.analysisDetails && (
+              <div className="space-y-3">
+                {(analysis.analysisDetails.companyName || analysis.analysisDetails.dateRange) && (
+                  <div className="flex items-center gap-4 text-sm text-surface-600 dark:text-surface-400">
+                    {analysis.analysisDetails.companyName && (
+                      <span><strong>Company:</strong> {analysis.analysisDetails.companyName}</span>
+                    )}
+                    {analysis.analysisDetails.dateRange && (
+                      <span><strong>As of:</strong> {analysis.analysisDetails.dateRange}</span>
+                    )}
+                  </div>
+                )}
+                <div className="grid grid-cols-3 gap-4 p-4 bg-surface-100 dark:bg-surface-800 rounded-lg">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-primary-600">{analysis.analysisDetails.totalSheetsParsed}</p>
+                    <p className="text-xs text-surface-500">Sheets Parsed</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-primary-600">{analysis.analysisDetails.totalRowsAnalyzed.toLocaleString()}</p>
+                    <p className="text-xs text-surface-500">Rows Analyzed</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-primary-600">{facilities.length}</p>
+                    <p className="text-xs text-surface-500">Buildings Found</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Extraction Financial Summary */}
+            {analysis.extraction && (
+              <div className="space-y-4">
+                {/* Financial Overview */}
+                <div className="p-4 bg-gradient-to-r from-emerald-50 to-primary-50 dark:from-emerald-900/20 dark:to-primary-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                  <div className="flex items-center gap-2 mb-3">
+                    <DollarSign className="w-5 h-5 text-emerald-600" />
+                    <h4 className="font-semibold text-emerald-800 dark:text-emerald-300">Financial Summary (Annualized)</h4>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-xs text-surface-500 uppercase tracking-wide">Total Revenue</p>
+                      <p className="text-xl font-bold text-emerald-600">
+                        ${(analysis.extraction.summary.totalRevenue / 1000000).toFixed(2)}M
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-surface-500 uppercase tracking-wide">Total Expenses</p>
+                      <p className="text-xl font-bold text-rose-600">
+                        ${(analysis.extraction.summary.totalExpenses / 1000000).toFixed(2)}M
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-surface-500 uppercase tracking-wide">Net Operating Income</p>
+                      <p className="text-xl font-bold text-primary-600">
+                        ${(analysis.extraction.summary.totalNOI / 1000000).toFixed(2)}M
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Data Quality & COA Mapping Status */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-surface-100 dark:bg-surface-800 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <PieChart className="w-4 h-4 text-primary-500" />
+                      <h4 className="font-medium text-sm">Data Quality</h4>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-3 bg-surface-200 dark:bg-surface-700 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary-500 rounded-full transition-all"
+                          style={{ width: `${analysis.extraction.summary.dataQuality * 100}%` }}
+                        />
+                      </div>
+                      <span className="text-sm font-bold text-primary-600">
+                        {Math.round(analysis.extraction.summary.dataQuality * 100)}%
+                      </span>
+                    </div>
+                    <p className="text-xs text-surface-500 mt-1">
+                      {analysis.extraction.metadata.mappedItems} of {analysis.extraction.metadata.mappedItems + analysis.extraction.metadata.unmappedItems} items mapped to COA
+                    </p>
+                  </div>
+
+                  <div className="p-4 bg-surface-100 dark:bg-surface-800 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <BarChart3 className="w-4 h-4 text-primary-500" />
+                      <h4 className="font-medium text-sm">COA Mapping Status</h4>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="flex-1 flex items-center gap-2 p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded">
+                        <CheckSquare className="w-4 h-4 text-emerald-600" />
+                        <div>
+                          <p className="text-lg font-bold text-emerald-600">{analysis.extraction.metadata.mappedItems}</p>
+                          <p className="text-xs text-emerald-700 dark:text-emerald-400">Mapped</p>
+                        </div>
+                      </div>
+                      <div className="flex-1 flex items-center gap-2 p-2 bg-amber-100 dark:bg-amber-900/30 rounded">
+                        <AlertTriangle className="w-4 h-4 text-amber-600" />
+                        <div>
+                          <p className="text-lg font-bold text-amber-600">{analysis.extraction.metadata.unmappedItems}</p>
+                          <p className="text-xs text-amber-700 dark:text-amber-400">Unmapped</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Period Coverage */}
+                {analysis.extraction.summary.periodsExtracted.length > 0 && (
+                  <div className="p-3 bg-surface-50 dark:bg-surface-800/50 rounded-lg border border-surface-200 dark:border-surface-700">
+                    <p className="text-xs text-surface-500 mb-1">Periods Extracted</p>
+                    <div className="flex flex-wrap gap-1">
+                      {analysis.extraction.summary.periodsExtracted.slice(0, 12).map((period, i) => (
+                        <Badge key={i} variant="outline" className="text-xs">
+                          {period}
+                        </Badge>
+                      ))}
+                      {analysis.extraction.summary.periodsExtracted.length > 12 && (
+                        <Badge variant="secondary" className="text-xs">
+                          +{analysis.extraction.summary.periodsExtracted.length - 12} more
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Per-Facility Metrics */}
+                {analysis.extraction.facilities.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-primary-500" />
+                      <h4 className="font-medium">Per-Facility Operating Metrics</h4>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {analysis.extraction.facilities.map((facility, idx) => (
+                        <div key={idx} className="p-3 bg-surface-50 dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Building2 className="w-4 h-4 text-primary-500" />
+                            <h5 className="font-medium text-sm truncate">{facility.name}</h5>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <p className="text-surface-500">Avg Daily Census</p>
+                              <p className="font-semibold">
+                                {facility.metrics.avgDailyCensus?.toFixed(1) || '—'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-surface-500">Occupancy</p>
+                              <p className="font-semibold">
+                                {facility.metrics.occupancyRate ? `${facility.metrics.occupancyRate.toFixed(1)}%` : '—'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-surface-500">Rev PPD</p>
+                              <p className="font-semibold text-emerald-600">
+                                {facility.metrics.revenuePPD ? `$${facility.metrics.revenuePPD.toFixed(0)}` : '—'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-surface-500">NOI</p>
+                              <p className="font-semibold text-primary-600">
+                                {facility.metrics.netOperatingIncome
+                                  ? `$${(facility.metrics.netOperatingIncome / 1000).toFixed(0)}K`
+                                  : '—'}
+                              </p>
+                            </div>
+                          </div>
+                          {facility.metrics.payorMix && (
+                            <div className="mt-2 pt-2 border-t border-surface-200 dark:border-surface-700">
+                              <p className="text-xs text-surface-500 mb-1">Payor Mix</p>
+                              <div className="flex gap-1 text-xs">
+                                {facility.metrics.payorMix.medicare && (
+                                  <Badge variant="outline" className="text-xs px-1">
+                                    MC: {facility.metrics.payorMix.medicare.toFixed(0)}%
+                                  </Badge>
+                                )}
+                                {facility.metrics.payorMix.medicaid && (
+                                  <Badge variant="outline" className="text-xs px-1">
+                                    MA: {facility.metrics.payorMix.medicaid.toFixed(0)}%
+                                  </Badge>
+                                )}
+                                {facility.metrics.payorMix.private && (
+                                  <Badge variant="outline" className="text-xs px-1">
+                                    Pvt: {facility.metrics.payorMix.private.toFixed(0)}%
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Warnings */}
+                {analysis.extraction.summary.warnings.length > 0 && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                    <div className="flex items-center gap-2 mb-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600" />
+                      <h4 className="font-medium text-sm text-amber-800 dark:text-amber-300">Extraction Warnings</h4>
+                    </div>
+                    <ul className="text-xs text-amber-700 dark:text-amber-400 space-y-1">
+                      {analysis.extraction.summary.warnings.map((warning, i) => (
+                        <li key={i}>• {warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Deal Info */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
@@ -517,7 +808,12 @@ export function DocumentUploadAnalysis({
                       </>
                     ) : (
                       <>
-                        <span className="flex-1 font-medium">{facility.name}</span>
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium block truncate">{facility.name}</span>
+                          {facility.sourceSheet && (
+                            <span className="text-xs text-surface-400">from: {facility.sourceSheet}</span>
+                          )}
+                        </div>
                         {facility.city && facility.state && (
                           <span className="text-sm text-surface-500">
                             {facility.city}, {facility.state}

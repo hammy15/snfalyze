@@ -31,7 +31,7 @@ interface DataTableProps<T> {
   onSelectionChange?: (rows: string[]) => void
   sortColumn?: string | null
   sortDirection?: 'asc' | 'desc'
-  onSort?: (column: string) => void
+  onSort?: (column: string, direction: 'asc' | 'desc') => void
   hoverable?: boolean
 }
 

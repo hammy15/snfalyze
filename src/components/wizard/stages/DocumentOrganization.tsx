@@ -184,7 +184,7 @@ export function DocumentOrganization({ stageData, onUpdate, dealId }: DocumentOr
   };
 
   // Assign document to facility
-  const assignToFacility = (docId: string, facilityId: string) => {
+  const assignToFacility = (docId: string, facilityId: string | undefined) => {
     setDocuments((prev) =>
       prev.map((doc) =>
         doc.id === docId ? { ...doc, facilityId: facilityId || undefined } : doc

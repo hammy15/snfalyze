@@ -7,6 +7,14 @@ import { comprehensiveExtract, type ExtractionResult } from '@/lib/extraction/co
 
 const anthropic = new Anthropic();
 
+// Use /tmp on Vercel (serverless), local uploads folder in development
+const getUploadsDir = () => {
+  if (process.env.VERCEL) {
+    return '/tmp/wizard-uploads';
+  }
+  return join(process.cwd(), 'uploads', 'wizard');
+};
+
 interface FacilityInfo {
   name: string;
   fullEntityName?: string;
@@ -77,10 +85,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Build file list for extraction
+    const uploadsDir = getUploadsDir();
     const files: Array<{ id: string; filename: string; path: string }> = [];
     for (const doc of docs) {
       const ext = doc.filename?.split('.').pop()?.toLowerCase() || 'pdf';
-      const filePath = join(process.cwd(), 'uploads', 'wizard', `${doc.id}.${ext}`);
+      const filePath = join(uploadsDir, `${doc.id}.${ext}`);
       files.push({
         id: doc.id,
         filename: doc.filename || 'unknown',

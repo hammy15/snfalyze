@@ -5,6 +5,14 @@ import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 
+// Use /tmp on Vercel (serverless), local uploads folder in development
+const getUploadsDir = () => {
+  if (process.env.VERCEL) {
+    return '/tmp/wizard-uploads';
+  }
+  return join(process.cwd(), 'uploads', 'wizard');
+};
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
@@ -38,7 +46,7 @@ export async function POST(request: NextRequest) {
     const filename = `${fileId}.${ext}`;
 
     // Ensure uploads directory exists
-    const uploadsDir = join(process.cwd(), 'uploads', 'wizard');
+    const uploadsDir = getUploadsDir();
     await mkdir(uploadsDir, { recursive: true });
 
     // Save file

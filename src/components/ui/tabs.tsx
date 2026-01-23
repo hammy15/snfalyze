@@ -20,7 +20,7 @@ interface TabsProps {
   className?: string
 }
 
-export function Tabs({
+export function AnimatedTabs({
   tabs,
   defaultTab,
   onChange,
@@ -169,3 +169,127 @@ export function TabPanel({ id, activeTab, children, className }: TabPanelProps) 
     </div>
   )
 }
+
+// ============================================
+// Shadcn/UI-compatible Tabs API
+// ============================================
+import * as React from "react"
+
+interface TabsContextValue {
+  value: string
+  onValueChange: (value: string) => void
+}
+
+const TabsContext = React.createContext<TabsContextValue | null>(null)
+
+function useTabsContext() {
+  const context = React.useContext(TabsContext)
+  if (!context) {
+    throw new Error("Tabs compound components must be used within a Tabs component")
+  }
+  return context
+}
+
+interface TabsRootProps {
+  value?: string
+  defaultValue?: string
+  onValueChange?: (value: string) => void
+  children: React.ReactNode
+  className?: string
+}
+
+function TabsRoot({
+  value: controlledValue,
+  defaultValue,
+  onValueChange,
+  children,
+  className
+}: TabsRootProps) {
+  const [uncontrolledValue, setUncontrolledValue] = React.useState(defaultValue || "")
+  const value = controlledValue ?? uncontrolledValue
+
+  const handleValueChange = React.useCallback((newValue: string) => {
+    setUncontrolledValue(newValue)
+    onValueChange?.(newValue)
+  }, [onValueChange])
+
+  return (
+    <TabsContext.Provider value={{ value, onValueChange: handleValueChange }}>
+      <div className={className}>{children}</div>
+    </TabsContext.Provider>
+  )
+}
+
+interface TabsListProps {
+  children: React.ReactNode
+  className?: string
+}
+
+function TabsList({ children, className }: TabsListProps) {
+  return (
+    <div
+      role="tablist"
+      className={cn(
+        "inline-flex h-10 items-center justify-center rounded-md bg-surface-100 p-1 text-surface-500 dark:bg-surface-800 dark:text-surface-400",
+        className
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
+interface TabsTriggerProps {
+  value: string
+  children: React.ReactNode
+  className?: string
+  disabled?: boolean
+}
+
+function TabsTrigger({ value, children, className, disabled }: TabsTriggerProps) {
+  const { value: selectedValue, onValueChange } = useTabsContext()
+  const isSelected = selectedValue === value
+
+  return (
+    <button
+      role="tab"
+      type="button"
+      aria-selected={isSelected}
+      disabled={disabled}
+      onClick={() => !disabled && onValueChange(value)}
+      className={cn(
+        "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+        isSelected
+          ? "bg-white text-surface-900 shadow-sm dark:bg-surface-900 dark:text-surface-50"
+          : "text-surface-500 hover:text-surface-900 dark:text-surface-400 dark:hover:text-surface-50",
+        className
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+interface TabsContentProps {
+  value: string
+  children: React.ReactNode
+  className?: string
+}
+
+function TabsContent({ value, children, className }: TabsContentProps) {
+  const { value: selectedValue } = useTabsContext()
+
+  if (selectedValue !== value) return null
+
+  return (
+    <div
+      role="tabpanel"
+      className={cn("mt-2 ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2", className)}
+    >
+      {children}
+    </div>
+  )
+}
+
+// Export shadcn/ui compatible components
+export { TabsRoot as Tabs, TabsList, TabsTrigger, TabsContent }

@@ -58,10 +58,7 @@ export function StageConfirmation({
           </Button>
           <Button
             variant={variant === 'warning' ? 'destructive' : 'default'}
-            onClick={() => {
-              onConfirm();
-              onOpenChange(false);
-            }}
+            onClick={onConfirm}
           >
             {confirmLabel}
           </Button>

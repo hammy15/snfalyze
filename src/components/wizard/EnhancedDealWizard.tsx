@@ -507,9 +507,10 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
     setShowConfirmation(true);
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (pendingStageChange) {
-      navigateStage(pendingStageChange);
+      setShowConfirmation(false);
+      await navigateStage(pendingStageChange);
     }
   };
 

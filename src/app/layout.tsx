@@ -6,6 +6,13 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'SNFalyze | Cascadia Healthcare',
   description: 'AI-driven underwriting and deal intelligence platform for skilled nursing, assisted living, and independent living facilities.',
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/icon.svg', type: 'image/svg+xml' },
+    ],
+    apple: '/icon.svg',
+  },
 };
 
 export default function RootLayout({

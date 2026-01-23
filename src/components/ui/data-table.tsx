@@ -8,7 +8,7 @@ export interface Column<T> {
   id?: string
   accessor?: keyof T | string
   header: string
-  width?: string
+  width?: string | number
   minWidth?: number
   maxWidth?: number
   align?: "left" | "center" | "right"

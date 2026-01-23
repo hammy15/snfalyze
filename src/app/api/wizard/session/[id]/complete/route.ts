@@ -143,11 +143,11 @@ export async function POST(
     let dealRecord;
 
     if (session.dealId) {
-      // Update existing deal
+      // Update existing deal (dealName already validated above)
       const [updated] = await db
         .update(deals)
         .set({
-          name: dealStructure.dealName,
+          name: dealStructure.dealName!,
           dealStructure: dealStructure.dealStructure || 'purchase',
           assetType,
           isAllOrNothing: dealStructure.isAllOrNothing ?? true,
@@ -162,11 +162,11 @@ export async function POST(
         .returning();
       dealRecord = updated;
     } else {
-      // Create new deal
+      // Create new deal (dealName already validated above)
       const [newDeal] = await db
         .insert(deals)
         .values({
-          name: dealStructure.dealName,
+          name: dealStructure.dealName!,
           dealStructure: dealStructure.dealStructure || 'purchase',
           assetType,
           isAllOrNothing: dealStructure.isAllOrNothing ?? true,

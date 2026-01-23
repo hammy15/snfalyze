@@ -60,7 +60,7 @@ const defaultDeal: Deal & { dealStructure?: string } = {
   facility_count: 0,
   total_beds: 0,
   states: [],
-  source: '',
+  source: 'other',
   source_name: '',
   received_date: new Date(),
   response_deadline: new Date(),

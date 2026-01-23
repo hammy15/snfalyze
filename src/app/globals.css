@@ -1172,3 +1172,346 @@
     display: block;
   }
 }
+
+/* ================================================
+   HAMMY'S DESIGN SYSTEM ENHANCEMENTS
+   Neumorphism + Dark Mode + Animations
+   ================================================ */
+
+/* Dark Mode Variables */
+.dark {
+  --color-bg-page: var(--gray-950);
+  --color-bg-surface: var(--gray-900);
+  --color-bg-muted: var(--gray-800);
+  --color-bg-subtle: var(--gray-900);
+
+  --color-text-primary: var(--gray-50);
+  --color-text-secondary: var(--gray-400);
+  --color-text-tertiary: var(--gray-500);
+  --color-text-disabled: var(--gray-600);
+
+  --color-border-default: var(--gray-700);
+  --color-border-muted: var(--gray-800);
+  --color-border-strong: var(--gray-600);
+
+  /* Neumorphism dark */
+  --neu-light: #353535;
+  --neu-dark: #1a1a1a;
+  --neu-bg: #27272a;
+}
+
+:root {
+  /* Neumorphism light */
+  --neu-light: #ffffff;
+  --neu-dark: #d1d1d1;
+  --neu-bg: #e4e4e7;
+}
+
+/* Dark mode body */
+.dark body {
+  background-color: var(--color-bg-page);
+  color: var(--color-text-primary);
+}
+
+/* Dark mode cards */
+.dark .card {
+  background: var(--color-bg-surface);
+  border-color: var(--color-border-muted);
+}
+
+.dark .stat-card {
+  background: var(--color-bg-surface);
+}
+
+/* Dark mode inputs */
+.dark .input {
+  background: var(--color-bg-muted);
+  border-color: var(--color-border-default);
+  color: var(--color-text-primary);
+}
+
+/* Dark mode tables */
+.dark .data-table th {
+  background: var(--gray-800);
+}
+
+.dark .data-table tbody tr:hover {
+  background: var(--gray-800);
+}
+
+/* Dark mode sidebar */
+.dark .sidebar {
+  background: var(--color-bg-surface);
+  border-color: var(--color-border-muted);
+}
+
+.dark .sidebar-nav-item:hover {
+  background: var(--gray-800);
+}
+
+/* Dark mode topbar */
+.dark .topbar {
+  background: var(--color-bg-surface);
+  border-color: var(--color-border-muted);
+}
+
+@layer components {
+  /* Neumorphic Card */
+  .neu-card {
+    @apply rounded-2xl p-6;
+    background: var(--neu-bg);
+    transition: all 0.3s ease;
+    box-shadow:
+      8px 8px 16px var(--neu-dark),
+      -8px -8px 16px var(--neu-light);
+  }
+
+  .neu-card:hover {
+    box-shadow:
+      10px 10px 20px var(--neu-dark),
+      -10px -10px 20px var(--neu-light);
+  }
+
+  /* Neumorphic Button */
+  .neu-button {
+    @apply px-6 py-3 rounded-xl font-medium;
+    background: var(--neu-bg);
+    color: var(--color-text-primary);
+    transition: all 0.2s ease;
+    box-shadow:
+      6px 6px 12px var(--neu-dark),
+      -6px -6px 12px var(--neu-light);
+  }
+
+  .neu-button:hover {
+    color: theme('colors.primary.500');
+  }
+
+  .neu-button:active {
+    box-shadow:
+      inset 4px 4px 8px var(--neu-dark),
+      inset -4px -4px 8px var(--neu-light);
+  }
+
+  /* Neumorphic Button Primary */
+  .neu-button-primary {
+    @apply px-6 py-3 rounded-xl font-medium;
+    @apply bg-primary-500 text-white;
+    transition: all 0.2s ease;
+    box-shadow:
+      6px 6px 12px var(--neu-dark),
+      -6px -6px 12px var(--neu-light),
+      inset 0 1px 0 rgba(255,255,255,0.2);
+  }
+
+  .neu-button-primary:hover {
+    @apply bg-primary-600;
+  }
+
+  .neu-button-primary:active {
+    box-shadow:
+      inset 4px 4px 8px rgba(0,0,0,0.2),
+      inset -2px -2px 4px rgba(255,255,255,0.1);
+  }
+
+  /* Neumorphic Input */
+  .neu-input {
+    @apply w-full px-4 py-3 rounded-xl;
+    background: var(--neu-bg);
+    color: var(--color-text-primary);
+    border: none;
+    outline: none;
+    transition: all 0.2s;
+    box-shadow:
+      inset 4px 4px 8px var(--neu-dark),
+      inset -4px -4px 8px var(--neu-light);
+  }
+
+  .neu-input:focus {
+    box-shadow:
+      inset 4px 4px 8px var(--neu-dark),
+      inset -4px -4px 8px var(--neu-light),
+      0 0 0 3px rgba(20, 184, 166, 0.2);
+  }
+
+  /* Neumorphic Badge */
+  .neu-badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium;
+    background: var(--neu-bg);
+    box-shadow:
+      3px 3px 6px var(--neu-dark),
+      -3px -3px 6px var(--neu-light);
+  }
+
+  .neu-badge-primary {
+    @apply bg-primary-500/20 text-primary-700;
+  }
+
+  .dark .neu-badge-primary {
+    @apply text-primary-300;
+  }
+
+  /* Glass Effect */
+  .glass {
+    @apply backdrop-blur-lg;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .dark .glass {
+    background: rgba(24, 24, 27, 0.7);
+    border: 1px solid rgba(63, 63, 70, 0.5);
+  }
+
+  /* Glow Effect */
+  .glow {
+    position: relative;
+  }
+
+  .glow::before {
+    content: '';
+    @apply absolute -inset-1 rounded-2xl;
+    @apply bg-gradient-to-r from-primary-500 to-accent-500;
+    @apply opacity-0 blur-xl;
+    transition: opacity 0.5s;
+    z-index: -1;
+  }
+
+  .glow:hover::before {
+    @apply opacity-50;
+  }
+
+  /* Shimmer Loading */
+  .shimmer {
+    @apply relative overflow-hidden;
+    background: var(--gray-200);
+  }
+
+  .dark .shimmer {
+    background: var(--gray-800);
+  }
+
+  .shimmer::after {
+    content: '';
+    @apply absolute inset-0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.4),
+      transparent
+    );
+    animation: shimmer 2s linear infinite;
+    background-size: 200% 100%;
+  }
+
+  .dark .shimmer::after {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.1),
+      transparent
+    );
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+}
+
+@layer utilities {
+  /* Enhanced Animations */
+  .animate-fade-in-up {
+    animation: fadeInUp 0.5s ease-out;
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite alternate;
+  }
+
+  @keyframes glow {
+    0% { box-shadow: 0 0 20px rgba(20, 184, 166, 0.3); }
+    100% { box-shadow: 0 0 30px rgba(20, 184, 166, 0.6); }
+  }
+
+  .animate-pulse-soft {
+    animation: pulseSoft 2s ease-in-out infinite;
+  }
+
+  @keyframes pulseSoft {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  /* Stagger children animations */
+  .stagger-children > * {
+    @apply opacity-0;
+    animation: fadeInUp 0.5s ease-out forwards;
+  }
+
+  .stagger-children > *:nth-child(1) { animation-delay: 0.1s; }
+  .stagger-children > *:nth-child(2) { animation-delay: 0.2s; }
+  .stagger-children > *:nth-child(3) { animation-delay: 0.3s; }
+  .stagger-children > *:nth-child(4) { animation-delay: 0.4s; }
+  .stagger-children > *:nth-child(5) { animation-delay: 0.5s; }
+  .stagger-children > *:nth-child(6) { animation-delay: 0.6s; }
+
+  /* Gradient text */
+  .text-gradient-primary {
+    @apply bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-primary-400 via-primary-500 to-primary-600;
+  }
+
+  /* Touch feedback for mobile */
+  @media (hover: none) {
+    .touch-feedback {
+      @apply active:scale-[0.97] active:opacity-80;
+      transition: transform 0.1s;
+    }
+  }
+
+  /* Custom scrollbar */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}

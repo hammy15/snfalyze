@@ -1,37 +1,36 @@
-'use client';
+"use client"
 
-import * as React from 'react';
-import { cn } from '@/lib/utils';
+import * as React from "react"
+import { cva, type VariantProps } from "class-variance-authority"
+import { cn } from "@/lib/utils"
 
-export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
-  variant?: 'default' | 'success' | 'warning' | 'error' | 'info' | 'outline' | 'secondary' | 'destructive';
+const badgeVariants = cva(
+  "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium transition-all duration-200",
+  {
+    variants: {
+      variant: {
+        default: "neu-badge",
+        primary: "neu-badge neu-badge-primary",
+        success: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300",
+        warning: "bg-amber-500/20 text-amber-700 dark:text-amber-300",
+        danger: "bg-rose-500/20 text-rose-700 dark:text-rose-300",
+        info: "bg-sky-500/20 text-sky-700 dark:text-sky-300",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  }
+)
+
+export interface BadgeProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof badgeVariants> {}
+
+function Badge({ className, variant, ...props }: BadgeProps) {
+  return (
+    <div className={cn(badgeVariants({ variant }), className)} {...props} />
+  )
 }
 
-export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
-  ({ className, variant = 'default', ...props }, ref) => {
-    const variants = {
-      default: 'bg-cascadia-100 text-cascadia-700',
-      success: 'bg-green-100 text-green-700',
-      warning: 'bg-yellow-100 text-yellow-700',
-      error: 'bg-red-100 text-red-700',
-      info: 'bg-blue-100 text-blue-700',
-      outline: 'border border-cascadia-300 bg-transparent text-cascadia-700',
-      secondary: 'bg-gray-100 text-gray-700',
-      destructive: 'bg-red-500 text-white',
-    };
-
-    return (
-      <span
-        ref={ref}
-        className={cn(
-          'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-          variants[variant],
-          className
-        )}
-        {...props}
-      />
-    );
-  }
-);
-
-Badge.displayName = 'Badge';
+export { Badge, badgeVariants }

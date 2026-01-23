@@ -1,50 +1,54 @@
-'use client';
+"use client"
 
-import * as React from 'react';
-import { cn } from '@/lib/utils';
+import * as React from "react"
+import { cva, type VariantProps } from "class-variance-authority"
+import { cn } from "@/lib/utils"
 
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'destructive' | 'default';
-  size?: 'sm' | 'md' | 'lg' | 'icon';
-  loading?: boolean;
+const buttonVariants = cva(
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-all duration-200 ease-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]",
+  {
+    variants: {
+      variant: {
+        default: "neu-button-primary",
+        secondary: "neu-button",
+        ghost: "hover:bg-surface-200 dark:hover:bg-surface-800 hover:text-primary-600 dark:hover:text-primary-400",
+        outline: "border-2 border-surface-300 dark:border-surface-700 hover:border-primary-500 hover:text-primary-600 dark:hover:text-primary-400 bg-transparent",
+        destructive: "bg-rose-500 text-white hover:bg-rose-600 shadow-lg shadow-rose-500/25",
+        link: "text-primary-500 underline-offset-4 hover:underline",
+      },
+      size: {
+        default: "h-11 px-6 py-2",
+        sm: "h-9 px-4 text-xs",
+        lg: "h-12 px-8 text-base",
+        xl: "h-14 px-10 text-lg",
+        icon: "h-11 w-11",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  }
+)
+
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
+  loading?: boolean
 }
 
-export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = 'primary', size = 'md', loading, disabled, children, ...props }, ref) => {
-    const variants = {
-      primary: 'bg-accent text-white hover:bg-accent-dark',
-      default: 'bg-accent text-white hover:bg-accent-dark',
-      secondary: 'bg-cascadia-100 text-cascadia-700 hover:bg-cascadia-200',
-      ghost: 'hover:bg-cascadia-100 text-cascadia-600',
-      danger: 'bg-status-error text-white hover:bg-red-700',
-      destructive: 'bg-status-error text-white hover:bg-red-700',
-      outline: 'border border-cascadia-300 bg-transparent hover:bg-cascadia-100 text-cascadia-700',
-    };
-
-    const sizes = {
-      sm: 'px-3 py-1.5 text-sm',
-      md: 'px-4 py-2 text-sm',
-      lg: 'px-6 py-3 text-base',
-      icon: 'h-10 w-10 p-0',
-    };
-
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, loading, children, disabled, ...props }, ref) => {
     return (
       <button
+        className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
-        className={cn(
-          'inline-flex items-center justify-center rounded-md font-medium transition-colors',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
-          'disabled:pointer-events-none disabled:opacity-50',
-          variants[variant],
-          sizes[size],
-          className
-        )}
         disabled={disabled || loading}
         {...props}
       >
         {loading && (
           <svg
-            className="mr-2 h-4 w-4 animate-spin"
+            className="animate-spin -ml-1 mr-2 h-4 w-4"
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"
@@ -66,8 +70,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         )}
         {children}
       </button>
-    );
+    )
   }
-);
+)
+Button.displayName = "Button"
 
-Button.displayName = 'Button';
+export { Button, buttonVariants }

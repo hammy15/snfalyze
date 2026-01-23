@@ -1,6 +1,9 @@
 import type { Config } from 'tailwindcss';
+const preset = require('./tailwind.preset');
 
 const config: Config = {
+  presets: [preset],
+  darkMode: 'class',
   content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
@@ -9,7 +12,7 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Cascadia brand colors - professional, calm, trustworthy
+        // Keep Cascadia brand colors for this project
         cascadia: {
           50: '#f8fafc',
           100: '#f1f5f9',
@@ -23,31 +26,12 @@ const config: Config = {
           900: '#0f172a',
           950: '#020617',
         },
-        accent: {
-          DEFAULT: '#0f766e',
-          light: '#14b8a6',
-          dark: '#0d5a54',
-        },
         status: {
           success: '#059669',
           warning: '#d97706',
           error: '#dc2626',
           info: '#0284c7',
         },
-      },
-      fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace'],
-      },
-      spacing: {
-        '18': '4.5rem',
-        '88': '22rem',
-        '112': '28rem',
-        '128': '32rem',
-      },
-      boxShadow: {
-        'soft': '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',
-        'card': '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1)',
       },
     },
   },

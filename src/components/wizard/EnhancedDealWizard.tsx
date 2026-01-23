@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,26 @@ import { DocumentExtraction } from './stages/DocumentExtraction';
 import { COAMappingReview } from './stages/COAMappingReview';
 import { FinancialConsolidation } from './stages/FinancialConsolidation';
 import { ChevronLeft, ChevronRight, Save, AlertCircle } from 'lucide-react';
+
+// Debounce helper
+function useDebounce<T extends (...args: Parameters<T>) => void>(
+  callback: T,
+  delay: number
+): T {
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  return useCallback(
+    ((...args: Parameters<T>) => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = setTimeout(() => {
+        callback(...args);
+      }, delay);
+    }) as T,
+    [callback, delay]
+  );
+}
 
 export interface WizardStageData {
   dealStructure?: {
@@ -103,6 +123,7 @@ interface EnhancedDealWizardProps {
 export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDealWizardProps) {
   const router = useRouter();
   const [session, setSession] = useState<WizardSession | null>(null);
+  const [localStageData, setLocalStageData] = useState<WizardStageData>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -122,6 +143,7 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
           const data = await response.json();
           if (data.success) {
             setSession(data.data);
+            setLocalStageData(data.data.stageData || {});
           } else {
             setError(data.error || 'Failed to load wizard session');
           }
@@ -135,6 +157,7 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
           const data = await response.json();
           if (data.success) {
             setSession(data.data);
+            setLocalStageData(data.data.stageData || {});
             // Update URL with session ID
             router.replace(`/app/deals/new/wizard?session=${data.data.id}`);
           } else {
@@ -152,8 +175,8 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
     initSession();
   }, [sessionId, dealId, router]);
 
-  // Save current stage data
-  const saveStageData = useCallback(async (data: Partial<WizardStageData>) => {
+  // Save stage data to API (called by debounced function)
+  const saveToApi = useCallback(async (data: WizardStageData) => {
     if (!session) return;
 
     setSaving(true);
@@ -162,7 +185,7 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          stageData: { ...session.stageData, ...data },
+          stageData: data,
           mergeStageData: true,
         }),
       });
@@ -177,22 +200,45 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
     }
   }, [session]);
 
+  // Debounced save (500ms delay)
+  const debouncedSave = useDebounce(saveToApi, 500);
+
+  // Update local state immediately, then debounce API save
+  const updateStageData = useCallback((data: Partial<WizardStageData>) => {
+    setLocalStageData((prev) => {
+      const newData = { ...prev };
+      // Deep merge the data
+      for (const key of Object.keys(data) as Array<keyof WizardStageData>) {
+        if (data[key] !== undefined) {
+          newData[key] = { ...prev[key], ...data[key] } as typeof newData[typeof key];
+        }
+      }
+      // Trigger debounced save with new data
+      debouncedSave(newData);
+      return newData;
+    });
+  }, [debouncedSave]);
+
   // Navigate to next/previous stage
   const navigateStage = async (direction: 'next' | 'back') => {
     if (!session) return;
 
     setSaving(true);
     try {
+      // First save the current local state
       const response = await fetch(`/api/wizard/session/${session.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          stageData: localStageData,
+          mergeStageData: true,
           [direction === 'next' ? 'advanceStage' : 'goBack']: true,
         }),
       });
       const result = await response.json();
       if (result.success) {
         setSession(result.data);
+        setLocalStageData(result.data.stageData || {});
         setShowConfirmation(false);
         setPendingStageChange(null);
       }
@@ -209,6 +255,16 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
 
     setSaving(true);
     try {
+      // First save any pending local changes
+      await fetch(`/api/wizard/session/${session.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stageData: localStageData,
+          mergeStageData: true,
+        }),
+      });
+
       const response = await fetch(`/api/wizard/session/${session.id}/complete`, {
         method: 'POST',
       });
@@ -252,7 +308,7 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
 
   // Get confirmation message for current stage
   const getConfirmationMessage = () => {
-    const stageData = session?.stageData || {};
+    const stageData = localStageData;
     switch (session?.currentStage) {
       case 'deal_structure_setup':
         return `Creating ${stageData.dealStructure?.dealStructure?.replace('_', '-') || 'purchase'} deal "${stageData.dealStructure?.dealName}" with ${stageData.dealStructure?.facilityCount || 0} facilities. Proceed?`;
@@ -281,8 +337,8 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
     if (!session) return null;
 
     const commonProps = {
-      stageData: session.stageData,
-      onUpdate: saveStageData,
+      stageData: localStageData,
+      onUpdate: updateStageData,
       dealId: session.dealId || undefined,
     };
 

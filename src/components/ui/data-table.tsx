@@ -4,7 +4,9 @@ import { useState, ReactNode } from "react"
 import { cn } from "@/lib/utils"
 
 export interface Column<T> {
-  key: keyof T | string
+  key?: keyof T | string
+  id?: string
+  accessor?: keyof T | string
   header: string
   width?: string
   align?: "left" | "center" | "right"

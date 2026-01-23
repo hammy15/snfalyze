@@ -26,6 +26,12 @@ interface DataTableProps<T> {
   loading?: boolean
   className?: string
   striped?: boolean
+  selectable?: boolean
+  selectedRows?: string[]
+  onSelectionChange?: (rows: string[]) => void
+  sortColumn?: string | null
+  sortDirection?: 'asc' | 'desc'
+  onSort?: (column: string) => void
   hoverable?: boolean
 }
 

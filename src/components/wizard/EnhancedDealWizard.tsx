@@ -94,10 +94,12 @@ export interface WizardStageData {
   documentExtraction?: {
     documents?: Array<{
       id: string;
+      filename?: string;
       status: 'pending' | 'in_progress' | 'review_needed' | 'complete';
       extractedFields?: number;
       clarificationsCount?: number;
       clarificationsResolved?: number;
+      confidence?: number;
     }>;
   };
   coaMappingReview?: {
@@ -105,6 +107,15 @@ export interface WizardStageData {
     mappedItems?: number;
     unmappedItems?: number;
     reviewedItems?: number;
+    mappings?: Array<{
+      id: string;
+      sourceLabel: string;
+      sourceValue: number;
+      coaCode?: string;
+      coaName?: string;
+      category?: string;
+      isMapped: boolean;
+    }>;
   };
   financialConsolidation?: {
     censusVerified?: boolean;

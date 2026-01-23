@@ -293,3 +293,8 @@ function TabsContent({ value, children, className }: TabsContentProps) {
 
 // Export shadcn/ui compatible components
 export { TabsRoot as Tabs, TabsList, TabsTrigger, TabsContent }
+
+// Legacy aliases for backwards compatibility
+export { AnimatedTabs as LegacyTabs }
+export { TabsList as TabList }
+export { TabsTrigger as Tab }

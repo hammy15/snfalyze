@@ -3,7 +3,7 @@
 import { useState, ReactNode } from "react"
 import { cn } from "@/lib/utils"
 
-interface Column<T> {
+export interface Column<T> {
   key: keyof T | string
   header: string
   width?: string

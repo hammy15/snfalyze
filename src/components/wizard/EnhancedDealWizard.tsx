@@ -206,13 +206,27 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
   // Update local state immediately, then debounce API save
   const updateStageData = useCallback((data: Partial<WizardStageData>) => {
     setLocalStageData((prev) => {
-      const newData = { ...prev };
-      // Deep merge the data
-      for (const key of Object.keys(data) as Array<keyof WizardStageData>) {
-        if (data[key] !== undefined) {
-          newData[key] = { ...prev[key], ...data[key] } as typeof newData[typeof key];
-        }
-      }
+      // Deep merge each section
+      const newData: WizardStageData = {
+        dealStructure: data.dealStructure
+          ? { ...prev.dealStructure, ...data.dealStructure }
+          : prev.dealStructure,
+        facilityIdentification: data.facilityIdentification
+          ? { ...prev.facilityIdentification, ...data.facilityIdentification }
+          : prev.facilityIdentification,
+        documentOrganization: data.documentOrganization
+          ? { ...prev.documentOrganization, ...data.documentOrganization }
+          : prev.documentOrganization,
+        documentExtraction: data.documentExtraction
+          ? { ...prev.documentExtraction, ...data.documentExtraction }
+          : prev.documentExtraction,
+        coaMappingReview: data.coaMappingReview
+          ? { ...prev.coaMappingReview, ...data.coaMappingReview }
+          : prev.coaMappingReview,
+        financialConsolidation: data.financialConsolidation
+          ? { ...prev.financialConsolidation, ...data.financialConsolidation }
+          : prev.financialConsolidation,
+      };
       // Trigger debounced save with new data
       debouncedSave(newData);
       return newData;

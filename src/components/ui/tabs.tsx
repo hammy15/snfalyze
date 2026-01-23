@@ -2,8 +2,32 @@
 
 import { useState, useRef, useEffect, ReactNode } from "react"
 import { cn } from "@/lib/utils"
+import * as React from "react"
 
-interface Tab {
+// ============================================
+// Shared Context for compound components
+// ============================================
+
+interface TabsContextValue {
+  value: string
+  onValueChange: (value: string) => void
+}
+
+const TabsContext = React.createContext<TabsContextValue | null>(null)
+
+function useTabsContext() {
+  const context = React.useContext(TabsContext)
+  if (!context) {
+    throw new Error("Tabs compound components must be used within a Tabs component")
+  }
+  return context
+}
+
+// ============================================
+// Legacy AnimatedTabs (array-based API)
+// ============================================
+
+interface LegacyTab {
   id: string
   label: string
   icon?: ReactNode
@@ -11,8 +35,8 @@ interface Tab {
   disabled?: boolean
 }
 
-interface TabsProps {
-  tabs: Tab[]
+interface AnimatedTabsProps {
+  tabs: LegacyTab[]
   defaultTab?: string
   onChange?: (tabId: string) => void
   children: ReactNode
@@ -27,7 +51,7 @@ export function AnimatedTabs({
   children,
   variant = "default",
   className
-}: TabsProps) {
+}: AnimatedTabsProps) {
   const [activeTab, setActiveTab] = useState(defaultTab || tabs[0]?.id)
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 })
   const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
@@ -148,51 +172,14 @@ export function AnimatedTabs({
   )
 }
 
-interface TabPanelProps {
-  id: string
-  activeTab: string
-  children: ReactNode
-  className?: string
-}
-
-export function TabPanel({ id, activeTab, children, className }: TabPanelProps) {
-  if (id !== activeTab) return null
-
-  return (
-    <div
-      role="tabpanel"
-      id={`panel-${id}`}
-      aria-labelledby={id}
-      className={cn("animate-fade-in", className)}
-    >
-      {children}
-    </div>
-  )
-}
-
 // ============================================
 // Shadcn/UI-compatible Tabs API
 // ============================================
-import * as React from "react"
-
-interface TabsContextValue {
-  value: string
-  onValueChange: (value: string) => void
-}
-
-const TabsContext = React.createContext<TabsContextValue | null>(null)
-
-function useTabsContext() {
-  const context = React.useContext(TabsContext)
-  if (!context) {
-    throw new Error("Tabs compound components must be used within a Tabs component")
-  }
-  return context
-}
 
 interface TabsRootProps {
   value?: string
   defaultValue?: string
+  defaultTab?: string // Legacy support
   onValueChange?: (value: string) => void
   children: React.ReactNode
   className?: string
@@ -201,11 +188,12 @@ interface TabsRootProps {
 function TabsRoot({
   value: controlledValue,
   defaultValue,
+  defaultTab, // Legacy support
   onValueChange,
   children,
   className
 }: TabsRootProps) {
-  const [uncontrolledValue, setUncontrolledValue] = React.useState(defaultValue || "")
+  const [uncontrolledValue, setUncontrolledValue] = React.useState(defaultValue || defaultTab || "")
   const value = controlledValue ?? uncontrolledValue
 
   const handleValueChange = React.useCallback((newValue: string) => {
@@ -240,15 +228,19 @@ function TabsList({ children, className }: TabsListProps) {
 }
 
 interface TabsTriggerProps {
-  value: string
+  value?: string
+  id?: string // Legacy support
   children: React.ReactNode
   className?: string
   disabled?: boolean
+  icon?: React.ReactNode // Legacy support
+  badge?: string | number // Legacy support
 }
 
-function TabsTrigger({ value, children, className, disabled }: TabsTriggerProps) {
+function TabsTrigger({ value, id, children, className, disabled, icon, badge }: TabsTriggerProps) {
   const { value: selectedValue, onValueChange } = useTabsContext()
-  const isSelected = selectedValue === value
+  const tabValue = value || id || "" // Support both 'value' and legacy 'id'
+  const isSelected = selectedValue === tabValue
 
   return (
     <button
@@ -256,30 +248,43 @@ function TabsTrigger({ value, children, className, disabled }: TabsTriggerProps)
       type="button"
       aria-selected={isSelected}
       disabled={disabled}
-      onClick={() => !disabled && onValueChange(value)}
+      onClick={() => !disabled && onValueChange(tabValue)}
       className={cn(
-        "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
         isSelected
           ? "bg-white text-surface-900 shadow-sm dark:bg-surface-900 dark:text-surface-50"
           : "text-surface-500 hover:text-surface-900 dark:text-surface-400 dark:hover:text-surface-50",
         className
       )}
     >
+      {icon}
       {children}
+      {badge !== undefined && (
+        <span className={cn(
+          "px-1.5 py-0.5 text-xs rounded-full",
+          isSelected
+            ? "bg-primary-500/20 text-primary-600 dark:text-primary-400"
+            : "bg-surface-200 dark:bg-surface-700 text-surface-600 dark:text-surface-300"
+        )}>
+          {badge}
+        </span>
+      )}
     </button>
   )
 }
 
 interface TabsContentProps {
-  value: string
+  value?: string
+  id?: string // Legacy support
   children: React.ReactNode
   className?: string
 }
 
-function TabsContent({ value, children, className }: TabsContentProps) {
+function TabsContent({ value, id, children, className }: TabsContentProps) {
   const { value: selectedValue } = useTabsContext()
+  const tabValue = value || id || "" // Support both 'value' and legacy 'id'
 
-  if (selectedValue !== value) return null
+  if (selectedValue !== tabValue) return null
 
   return (
     <div
@@ -291,7 +296,37 @@ function TabsContent({ value, children, className }: TabsContentProps) {
   )
 }
 
-// Export shadcn/ui compatible components
+// ============================================
+// Legacy TabPanel (for old-style AnimatedTabs)
+// ============================================
+
+interface LegacyTabPanelProps {
+  id: string
+  activeTab: string
+  children: ReactNode
+  className?: string
+}
+
+export function TabPanel({ id, activeTab, children, className }: LegacyTabPanelProps) {
+  if (id !== activeTab) return null
+
+  return (
+    <div
+      role="tabpanel"
+      id={`panel-${id}`}
+      aria-labelledby={id}
+      className={cn("animate-fade-in", className)}
+    >
+      {children}
+    </div>
+  )
+}
+
+// ============================================
+// Exports
+// ============================================
+
+// Primary shadcn/ui compatible exports
 export { TabsRoot as Tabs, TabsList, TabsTrigger, TabsContent }
 
 // Legacy aliases for backwards compatibility

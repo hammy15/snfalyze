@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { LegacyTabs as Tabs, TabList, Tab, TabPanel } from '@/components/ui/tabs';
+import { Tabs, TabList, Tab, TabsContent as TabPanel } from '@/components/ui/tabs';
 import { Timeline, TimelineItem } from '@/components/ui/timeline';
 import { StatCard } from '@/components/ui/stat-card';
 import { RiskBadge, QualityRating, StatusPill } from '@/components/ui/status-badge';

@@ -64,15 +64,24 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   };
 
   return (
-    <aside className={cn('sidebar', collapsed && 'collapsed')}>
+    <aside
+      className={cn(
+        'fixed top-0 left-0 h-screen z-50',
+        'flex flex-col',
+        'bg-white dark:bg-surface-900',
+        'border-r border-surface-200 dark:border-surface-800',
+        'transition-[width] duration-200',
+        collapsed ? 'w-16' : 'w-60'
+      )}
+    >
       {/* Logo */}
-      <div className="h-14 flex items-center px-4 border-b border-[var(--color-border-muted)]">
+      <div className="h-14 flex items-center px-4 border-b border-surface-200 dark:border-surface-800">
         <Link href="/app" className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center flex-shrink-0">
             <span className="text-white font-bold text-sm">SF</span>
           </div>
           {!collapsed && (
-            <span className="text-base font-semibold text-[var(--color-text-primary)]">
+            <span className="text-base font-semibold text-surface-900 dark:text-surface-100">
               SNFalyze
             </span>
           )}
@@ -82,10 +91,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {/* Search (collapsed shows icon only) */}
       {!collapsed && (
         <div className="px-3 py-3">
-          <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-text-tertiary)] bg-[var(--gray-50)] rounded-md hover:bg-[var(--gray-100)] transition-colors">
+          <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-surface-500 dark:text-surface-400 bg-surface-100 dark:bg-surface-800 rounded-md hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors">
             <Search className="w-4 h-4" />
             <span>Search...</span>
-            <kbd className="ml-auto text-xs bg-[var(--gray-200)] px-1.5 py-0.5 rounded">⌘K</kbd>
+            <kbd className="ml-auto text-xs bg-surface-200 dark:bg-surface-700 px-1.5 py-0.5 rounded">⌘K</kbd>
           </button>
         </div>
       )}
@@ -98,13 +107,16 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               key={item.name}
               href={item.href}
               className={cn(
-                'sidebar-nav-item',
-                isActive(item.href) && 'active',
-                collapsed && 'justify-center px-0 mx-2'
+                'flex items-center gap-3 px-3 py-2 mx-2 rounded-md text-sm font-medium',
+                'text-surface-600 dark:text-surface-400',
+                'hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-900 dark:hover:text-surface-100',
+                'transition-colors',
+                isActive(item.href) && 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400',
+                collapsed && 'justify-center px-0'
               )}
               title={collapsed ? item.name : undefined}
             >
-              <item.icon className="icon" />
+              <item.icon className="w-5 h-5 flex-shrink-0" />
               {!collapsed && (
                 <>
                   <span className="flex-1">{item.name}</span>
@@ -123,8 +135,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {!collapsed && (
           <div className="mt-6 px-3">
             <div className="flex items-center gap-2 px-2 mb-2">
-              <Clock className="w-3.5 h-3.5 text-[var(--color-text-disabled)]" />
-              <span className="text-xs font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider">
+              <Clock className="w-3.5 h-3.5 text-surface-400" />
+              <span className="text-xs font-medium text-surface-500 uppercase tracking-wider">
                 Recent
               </span>
             </div>
@@ -133,7 +145,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="block px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--gray-50)] rounded-md transition-colors truncate"
+                  className="block px-3 py-1.5 text-sm text-surface-600 dark:text-surface-400 hover:text-surface-900 dark:hover:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-800 rounded-md transition-colors truncate"
                 >
                   {item.name}
                 </Link>
@@ -144,19 +156,22 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </nav>
 
       {/* Bottom Navigation */}
-      <div className="border-t border-[var(--color-border-muted)] py-2">
+      <div className="border-t border-surface-200 dark:border-surface-800 py-2">
         {bottomNavItems.map((item) => (
           <Link
             key={item.name}
             href={item.href}
             className={cn(
-              'sidebar-nav-item',
-              isActive(item.href) && 'active',
-              collapsed && 'justify-center px-0 mx-2'
+              'flex items-center gap-3 px-3 py-2 mx-2 rounded-md text-sm font-medium',
+              'text-surface-600 dark:text-surface-400',
+              'hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-900 dark:hover:text-surface-100',
+              'transition-colors',
+              isActive(item.href) && 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400',
+              collapsed && 'justify-center px-0'
             )}
             title={collapsed ? item.name : undefined}
           >
-            <item.icon className="icon" />
+            <item.icon className="w-5 h-5 flex-shrink-0" />
             {!collapsed && <span>{item.name}</span>}
           </Link>
         ))}
@@ -165,7 +180,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {/* Collapse Toggle */}
       <button
         onClick={onToggle}
-        className="absolute -right-3 top-20 w-6 h-6 bg-[var(--color-bg-surface)] border border-[var(--color-border-default)] rounded-full flex items-center justify-center text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] shadow-sm transition-colors z-10"
+        className="absolute -right-3 top-20 w-6 h-6 bg-white dark:bg-surface-800 border border-surface-300 dark:border-surface-600 rounded-full flex items-center justify-center text-surface-500 hover:text-surface-900 dark:hover:text-surface-100 hover:border-surface-400 shadow-sm transition-colors z-10"
       >
         {collapsed ? (
           <ChevronRight className="w-3.5 h-3.5" />

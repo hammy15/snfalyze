@@ -112,7 +112,7 @@ export function DataTable<T extends Record<string, any>>({
                         <svg
                           className={cn(
                             "w-3 h-3 -mb-1",
-                            sortConfig?.key === column.key && sortConfig.direction === "asc"
+                            sortConfig?.key === column.key && sortConfig?.direction === "asc"
                               ? "text-teal-500"
                               : "text-gray-300 dark:text-gray-600"
                           )}
@@ -124,7 +124,7 @@ export function DataTable<T extends Record<string, any>>({
                         <svg
                           className={cn(
                             "w-3 h-3 -mt-1",
-                            sortConfig?.key === column.key && sortConfig.direction === "desc"
+                            sortConfig?.key === column.key && sortConfig?.direction === "desc"
                               ? "text-teal-500"
                               : "text-gray-300 dark:text-gray-600"
                           )}

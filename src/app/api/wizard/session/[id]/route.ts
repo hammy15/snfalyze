@@ -106,11 +106,20 @@ export async function PATCH(
     // Handle stage data
     if (stageData) {
       if (mergeStageData) {
-        // Deep merge stage data
-        newStageData = {
-          ...newStageData,
-          ...stageData,
-        };
+        // Deep merge stage data - merge each section individually
+        newStageData = { ...newStageData };
+        for (const key of Object.keys(stageData)) {
+          if (typeof stageData[key] === 'object' && stageData[key] !== null && !Array.isArray(stageData[key])) {
+            // Deep merge objects
+            newStageData[key] = {
+              ...(newStageData[key] as Record<string, unknown> || {}),
+              ...stageData[key],
+            };
+          } else {
+            // Replace arrays and primitives
+            newStageData[key] = stageData[key];
+          }
+        }
       } else {
         // Replace stage data
         newStageData = stageData;

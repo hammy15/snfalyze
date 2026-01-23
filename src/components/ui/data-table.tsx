@@ -9,9 +9,12 @@ export interface Column<T> {
   accessor?: keyof T | string
   header: string
   width?: string
+  minWidth?: number
+  maxWidth?: number
   align?: "left" | "center" | "right"
   sortable?: boolean
   render?: (value: any, row: T, index: number) => ReactNode
+  cell?: (value: any, row: T, index: number) => ReactNode
 }
 
 interface DataTableProps<T> {

@@ -624,10 +624,53 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
   };
 
   // Handle analysis complete - auto advance to next stage
-  const handleAnalysisComplete = useCallback(() => {
+  const handleAnalysisComplete = useCallback(async (_analysis: unknown, newStageData: Partial<WizardStageData>) => {
     // Auto advance when analysis is confirmed
-    navigateStage('next');
-  }, []);
+    if (!session) {
+      console.error('[Wizard] No session available for handleAnalysisComplete');
+      return;
+    }
+
+    console.log('[Wizard] Analysis complete, navigating to next stage');
+    setSaving(true);
+
+    // Merge the new stage data with existing local state
+    const mergedStageData = {
+      ...localStageData,
+      ...newStageData,
+      dealStructure: { ...localStageData.dealStructure, ...newStageData.dealStructure },
+      facilityIdentification: { ...localStageData.facilityIdentification, ...newStageData.facilityIdentification },
+      documentOrganization: { ...localStageData.documentOrganization, ...newStageData.documentOrganization },
+    };
+
+    try {
+      const response = await fetch(`/api/wizard/session/${session.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stageData: mergedStageData,
+          mergeStageData: true,
+          advanceStage: true,
+        }),
+      });
+
+      const result = await response.json();
+      console.log('[Wizard] Navigation response:', result.success, result.data?.currentStage);
+
+      if (result.success) {
+        setSession(result.data);
+        setLocalStageData(result.data.stageData || {});
+      } else {
+        console.error('[Wizard] Navigation failed:', result.error);
+        setError(result.error || 'Failed to navigate');
+      }
+    } catch (err) {
+      console.error('[Wizard] Navigation error:', err);
+      setError('Failed to navigate to next stage');
+    } finally {
+      setSaving(false);
+    }
+  }, [session, localStageData]);
 
   // Render current stage component
   const renderStage = () => {

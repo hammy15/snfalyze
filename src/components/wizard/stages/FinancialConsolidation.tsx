@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -234,18 +234,47 @@ export function FinancialConsolidation({ stageData, onUpdate, dealId }: Financia
     loadData();
   }, [dealId, stageData]);
 
-  // Sync to parent
+  // Store onUpdate in a ref to avoid infinite loops
+  const onUpdateRef = useRef(onUpdate);
   useEffect(() => {
-    onUpdate({
-      financialConsolidation: {
-        censusVerified: censusData.every((c) => c.isVerified),
-        ppdCalculated: ppdData.length > 0,
-        facilityPnlGenerated: facilityPnl.length > 0,
-        portfolioRollupGenerated: !!rollup,
-        proformaGenerated,
-      },
-    });
-  }, [censusData, ppdData, facilityPnl, rollup, proformaGenerated, onUpdate]);
+    onUpdateRef.current = onUpdate;
+  }, [onUpdate]);
+
+  // Track previous values to avoid unnecessary updates
+  const prevValuesRef = useRef<{
+    censusVerified: boolean;
+    ppdCalculated: boolean;
+    facilityPnlGenerated: boolean;
+    portfolioRollupGenerated: boolean;
+    proformaGenerated: boolean;
+  } | null>(null);
+
+  // Sync to parent - only when values actually change
+  useEffect(() => {
+    const newValues = {
+      censusVerified: censusData.every((c) => c.isVerified),
+      ppdCalculated: ppdData.length > 0,
+      facilityPnlGenerated: facilityPnl.length > 0,
+      portfolioRollupGenerated: !!rollup,
+      proformaGenerated,
+    };
+
+    // Only update if values actually changed
+    const prev = prevValuesRef.current;
+    if (
+      !prev ||
+      prev.censusVerified !== newValues.censusVerified ||
+      prev.ppdCalculated !== newValues.ppdCalculated ||
+      prev.facilityPnlGenerated !== newValues.facilityPnlGenerated ||
+      prev.portfolioRollupGenerated !== newValues.portfolioRollupGenerated ||
+      prev.proformaGenerated !== newValues.proformaGenerated
+    ) {
+      prevValuesRef.current = newValues;
+      onUpdateRef.current({
+        financialConsolidation: newValues,
+      });
+    }
+  }, [censusData, ppdData, facilityPnl, rollup, proformaGenerated]);
 
   // Generate proforma
   const generateProforma = async () => {

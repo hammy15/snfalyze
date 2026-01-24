@@ -55,6 +55,7 @@ import {
   PortfolioFinancialView,
   type FacilityTab,
 } from '@/components/financials';
+import { DealScoreCard } from '@/components/scoring';
 
 // Default deal data (used as fallback)
 const defaultDeal: Deal & { dealStructure?: string } = {
@@ -504,6 +505,9 @@ export default function DealDetailPage() {
 
             {/* Overview Tab */}
             <TabsContent value="overview" className="mt-4 space-y-4">
+              {/* Deal Score Card */}
+              <DealScoreCard dealId={deal.id} />
+
               <Card>
                 <CardHeader>
                   <CardTitle>Hypothesis Notes</CardTitle>

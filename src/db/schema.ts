@@ -1185,6 +1185,64 @@ export const capitalPartnersRelations = relations(capitalPartners, ({ many }) =>
   partnerMatches: many(partnerMatches),
 }));
 
+export const financialPeriodsRelations = relations(financialPeriods, ({ one }) => ({
+  deal: one(deals, {
+    fields: [financialPeriods.dealId],
+    references: [deals.id],
+  }),
+  facility: one(facilities, {
+    fields: [financialPeriods.facilityId],
+    references: [facilities.id],
+  }),
+}));
+
+export const valuationsRelations = relations(valuations, ({ one }) => ({
+  deal: one(deals, {
+    fields: [valuations.dealId],
+    references: [deals.id],
+  }),
+  facility: one(facilities, {
+    fields: [valuations.facilityId],
+    references: [facilities.id],
+  }),
+}));
+
+export const capexItemsRelations = relations(capexItems, ({ one }) => ({
+  deal: one(deals, {
+    fields: [capexItems.dealId],
+    references: [deals.id],
+  }),
+  facility: one(facilities, {
+    fields: [capexItems.facilityId],
+    references: [facilities.id],
+  }),
+}));
+
+export const assumptionsRelations = relations(assumptions, ({ one }) => ({
+  deal: one(deals, {
+    fields: [assumptions.dealId],
+    references: [deals.id],
+  }),
+}));
+
+export const partnerMatchesRelations = relations(partnerMatches, ({ one }) => ({
+  deal: one(deals, {
+    fields: [partnerMatches.dealId],
+    references: [deals.id],
+  }),
+  partner: one(capitalPartners, {
+    fields: [partnerMatches.partnerId],
+    references: [capitalPartners.id],
+  }),
+}));
+
+export const riskFactorsRelations = relations(riskFactors, ({ one }) => ({
+  deal: one(deals, {
+    fields: [riskFactors.dealId],
+    references: [deals.id],
+  }),
+}));
+
 export const cmsProviderDataRelations = relations(cmsProviderData, ({ many }) => ({
   mcrCostReports: many(mcrCostReports),
 }));

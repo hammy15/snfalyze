@@ -131,7 +131,7 @@ interface AIAnalysis {
 interface DocumentUploadAnalysisProps {
   stageData: WizardStageData;
   onUpdate: (data: Partial<WizardStageData>) => void;
-  onAnalysisComplete: (analysis: AIAnalysis) => void;
+  onAnalysisComplete: (analysis: AIAnalysis, stageData: Partial<WizardStageData>) => void;
   sessionId?: string;
 }
 
@@ -362,7 +362,7 @@ export function DocumentUploadAnalysis({
     }
 
     onUpdate(stageDataUpdate);
-    onAnalysisComplete(analysis);
+    onAnalysisComplete(analysis, stageDataUpdate);
   };
 
   // Update a facility

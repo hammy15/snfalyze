@@ -49,6 +49,12 @@ import {
   ArrowLeftRight,
 } from 'lucide-react';
 import { SaleLeasebackDashboard } from '@/components/sale-leaseback/SaleLeasebackDashboard';
+import {
+  BuildingTabs,
+  FacilityFinancialWrapper,
+  PortfolioFinancialView,
+  type FacilityTab,
+} from '@/components/financials';
 
 // Default deal data (used as fallback)
 const defaultDeal: Deal & { dealStructure?: string } = {
@@ -114,6 +120,8 @@ export default function DealDetailPage() {
   const [synthesis, setSynthesis] = useState<DealSynthesis | undefined>(undefined);
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
+  const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
+  const [facilityTabs, setFacilityTabs] = useState<FacilityTab[]>([]);
 
   // Fetch deal data from API
   useEffect(() => {
@@ -174,7 +182,25 @@ export default function DealDetailPage() {
             }
           }
         }
-      } catch (error) {
+      // Fetch facilities for this deal
+          const facilitiesResponse = await fetch(`/api/deals/${dealId}/facilities`);
+          if (facilitiesResponse.ok) {
+            const facilitiesData = await facilitiesResponse.json();
+            if (facilitiesData.success && facilitiesData.data) {
+              const tabs: FacilityTab[] = facilitiesData.data.map((f: any) => ({
+                id: f.id,
+                name: f.name,
+                beds: f.licensedBeds || 0,
+                occupancy: f.currentOccupancy || 0,
+                ebitda: f.trailingTwelveMonthEbitda || 0,
+              }));
+              setFacilityTabs(tabs);
+              if (tabs.length > 0) {
+                setSelectedFacilityId(tabs[0].id);
+              }
+            }
+          }
+        } catch (error) {
         console.error('Failed to fetch deal data:', error);
       } finally {
         setLoading(false);
@@ -464,6 +490,10 @@ export default function DealDetailPage() {
                 Risks ({risks.length})
               </TabsTrigger>
               <TabsTrigger value="synthesis">Synthesis</TabsTrigger>
+              <TabsTrigger value="financials" className="flex items-center gap-1">
+                <DollarSign className="h-4 w-4" />
+                Financials
+              </TabsTrigger>
               {deal.dealStructure === 'sale_leaseback' && (
                 <TabsTrigger value="sale-leaseback" className="flex items-center gap-1">
                   <ArrowLeftRight className="h-4 w-4" />
@@ -763,6 +793,63 @@ export default function DealDetailPage() {
                 synthesis={synthesis}
                 onSaveSynthesis={handleSaveSynthesis}
               />
+            </TabsContent>
+
+            {/* Financials Tab */}
+            <TabsContent value="financials" className="mt-4 space-y-4">
+              <BuildingTabs
+                facilities={facilityTabs}
+                selectedFacilityId={selectedFacilityId}
+                onSelectFacility={setSelectedFacilityId}
+              />
+
+              {selectedFacilityId === null ? (
+                <PortfolioFinancialView
+                  facilities={facilityTabs.map((f) => ({
+                    facilityId: f.id,
+                    facilityName: f.name,
+                    beds: f.beds,
+                    totalDays: Math.round(f.beds * 365 * (f.occupancy || 0.85)),
+                    occupancy: f.occupancy || 0.85,
+                    totalRevenue: 0,
+                    totalExpenses: 0,
+                    ebitdar: 0,
+                    ebitda: f.ebitda || 0,
+                    blendedPPD: 0,
+                    censusByPayer: {
+                      medicarePartADays: 0,
+                      medicareAdvantageDays: 0,
+                      managedCareDays: 0,
+                      medicaidDays: 0,
+                      managedMedicaidDays: 0,
+                      privateDays: 0,
+                      vaContractDays: 0,
+                      hospiceDays: 0,
+                      otherDays: 0,
+                    },
+                    revenueByPayer: {
+                      medicarePartA: 0,
+                      medicareAdvantage: 0,
+                      managedCare: 0,
+                      medicaid: 0,
+                      managedMedicaid: 0,
+                      private: 0,
+                      vaContract: 0,
+                      hospice: 0,
+                      other: 0,
+                      ancillary: 0,
+                      therapy: 0,
+                      total: 0,
+                    },
+                  }))}
+                />
+              ) : (
+                <FacilityFinancialWrapper
+                  facilityId={selectedFacilityId}
+                  facilityName={facilityTabs.find((f) => f.id === selectedFacilityId)?.name || 'Facility'}
+                  dealId={deal.id}
+                />
+              )}
             </TabsContent>
 
             {/* Sale-Leaseback Tab */}

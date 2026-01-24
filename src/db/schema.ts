@@ -1175,6 +1175,9 @@ export const facilitiesRelations = relations(facilities, ({ one, many }) => ({
   surveyDeficiencies: many(surveyDeficiencies),
   proformaScenarios: many(proformaScenarios),
   saleLeasebackRecords: many(saleLeaseback),
+  censusPeriods: many(facilityCensusPeriods),
+  payerRates: many(facilityPayerRates),
+  proformaLineOverrides: many(proformaLineOverrides),
 }));
 
 export const capitalPartnersRelations = relations(capitalPartners, ({ many }) => ({
@@ -1515,5 +1518,168 @@ export const dealCoaMappingsRelations = relations(dealCoaMappings, ({ one }) => 
   document: one(documents, {
     fields: [dealCoaMappings.documentId],
     references: [documents.id],
+  }),
+}));
+
+// ============================================================================
+// Per-Building Financial Analysis Tables
+// ============================================================================
+
+// Census by Payer Period - Detailed patient days tracking by payer type
+export const facilityCensusPeriods = pgTable(
+  'facility_census_periods',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    facilityId: uuid('facility_id')
+      .references(() => facilities.id, { onDelete: 'cascade' })
+      .notNull(),
+    periodStart: date('period_start').notNull(),
+    periodEnd: date('period_end').notNull(),
+
+    // Skilled Census (higher PPD)
+    medicarePartADays: integer('medicare_part_a_days').default(0),
+    medicareAdvantageDays: integer('medicare_advantage_days').default(0),
+    managedCareDays: integer('managed_care_days').default(0),
+
+    // Non-Skilled Census (lower PPD)
+    medicaidDays: integer('medicaid_days').default(0),
+    managedMedicaidDays: integer('managed_medicaid_days').default(0),
+    privateDays: integer('private_days').default(0),
+    vaContractDays: integer('va_contract_days').default(0),
+    hospiceDays: integer('hospice_days').default(0),
+    otherDays: integer('other_days').default(0),
+
+    totalBeds: integer('total_beds'),
+    occupancyRate: decimal('occupancy_rate', { precision: 5, scale: 2 }),
+    source: varchar('source', { length: 50 }), // 'extracted', 'manual', 'projected'
+    notes: text('notes'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    facilityIdIdx: index('idx_census_periods_facility_id').on(table.facilityId),
+    periodIdx: index('idx_census_periods_period').on(table.periodStart, table.periodEnd),
+  })
+);
+
+// PPD Rates by Payer - Revenue per patient day rates for each payer type
+export const facilityPayerRates = pgTable(
+  'facility_payer_rates',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    facilityId: uuid('facility_id')
+      .references(() => facilities.id, { onDelete: 'cascade' })
+      .notNull(),
+    effectiveDate: date('effective_date').notNull(),
+
+    // Skilled PPD Rates
+    medicarePartAPpd: decimal('medicare_part_a_ppd', { precision: 10, scale: 2 }),
+    medicareAdvantagePpd: decimal('medicare_advantage_ppd', { precision: 10, scale: 2 }),
+    managedCarePpd: decimal('managed_care_ppd', { precision: 10, scale: 2 }),
+
+    // Non-Skilled PPD Rates
+    medicaidPpd: decimal('medicaid_ppd', { precision: 10, scale: 2 }),
+    managedMedicaidPpd: decimal('managed_medicaid_ppd', { precision: 10, scale: 2 }),
+    privatePpd: decimal('private_ppd', { precision: 10, scale: 2 }),
+    vaContractPpd: decimal('va_contract_ppd', { precision: 10, scale: 2 }),
+    hospicePpd: decimal('hospice_ppd', { precision: 10, scale: 2 }),
+
+    // Ancillary Revenue
+    ancillaryRevenuePpd: decimal('ancillary_revenue_ppd', { precision: 10, scale: 2 }),
+    therapyRevenuePpd: decimal('therapy_revenue_ppd', { precision: 10, scale: 2 }),
+
+    source: varchar('source', { length: 50 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    facilityIdIdx: index('idx_payer_rates_facility_id').on(table.facilityId),
+    effectiveDateIdx: index('idx_payer_rates_effective_date').on(table.effectiveDate),
+  })
+);
+
+// Pro Forma Line Overrides - Cell-level overrides for pro forma editor
+export const proformaLineOverrides = pgTable(
+  'proforma_line_overrides',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    scenarioId: uuid('scenario_id')
+      .references(() => proformaScenarios.id, { onDelete: 'cascade' })
+      .notNull(),
+    facilityId: uuid('facility_id')
+      .references(() => facilities.id, { onDelete: 'cascade' })
+      .notNull(),
+    coaCode: varchar('coa_code', { length: 20 }).notNull(),
+    monthIndex: integer('month_index').notNull(), // 0-59 for 5-year pro forma
+    overrideType: varchar('override_type', { length: 20 }).notNull(), // 'fixed', 'ppd', 'percent_revenue'
+    overrideValue: decimal('override_value', { precision: 15, scale: 2 }),
+    annualGrowthRate: decimal('annual_growth_rate', { precision: 5, scale: 4 }),
+    notes: text('notes'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    scenarioIdIdx: index('idx_proforma_overrides_scenario_id').on(table.scenarioId),
+    facilityIdIdx: index('idx_proforma_overrides_facility_id').on(table.facilityId),
+    coaMonthIdx: index('idx_proforma_overrides_coa_month').on(table.coaCode, table.monthIndex),
+  })
+);
+
+// Pro Forma Assumptions - Editable assumptions for scenario modeling
+export const proformaScenarioAssumptions = pgTable(
+  'proforma_scenario_assumptions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    scenarioId: uuid('scenario_id')
+      .references(() => proformaScenarios.id, { onDelete: 'cascade' })
+      .notNull(),
+    facilityId: uuid('facility_id').references(() => facilities.id, { onDelete: 'set null' }),
+    assumptionKey: varchar('assumption_key', { length: 50 }).notNull(),
+    assumptionValue: decimal('assumption_value', { precision: 15, scale: 4 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    scenarioIdIdx: index('idx_scenario_assumptions_scenario_id').on(table.scenarioId),
+    facilityIdIdx: index('idx_scenario_assumptions_facility_id').on(table.facilityId),
+    keyIdx: index('idx_scenario_assumptions_key').on(table.assumptionKey),
+  })
+);
+
+// ============================================================================
+// Per-Building Financial Analysis Relations
+// ============================================================================
+
+export const facilityCensusPeriodsRelations = relations(facilityCensusPeriods, ({ one }) => ({
+  facility: one(facilities, {
+    fields: [facilityCensusPeriods.facilityId],
+    references: [facilities.id],
+  }),
+}));
+
+export const facilityPayerRatesRelations = relations(facilityPayerRates, ({ one }) => ({
+  facility: one(facilities, {
+    fields: [facilityPayerRates.facilityId],
+    references: [facilities.id],
+  }),
+}));
+
+export const proformaLineOverridesRelations = relations(proformaLineOverrides, ({ one }) => ({
+  scenario: one(proformaScenarios, {
+    fields: [proformaLineOverrides.scenarioId],
+    references: [proformaScenarios.id],
+  }),
+  facility: one(facilities, {
+    fields: [proformaLineOverrides.facilityId],
+    references: [facilities.id],
+  }),
+}));
+
+export const proformaScenarioAssumptionsRelations = relations(proformaScenarioAssumptions, ({ one }) => ({
+  scenario: one(proformaScenarios, {
+    fields: [proformaScenarioAssumptions.scenarioId],
+    references: [proformaScenarios.id],
+  }),
+  facility: one(facilities, {
+    fields: [proformaScenarioAssumptions.facilityId],
+    references: [facilities.id],
   }),
 }));

@@ -1,4 +1,12 @@
 import { ProformaAssumptions, FacilityType } from './types';
+import type {
+  CensusByPayer,
+  PayerRates,
+  RevenueByPayer,
+  FacilityFinancials,
+  PortfolioMetrics,
+} from '@/components/financials/types';
+import { getTotalDays } from '@/components/financials/types';
 
 export interface MonthlyData {
   // Census
@@ -392,4 +400,263 @@ export function formatNumber(value: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+// ============================================================================
+// Payer-Level Calculation Functions
+// ============================================================================
+
+/**
+ * Calculate revenue by payer type
+ * Revenue = Census Days × PPD Rate for each payer
+ */
+export function calculatePayerRevenue(
+  census: CensusByPayer,
+  rates: Partial<PayerRates>
+): RevenueByPayer {
+  const totalDays = getTotalDays(census);
+
+  const medicarePartA = census.medicarePartADays * (rates.medicarePartAPpd || 0);
+  const medicareAdvantage = census.medicareAdvantageDays * (rates.medicareAdvantagePpd || 0);
+  const managedCare = census.managedCareDays * (rates.managedCarePpd || 0);
+  const medicaid = census.medicaidDays * (rates.medicaidPpd || 0);
+  const managedMedicaid = census.managedMedicaidDays * (rates.managedMedicaidPpd || 0);
+  const privatePay = census.privateDays * (rates.privatePpd || 0);
+  const vaContract = census.vaContractDays * (rates.vaContractPpd || 0);
+  const hospice = census.hospiceDays * (rates.hospicePpd || 0);
+  const other = census.otherDays * 200; // Default $200 PPD for other
+
+  const ancillary = totalDays * (rates.ancillaryRevenuePpd || 0);
+  const therapy = totalDays * (rates.therapyRevenuePpd || 0);
+
+  const total =
+    medicarePartA +
+    medicareAdvantage +
+    managedCare +
+    medicaid +
+    managedMedicaid +
+    privatePay +
+    vaContract +
+    hospice +
+    other +
+    ancillary +
+    therapy;
+
+  return {
+    medicarePartA,
+    medicareAdvantage,
+    managedCare,
+    medicaid,
+    managedMedicaid,
+    private: privatePay,
+    vaContract,
+    hospice,
+    other,
+    ancillary,
+    therapy,
+    total,
+  };
+}
+
+/**
+ * Calculate blended (weighted average) PPD across all payers
+ */
+export function calculateBlendedPPD(
+  census: CensusByPayer,
+  rates: Partial<PayerRates>
+): number {
+  const revenue = calculatePayerRevenue(census, rates);
+  const totalDays = getTotalDays(census);
+
+  // Exclude ancillary and therapy from blended room & board PPD
+  const roomBoardRevenue =
+    revenue.total - revenue.ancillary - revenue.therapy;
+
+  return totalDays > 0 ? roomBoardRevenue / totalDays : 0;
+}
+
+/**
+ * Calculate blended PPD including ancillary revenue
+ */
+export function calculateAllInPPD(
+  census: CensusByPayer,
+  rates: Partial<PayerRates>
+): number {
+  const revenue = calculatePayerRevenue(census, rates);
+  const totalDays = getTotalDays(census);
+  return totalDays > 0 ? revenue.total / totalDays : 0;
+}
+
+/**
+ * Calculate portfolio-weighted metrics across multiple facilities
+ */
+export function calculatePortfolioMetrics(
+  facilities: FacilityFinancials[]
+): PortfolioMetrics {
+  if (facilities.length === 0) {
+    return {
+      totalFacilities: 0,
+      totalBeds: 0,
+      totalDays: 0,
+      weightedOccupancy: 0,
+      totalRevenue: 0,
+      totalExpenses: 0,
+      totalEbitdar: 0,
+      totalEbitda: 0,
+      weightedPPD: 0,
+      weightedMargin: 0,
+      facilitiesRanked: [],
+      combinedPayerMix: [],
+    };
+  }
+
+  const totalFacilities = facilities.length;
+  const totalBeds = facilities.reduce((sum, f) => sum + f.beds, 0);
+  const totalDays = facilities.reduce((sum, f) => sum + f.totalDays, 0);
+  const totalRevenue = facilities.reduce((sum, f) => sum + f.totalRevenue, 0);
+  const totalExpenses = facilities.reduce((sum, f) => sum + f.totalExpenses, 0);
+  const totalEbitdar = facilities.reduce((sum, f) => sum + f.ebitdar, 0);
+  const totalEbitda = facilities.reduce((sum, f) => sum + f.ebitda, 0);
+
+  // Weighted occupancy (by beds)
+  const weightedOccupancy =
+    totalBeds > 0
+      ? facilities.reduce((sum, f) => sum + f.occupancy * f.beds, 0) / totalBeds
+      : 0;
+
+  // Weighted PPD (by patient days)
+  const weightedPPD =
+    totalDays > 0
+      ? facilities.reduce((sum, f) => sum + f.blendedPPD * f.totalDays, 0) / totalDays
+      : 0;
+
+  // Weighted margin
+  const weightedMargin = totalRevenue > 0 ? totalEbitda / totalRevenue : 0;
+
+  // Rank facilities by EBITDA margin
+  const facilitiesRanked = [...facilities].sort((a, b) => {
+    const marginA = a.totalRevenue > 0 ? a.ebitda / a.totalRevenue : 0;
+    const marginB = b.totalRevenue > 0 ? b.ebitda / b.totalRevenue : 0;
+    return marginB - marginA;
+  });
+
+  // Combined payer mix
+  const combinedPayerMix = calculateCombinedPayerMix(facilities, totalDays, totalRevenue);
+
+  return {
+    totalFacilities,
+    totalBeds,
+    totalDays,
+    weightedOccupancy,
+    totalRevenue,
+    totalExpenses,
+    totalEbitdar,
+    totalEbitda,
+    weightedPPD,
+    weightedMargin,
+    facilitiesRanked,
+    combinedPayerMix,
+  };
+}
+
+/**
+ * Calculate combined payer mix across facilities
+ */
+function calculateCombinedPayerMix(
+  facilities: FacilityFinancials[],
+  totalDays: number,
+  totalRevenue: number
+): PortfolioMetrics['combinedPayerMix'] {
+  const payerTypes = [
+    { key: 'medicarePartA', label: 'Medicare Part A', daysKey: 'medicarePartADays', revenueKey: 'medicarePartA' },
+    { key: 'medicareAdvantage', label: 'Medicare Advantage', daysKey: 'medicareAdvantageDays', revenueKey: 'medicareAdvantage' },
+    { key: 'managedCare', label: 'Managed Care', daysKey: 'managedCareDays', revenueKey: 'managedCare' },
+    { key: 'medicaid', label: 'Medicaid', daysKey: 'medicaidDays', revenueKey: 'medicaid' },
+    { key: 'managedMedicaid', label: 'Managed Medicaid', daysKey: 'managedMedicaidDays', revenueKey: 'managedMedicaid' },
+    { key: 'private', label: 'Private Pay', daysKey: 'privateDays', revenueKey: 'private' },
+    { key: 'vaContract', label: 'VA Contract', daysKey: 'vaContractDays', revenueKey: 'vaContract' },
+    { key: 'hospice', label: 'Hospice', daysKey: 'hospiceDays', revenueKey: 'hospice' },
+    { key: 'other', label: 'Other', daysKey: 'otherDays', revenueKey: 'other' },
+  ];
+
+  return payerTypes.map((payer) => {
+    const payerDays = facilities.reduce((sum, f) => {
+      const days = f.censusByPayer[payer.daysKey as keyof CensusByPayer] || 0;
+      return sum + days;
+    }, 0);
+
+    const payerRevenue = facilities.reduce((sum, f) => {
+      const revenue = f.revenueByPayer[payer.revenueKey as keyof RevenueByPayer] || 0;
+      return sum + revenue;
+    }, 0);
+
+    const percentMix = totalDays > 0 ? payerDays / totalDays : 0;
+    const payerPPD = payerDays > 0 ? payerRevenue / payerDays : 0;
+
+    return {
+      payerType: payer.label,
+      totalDays: payerDays,
+      percentMix,
+      weightedPPD: payerPPD,
+      totalRevenue: payerRevenue,
+    };
+  }).filter((p) => p.totalDays > 0); // Only include payers with days
+}
+
+/**
+ * Calculate Year-over-Year change percentage
+ */
+export function calculateYoYChange(current: number, prior: number): number {
+  if (prior === 0) return 0;
+  return (current - prior) / prior;
+}
+
+/**
+ * Calculate Compound Annual Growth Rate (CAGR)
+ */
+export function calculateCAGR(
+  startValue: number,
+  endValue: number,
+  years: number
+): number {
+  if (startValue <= 0 || years <= 0) return 0;
+  return Math.pow(endValue / startValue, 1 / years) - 1;
+}
+
+/**
+ * Project future value with annual growth rate
+ */
+export function projectWithGrowth(
+  baseValue: number,
+  annualGrowthRate: number,
+  years: number
+): number {
+  return baseValue * Math.pow(1 + annualGrowthRate, years);
+}
+
+/**
+ * Calculate skilled vs non-skilled census breakdown
+ */
+export function calculateSkilledMix(census: CensusByPayer): {
+  skilledDays: number;
+  nonSkilledDays: number;
+  skilledPercent: number;
+} {
+  const skilledDays =
+    census.medicarePartADays +
+    census.medicareAdvantageDays +
+    census.managedCareDays;
+
+  const nonSkilledDays =
+    census.medicaidDays +
+    census.managedMedicaidDays +
+    census.privateDays +
+    census.vaContractDays +
+    census.hospiceDays +
+    census.otherDays;
+
+  const totalDays = skilledDays + nonSkilledDays;
+  const skilledPercent = totalDays > 0 ? skilledDays / totalDays : 0;
+
+  return { skilledDays, nonSkilledDays, skilledPercent };
 }

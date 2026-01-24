@@ -21,8 +21,9 @@ export async function GET(request: NextRequest) {
       .select({
         id: deals.id,
         name: deals.name,
-        stage: deals.stage,
+        status: deals.status,
         askingPrice: deals.askingPrice,
+        beds: deals.beds,
       })
       .from(deals)
       .orderBy(desc(deals.updatedAt))
@@ -36,24 +37,25 @@ export async function GET(request: NextRequest) {
       .from(deals);
     const pipelineValue = Number(pipelineValueResult[0]?.total) || 0;
 
-    // Get pipeline breakdown by stage
+    // Get pipeline breakdown by status
     const pipelineBreakdown = await db
       .select({
-        stage: deals.stage,
+        status: deals.status,
         count: count(),
         value: sql<number>`COALESCE(SUM(CAST(${deals.askingPrice} AS DECIMAL)), 0)`,
       })
       .from(deals)
-      .groupBy(deals.stage);
+      .groupBy(deals.status);
 
-    // Map to pipeline overview format
-    const stageMapping: Record<string, string> = {
-      'target': 'Target',
-      'contacted': 'Contacted',
-      'loi': 'LOI',
-      'diligence': 'Diligence',
-      'psa': 'PSA',
-      'closed': 'Closed',
+    // Map status to stage display names
+    const statusMapping: Record<string, string> = {
+      'new': 'Target',
+      'analyzing': 'Target',
+      'analysis_complete': 'Contacted',
+      'reviewed': 'LOI',
+      'in_progress': 'Diligence',
+      'complete': 'Closed',
+      'archived': 'Closed',
     };
 
     const pipelineOverview = [
@@ -66,11 +68,11 @@ export async function GET(request: NextRequest) {
     ];
 
     for (const item of pipelineBreakdown) {
-      const stageName = stageMapping[item.stage || 'target'] || 'Target';
+      const stageName = statusMapping[item.status || 'new'] || 'Target';
       const idx = pipelineOverview.findIndex(p => p.stage === stageName);
       if (idx !== -1) {
-        pipelineOverview[idx].count = Number(item.count) || 0;
-        pipelineOverview[idx].value = Math.round((Number(item.value) || 0) / 1000000);
+        pipelineOverview[idx].count += Number(item.count) || 0;
+        pipelineOverview[idx].value += Math.round((Number(item.value) || 0) / 1000000);
       }
     }
 
@@ -82,13 +84,24 @@ export async function GET(request: NextRequest) {
       .from(facilities);
     const totalBeds = Number(bedsResult[0]?.totalBeds) || 0;
 
+    // Map status to stage for UI
+    const statusToStage: Record<string, 'target' | 'contacted' | 'loi' | 'diligence' | 'psa' | 'closed'> = {
+      'new': 'target',
+      'analyzing': 'target',
+      'analysis_complete': 'contacted',
+      'reviewed': 'loi',
+      'in_progress': 'diligence',
+      'complete': 'closed',
+      'archived': 'closed',
+    };
+
     // Build pipeline deals list
     const pipelineDeals = recentDeals.map(deal => ({
       id: deal.id,
       name: deal.name || 'Unnamed Deal',
-      stage: (deal.stage || 'target') as 'target' | 'contacted' | 'loi' | 'diligence' | 'psa' | 'closed',
+      stage: statusToStage[deal.status || 'new'] || 'target',
       value: Number(deal.askingPrice) || 0,
-      beds: totalBeds > 0 ? Math.round(totalBeds / Math.max(dealsCount, 1)) : 0,
+      beds: deal.beds || 0,
       assignee: 'You',
     }));
 

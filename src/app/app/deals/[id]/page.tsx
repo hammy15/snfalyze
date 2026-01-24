@@ -132,6 +132,17 @@ export default function DealDetailPage() {
   const [cmsSyncMessage, setCmsSyncMessage] = useState<string | null>(null);
   const [completedTasks, setCompletedTasks] = useState<Record<string, boolean>>({});
   const [showWalkthrough, setShowWalkthrough] = useState(false);
+  const [walkthroughMetrics, setWalkthroughMetrics] = useState<{
+    agencyPercentage: number;
+    occupancyTrend: 'up' | 'down' | 'stable';
+    coverageRatio: number;
+    unmappedItemCount: number;
+  }>({
+    agencyPercentage: 0,
+    occupancyTrend: 'stable',
+    coverageRatio: 0,
+    unmappedItemCount: 0,
+  });
 
   // Fetch deal data from API
   useEffect(() => {
@@ -252,6 +263,15 @@ export default function DealDetailPage() {
               started_at: new Date(),
             };
             setStageProgress([firstStage]);
+          }
+        }
+
+        // Fetch walkthrough metrics
+        const metricsResponse = await fetch(`/api/deals/${dealId}/walkthrough-metrics`);
+        if (metricsResponse.ok) {
+          const metricsData = await metricsResponse.json();
+          if (metricsData.success && metricsData.data) {
+            setWalkthroughMetrics(metricsData.data);
           }
         }
 
@@ -734,11 +754,11 @@ export default function DealDetailPage() {
               documentCount={documents.length}
               hasFinancials={documents.some((d) => d.category === 'financials')}
               hasCensusData={facilityTabs.some((f) => f.occupancy && f.occupancy > 0)}
-              agencyPercentage={0} // TODO: Calculate from financials
+              agencyPercentage={walkthroughMetrics.agencyPercentage}
               isSff={facilityTabs.some((f: any) => f.isSff)}
-              occupancyTrend="stable" // TODO: Calculate from historical data
-              coverageRatio={0} // TODO: Calculate from financials
-              unmappedItemCount={0} // TODO: Get from COA mapping status
+              occupancyTrend={walkthroughMetrics.occupancyTrend}
+              coverageRatio={walkthroughMetrics.coverageRatio}
+              unmappedItemCount={walkthroughMetrics.unmappedItemCount}
             />
           </div>
         ) : (

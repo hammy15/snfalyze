@@ -206,9 +206,9 @@ export default function DealDetailPage() {
               isSff: f.isSff,
             }));
             setFacilityTabs(tabs);
-            if (tabs.length > 0) {
-              setSelectedFacilityId(tabs[0].id);
-            }
+            // Default to Portfolio view (null) instead of first facility
+            // This ensures Portfolio is always the default entity shown
+            setSelectedFacilityId(null);
           }
         }
 

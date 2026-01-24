@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, documents } from '@/db';
+import { db, documents, facilities as facilitiesTable } from '@/db';
 import { eq, inArray } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
 import { join } from 'path';
 import { comprehensiveExtract, type ExtractionResult } from '@/lib/extraction/comprehensive-extractor';
 import { extractSingleFile, type PerFileExtractionResult } from '@/lib/extraction/per-file-extractor';
+import { populateFromExtraction } from '@/lib/extraction/db-populator';
+import { crossReferenceValidate, type CrossReferenceResult } from '@/lib/extraction/cross-reference-validator';
+import { generateAISummary, generateQuickSummary, type AISummaryOutput } from '@/lib/extraction/ai-summary-generator';
 import { matchExtractedFacilityToCMS, type NormalizedProviderData } from '@/lib/cms';
 
 const anthropic = new Anthropic();
@@ -61,14 +64,40 @@ interface AnalysisResult {
     dateRange: string | null;
   };
   extraction: ExtractionResult | null;
+  databasePopulation?: {
+    populated: boolean;
+    facilities: Array<{
+      facilityName: string;
+      facilityId: string;
+      financialPeriods: number;
+      censusPeriods: number;
+      payerRates: number;
+      errors: string[];
+    }>;
+    totalFinancialPeriods: number;
+    totalCensusPeriods: number;
+    totalPayerRates: number;
+  };
+  crossReferenceValidation?: {
+    validated: boolean;
+    overallConfidence: number;
+    discrepancyCount: number;
+    corroborationCount: number;
+    highSeverityIssues: number;
+    recommendations: string[];
+    details?: CrossReferenceResult;
+  };
+  aiSummary?: AISummaryOutput;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { sessionId, fileIds } = body as {
+    const { sessionId, fileIds, dealId, autoPopulate = true } = body as {
       sessionId?: string;
       fileIds: string[];
+      dealId?: string;
+      autoPopulate?: boolean;
     };
 
     if (!fileIds || fileIds.length === 0) {
@@ -202,6 +231,51 @@ export async function POST(request: NextRequest) {
     }
     console.log('='.repeat(60));
 
+    // ========================================================================
+    // CROSS-REFERENCE VALIDATION
+    // ========================================================================
+    // Compare data across all extracted files to identify discrepancies
+    let crossReferenceResults: CrossReferenceResult | null = null;
+    if (perFileResults.length > 1) {
+      console.log('');
+      console.log('='.repeat(60));
+      console.log('CROSS-REFERENCE VALIDATION');
+      console.log('='.repeat(60));
+
+      try {
+        crossReferenceResults = crossReferenceValidate(
+          perFileResults.map(r => ({
+            documentId: r.documentId,
+            filename: r.filename,
+            financialData: r.financialData,
+            censusData: r.censusData,
+            rateData: r.rateData,
+          }))
+        );
+
+        console.log(`  Facilities validated: ${crossReferenceResults.facilitiesValidated.length}`);
+        console.log(`  Periods compared: ${crossReferenceResults.periodsCompared}`);
+        console.log(`  Discrepancies found: ${crossReferenceResults.discrepancies.length}`);
+        console.log(`    - High severity: ${crossReferenceResults.summaryMetrics.highSeverityDiscrepancies}`);
+        console.log(`    - Medium severity: ${crossReferenceResults.summaryMetrics.mediumSeverityDiscrepancies}`);
+        console.log(`    - Low severity: ${crossReferenceResults.summaryMetrics.lowSeverityDiscrepancies}`);
+        console.log(`  Corroborations found: ${crossReferenceResults.corroborations.length}`);
+        console.log(`  Overall confidence: ${(crossReferenceResults.overallConfidence * 100).toFixed(1)}%`);
+
+        if (crossReferenceResults.recommendations.length > 0) {
+          console.log('  Recommendations:');
+          crossReferenceResults.recommendations.forEach(r => console.log(`    ${r}`));
+        }
+      } catch (error) {
+        console.error('Cross-reference validation error:', error);
+      }
+
+      console.log('='.repeat(60));
+    } else {
+      console.log('');
+      console.log('Skipping cross-reference validation (single file)');
+    }
+
     // Also run comprehensive extraction for the summary data
     let extraction: ExtractionResult | null = null;
     try {
@@ -290,6 +364,164 @@ export async function POST(request: NextRequest) {
         // Small delay to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 100));
       }
+    }
+
+    // ========================================================================
+    // AUTO-POPULATE DATABASE
+    // ========================================================================
+    // If dealId is provided and autoPopulate is true, create facilities and
+    // populate the database with extracted data
+    const populationResults: Array<{
+      facilityName: string;
+      facilityId: string;
+      financialPeriods: number;
+      censusPeriods: number;
+      payerRates: number;
+      errors: string[];
+    }> = [];
+
+    if (dealId && autoPopulate && facilities.length > 0) {
+      console.log('');
+      console.log('='.repeat(60));
+      console.log('AUTO-POPULATING DATABASE');
+      console.log(`Deal ID: ${dealId}`);
+      console.log(`Facilities to process: ${facilities.length}`);
+      console.log('='.repeat(60));
+
+      for (const facility of facilities) {
+        try {
+          // Check if facility already exists
+          let [existingFacility] = await db
+            .select()
+            .from(facilitiesTable)
+            .where(eq(facilitiesTable.name, facility.name))
+            .limit(1);
+
+          // Create facility if it doesn't exist
+          if (!existingFacility) {
+            console.log(`  Creating facility: ${facility.name}`);
+            const [newFacility] = await db
+              .insert(facilitiesTable)
+              .values({
+                dealId,
+                name: facility.name,
+                ccn: facility.ccn || undefined,
+                address: facility.address || undefined,
+                city: facility.city || undefined,
+                state: facility.state || undefined,
+                assetType: (facility.type?.toUpperCase() || 'SNF') as 'SNF' | 'ALF' | 'ILF',
+                licensedBeds: facility.beds || undefined,
+                cmsRating: facility.cmsData?.overallRating || undefined,
+                healthRating: facility.cmsData?.healthInspectionRating || undefined,
+                staffingRating: facility.cmsData?.staffingRating || undefined,
+                qualityRating: facility.cmsData?.qualityMeasureRating || undefined,
+                isSff: facility.cmsData?.isSff || false,
+                isSffWatch: facility.cmsData?.isSffCandidate || false,
+                isVerified: facility.autoVerified || false,
+                verifiedAt: facility.autoVerified ? new Date() : undefined,
+                cmsDataSnapshot: facility.cmsData || undefined,
+              })
+              .returning();
+            existingFacility = newFacility;
+          } else {
+            console.log(`  Facility exists: ${facility.name} (${existingFacility.id})`);
+            // Update facility with latest CMS data if available
+            if (facility.cmsData) {
+              await db
+                .update(facilitiesTable)
+                .set({
+                  ccn: facility.ccn || existingFacility.ccn,
+                  cmsRating: facility.cmsData.overallRating,
+                  healthRating: facility.cmsData.healthInspectionRating,
+                  staffingRating: facility.cmsData.staffingRating,
+                  qualityRating: facility.cmsData.qualityMeasureRating,
+                  isSff: facility.cmsData.isSff,
+                  isSffWatch: facility.cmsData.isSffCandidate,
+                  cmsDataSnapshot: facility.cmsData,
+                })
+                .where(eq(facilitiesTable.id, existingFacility.id));
+            }
+          }
+
+          // Collect per-file extraction data for this facility
+          // Look for matching data in perFileResults
+          const facilityFinancialData = perFileResults.flatMap(r =>
+            r.financialData.filter(f =>
+              f.facilityName?.toLowerCase() === facility.name.toLowerCase() ||
+              f.facilityName?.toLowerCase().includes(facility.name.split(' ')[0].toLowerCase())
+            )
+          );
+          const facilityCensusData = perFileResults.flatMap(r =>
+            r.censusData.filter(c =>
+              c.facilityName?.toLowerCase() === facility.name.toLowerCase() ||
+              c.facilityName?.toLowerCase().includes(facility.name.split(' ')[0].toLowerCase())
+            )
+          );
+          const facilityRateData = perFileResults.flatMap(r =>
+            r.rateData.filter(rt =>
+              rt.facilityName?.toLowerCase() === facility.name.toLowerCase() ||
+              rt.facilityName?.toLowerCase().includes(facility.name.split(' ')[0].toLowerCase())
+            )
+          );
+
+          // If no facility-specific data found, use all data (single-facility scenario)
+          const financialDataToUse = facilityFinancialData.length > 0
+            ? facilityFinancialData
+            : (facilities.length === 1 ? perFileResults.flatMap(r => r.financialData) : []);
+          const censusDataToUse = facilityCensusData.length > 0
+            ? facilityCensusData
+            : (facilities.length === 1 ? perFileResults.flatMap(r => r.censusData) : []);
+          const rateDataToUse = facilityRateData.length > 0
+            ? facilityRateData
+            : (facilities.length === 1 ? perFileResults.flatMap(r => r.rateData) : []);
+
+          // Populate database
+          const popResult = await populateFromExtraction(
+            existingFacility.id,
+            financialDataToUse,
+            censusDataToUse,
+            rateDataToUse,
+            docs[0]?.id || 'unknown'
+          );
+
+          populationResults.push({
+            facilityName: facility.name,
+            facilityId: existingFacility.id,
+            financialPeriods: popResult.financialPeriodsInserted,
+            censusPeriods: popResult.censusPeriodsInserted,
+            payerRates: popResult.payerRatesInserted,
+            errors: popResult.errors,
+          });
+
+          console.log(`  ✓ Populated ${facility.name}:`);
+          console.log(`    - Financial periods: ${popResult.financialPeriodsInserted}`);
+          console.log(`    - Census periods: ${popResult.censusPeriodsInserted}`);
+          console.log(`    - Payer rates: ${popResult.payerRatesInserted}`);
+          if (popResult.errors.length > 0) {
+            console.log(`    - Errors: ${popResult.errors.join(', ')}`);
+          }
+
+        } catch (popError) {
+          console.error(`  ✗ Error populating ${facility.name}:`, popError);
+          populationResults.push({
+            facilityName: facility.name,
+            facilityId: 'error',
+            financialPeriods: 0,
+            censusPeriods: 0,
+            payerRates: 0,
+            errors: [popError instanceof Error ? popError.message : 'Unknown error'],
+          });
+        }
+      }
+
+      console.log('');
+      console.log('='.repeat(60));
+      console.log('AUTO-POPULATION COMPLETE');
+      console.log(`  Total facilities: ${populationResults.length}`);
+      console.log(`  Financial periods: ${populationResults.reduce((sum, r) => sum + r.financialPeriods, 0)}`);
+      console.log(`  Census periods: ${populationResults.reduce((sum, r) => sum + r.censusPeriods, 0)}`);
+      console.log(`  Payer rates: ${populationResults.reduce((sum, r) => sum + r.payerRates, 0)}`);
+      console.log('='.repeat(60));
     }
 
     // Build document types
@@ -394,6 +626,72 @@ Return ONLY valid JSON.`;
       }
     }
 
+    // ========================================================================
+    // AI SUMMARY GENERATION
+    // ========================================================================
+    // Generate comprehensive AI summary of all extracted data
+    let aiSummary: AISummaryOutput | null = null;
+    console.log('');
+    console.log('='.repeat(60));
+    console.log('GENERATING AI SUMMARY');
+    console.log('='.repeat(60));
+
+    try {
+      aiSummary = await generateAISummary({
+        facilities: facilities.map(f => ({
+          name: f.name,
+          ccn: f.ccn,
+          cmsData: f.cmsData,
+          metrics: f.metrics,
+        })),
+        perFileResults,
+        crossReferenceResults,
+        extractionSummary: extraction ? {
+          totalRevenue: extraction.summary.totalRevenue,
+          totalExpenses: extraction.summary.totalExpenses,
+          totalNOI: extraction.summary.totalNOI,
+          periodsExtracted: extraction.summary.periodsExtracted,
+          dataQuality: extraction.summary.dataQuality,
+        } : null,
+      });
+
+      console.log('  Executive Summary:', aiSummary.executiveSummary.substring(0, 100) + '...');
+      console.log('  Key Findings:', aiSummary.keyFindings.length);
+      console.log('  Risk Factors:', aiSummary.riskFactors.length);
+      console.log('  Confidence:', (aiSummary.confidence * 100).toFixed(0) + '%');
+    } catch (summaryError) {
+      console.error('AI summary generation error:', summaryError);
+      // Generate quick summary as fallback
+      const quickSummary = generateQuickSummary({
+        facilities: facilities.map(f => ({
+          name: f.name,
+          ccn: f.ccn,
+          cmsData: f.cmsData,
+          metrics: f.metrics,
+        })),
+        perFileResults,
+        crossReferenceResults,
+        extractionSummary: extraction ? {
+          totalRevenue: extraction.summary.totalRevenue,
+          totalExpenses: extraction.summary.totalExpenses,
+          totalNOI: extraction.summary.totalNOI,
+          periodsExtracted: extraction.summary.periodsExtracted,
+          dataQuality: extraction.summary.dataQuality,
+        } : null,
+      });
+      aiSummary = {
+        executiveSummary: quickSummary,
+        keyFindings: [],
+        riskFactors: [],
+        dataQualityAssessment: 'Unable to generate full AI assessment',
+        investmentHighlights: [],
+        operationalInsights: [],
+        recommendations: ['Manual review recommended'],
+        confidence: 0.5,
+      };
+    }
+    console.log('='.repeat(60));
+
     const result: AnalysisResult = {
       suggestedDealName,
       suggestedDealType,
@@ -411,6 +709,23 @@ Return ONLY valid JSON.`;
           : null,
       },
       extraction,
+      databasePopulation: populationResults.length > 0 ? {
+        populated: true,
+        facilities: populationResults,
+        totalFinancialPeriods: populationResults.reduce((sum, r) => sum + r.financialPeriods, 0),
+        totalCensusPeriods: populationResults.reduce((sum, r) => sum + r.censusPeriods, 0),
+        totalPayerRates: populationResults.reduce((sum, r) => sum + r.payerRates, 0),
+      } : undefined,
+      crossReferenceValidation: crossReferenceResults ? {
+        validated: true,
+        overallConfidence: crossReferenceResults.overallConfidence,
+        discrepancyCount: crossReferenceResults.discrepancies.length,
+        corroborationCount: crossReferenceResults.corroborations.length,
+        highSeverityIssues: crossReferenceResults.summaryMetrics.highSeverityDiscrepancies,
+        recommendations: crossReferenceResults.recommendations,
+        details: crossReferenceResults,
+      } : undefined,
+      aiSummary: aiSummary || undefined,
     };
 
     return NextResponse.json({

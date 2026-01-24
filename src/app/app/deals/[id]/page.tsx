@@ -47,6 +47,7 @@ import {
   Upload,
   Plus,
   ArrowLeftRight,
+  RefreshCw,
 } from 'lucide-react';
 import { SaleLeasebackDashboard } from '@/components/sale-leaseback/SaleLeasebackDashboard';
 import {
@@ -123,6 +124,8 @@ export default function DealDetailPage() {
   const [loading, setLoading] = useState(true);
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
   const [facilityTabs, setFacilityTabs] = useState<FacilityTab[]>([]);
+  const [cmsSyncing, setCmsSyncing] = useState(false);
+  const [cmsSyncMessage, setCmsSyncMessage] = useState<string | null>(null);
 
   // Fetch deal data from API
   useEffect(() => {
@@ -310,6 +313,48 @@ export default function DealDetailPage() {
     });
   };
 
+  // Sync all facilities in deal with CMS data
+  const handleSyncCMS = async () => {
+    setCmsSyncing(true);
+    setCmsSyncMessage(null);
+
+    try {
+      const response = await fetch(`/api/deals/${dealId}/sync-cms`, {
+        method: 'POST',
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setCmsSyncMessage(`Synced ${result.data.synced} facilities. ${result.data.notFound > 0 ? `${result.data.notFound} not found in CMS.` : ''}`);
+
+        // Refresh facilities data
+        const facilitiesResponse = await fetch(`/api/deals/${dealId}/facilities`);
+        if (facilitiesResponse.ok) {
+          const facilitiesData = await facilitiesResponse.json();
+          if (facilitiesData.success && facilitiesData.data) {
+            const tabs: FacilityTab[] = facilitiesData.data.map((f: any) => ({
+              id: f.id,
+              name: f.name,
+              beds: f.licensedBeds || 0,
+              occupancy: f.currentOccupancy || 0,
+              ebitda: f.trailingTwelveMonthEbitda || 0,
+            }));
+            setFacilityTabs(tabs);
+          }
+        }
+      } else {
+        setCmsSyncMessage(`Sync failed: ${result.error}`);
+      }
+    } catch (error) {
+      setCmsSyncMessage('Sync failed: Network error');
+    } finally {
+      setCmsSyncing(false);
+      // Clear message after 5 seconds
+      setTimeout(() => setCmsSyncMessage(null), 5000);
+    }
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -405,6 +450,17 @@ export default function DealDetailPage() {
             <Edit className="h-4 w-4 mr-1" />
             Edit Deal
           </Button>
+          <Button
+            variant="outline"
+            onClick={handleSyncCMS}
+            disabled={cmsSyncing}
+          >
+            <RefreshCw className={`h-4 w-4 mr-1 ${cmsSyncing ? 'animate-spin' : ''}`} />
+            {cmsSyncing ? 'Syncing...' : 'Sync CMS'}
+          </Button>
+          {cmsSyncMessage && (
+            <span className="text-sm text-muted-foreground ml-2">{cmsSyncMessage}</span>
+          )}
           {deal.dealStructure === 'sale_leaseback' && (
             <Link href={`/app/deals/${deal.id}/sale-leaseback`}>
               <Button variant="outline">

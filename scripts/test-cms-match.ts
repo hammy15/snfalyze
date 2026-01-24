@@ -13,35 +13,37 @@ async function testCMSMatching() {
   console.log('CMS Facility Matching Test');
   console.log('='.repeat(60));
 
-  // Test cases with various facility scenarios
+  // Test cases with real facility names from CMS database
   const testFacilities = [
-    // Test 1: Well-known facility name with city/state
+    // Test 1: Real facility with exact name, city, state, beds
     {
-      name: 'Sunrise Healthcare',
-      city: 'Dallas',
+      name: 'Valley Grande Manor',
+      city: 'Weslaco',
       state: 'TX',
-      licensedBeds: 120,
+      licensedBeds: 147,
     },
-    // Test 2: Generic name, should match by location
+    // Test 2: Real facility with partial name match
     {
-      name: 'Valley View Care Center',
-      city: 'Phoenix',
-      state: 'AZ',
+      name: 'Avir Beaumont',
+      city: 'Beaumont',
+      state: 'TX',
+      licensedBeds: 214,
     },
-    // Test 3: Common nursing home name
+    // Test 3: Real facility name, different state
     {
-      name: 'Golden Living Center',
-      state: 'FL',
+      name: 'Colonial Manor',
+      state: 'TX',
     },
     // Test 4: Partial name match test
     {
-      name: 'Evergreen',
+      name: 'Evergreen Post Acute',
       state: 'OR',
     },
-    // Test 5: Name with common suffix
+    // Test 5: Fuzzy match test - slight name variation
     {
-      name: 'Willowbrook Skilled Nursing Facility',
-      state: 'CA',
+      name: 'Guadalupe Valley Nursing',
+      city: 'Seguin',
+      state: 'TX',
     },
   ];
 
@@ -104,8 +106,8 @@ async function testCMSMatching() {
   console.log('='.repeat(60));
 
   try {
-    console.log('\nSearching for "Sunrise" in Texas...');
-    const searchResults = await searchProvidersByName('Sunrise', 'TX', 5);
+    console.log('\nSearching for "Valley" in Texas...');
+    const searchResults = await searchProvidersByName('Valley', 'TX', 5);
     console.log(`Found ${searchResults.length} results:`);
     searchResults.forEach((r, idx) => {
       console.log(`  ${idx + 1}. ${r.name} (CCN: ${r.ccn})`);

@@ -62,6 +62,8 @@ import {
 } from '@/components/financials';
 import { DealScoreCard } from '@/components/scoring';
 import { PortfolioFacilitiesOverview } from '@/components/deals/portfolio-facilities-overview';
+import { RentSuggestionCard } from '@/components/slb/rent-suggestion-card';
+import type { PortfolioRentSuggestion, SLBAssumptions } from '@/lib/sale-leaseback/auto-calculator';
 
 // Default deal data (used as fallback)
 const defaultDeal: Deal & { dealStructure?: string } = {
@@ -146,6 +148,8 @@ export default function DealDetailPage() {
     coverageRatio: 0,
     unmappedItemCount: 0,
   });
+  const [rentSuggestions, setRentSuggestions] = useState<PortfolioRentSuggestion | null>(null);
+  const [rentSuggestionsLoading, setRentSuggestionsLoading] = useState(false);
 
   // Fetch deal data from API
   useEffect(() => {
@@ -289,6 +293,40 @@ export default function DealDetailPage() {
             setWalkthroughMetrics(metricsData.data);
           }
         }
+
+        // Fetch rent suggestions
+        setRentSuggestionsLoading(true);
+        const rentResponse = await fetch(`/api/deals/${dealId}/rent-suggestions`);
+        if (rentResponse.ok) {
+          const rentData = await rentResponse.json();
+          if (rentData.success && rentData.data) {
+            // Transform API response to PortfolioRentSuggestion format
+            const portfolio = rentData.data.portfolio;
+            const facilities = rentData.data.facilities;
+            setRentSuggestions({
+              facilities: facilities || [],
+              portfolioTotal: portfolio || {
+                totalRevenue: 0,
+                totalExpenses: 0,
+                totalEbitdar: 0,
+                totalNoi: 0,
+                totalPurchasePrice: 0,
+                totalAnnualRent: 0,
+                totalMonthlyRent: 0,
+                totalBeds: 0,
+                weightedCoverage: 0,
+                weightedCapRate: 0,
+                blendedPricePerBed: 0,
+                purchasePriceRange: { low: 0, mid: 0, high: 0 },
+                annualRentRange: { low: 0, mid: 0, high: 0 },
+                facilitiesWithFinancials: 0,
+                facilitiesWithPricePerBed: 0,
+              },
+              assumptions: rentData.data.assumptions || { capRate: 0.075, yield: 0.085, minCoverage: 1.4 },
+            });
+          }
+        }
+        setRentSuggestionsLoading(false);
 
       } catch (error) {
         console.error('Failed to fetch deal data:', error);
@@ -871,6 +909,33 @@ export default function DealDetailPage() {
             <TabsContent value="overview" className="mt-4 space-y-4">
               {/* Deal Score Card */}
               <DealScoreCard dealId={deal.id} />
+
+              {/* Rent Suggestions - Show for deals with financial data */}
+              <RentSuggestionCard
+                portfolioData={rentSuggestions}
+                isLoading={rentSuggestionsLoading}
+                onAssumptionsChange={async (newAssumptions: SLBAssumptions) => {
+                  // Refetch with new assumptions
+                  setRentSuggestionsLoading(true);
+                  try {
+                    const response = await fetch(
+                      `/api/deals/${deal.id}/rent-suggestions?capRate=${newAssumptions.capRate}&yield=${newAssumptions.yield}&minCoverage=${newAssumptions.minCoverage}`
+                    );
+                    if (response.ok) {
+                      const data = await response.json();
+                      if (data.success && data.data) {
+                        setRentSuggestions({
+                          facilities: data.data.facilities || [],
+                          portfolioTotal: data.data.portfolio || rentSuggestions?.portfolioTotal,
+                          assumptions: data.data.assumptions || newAssumptions,
+                        });
+                      }
+                    }
+                  } finally {
+                    setRentSuggestionsLoading(false);
+                  }
+                }}
+              />
 
               {/* Portfolio & Facilities Overview */}
               {facilityTabs.length > 0 && (

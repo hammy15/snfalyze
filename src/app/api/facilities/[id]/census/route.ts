@@ -4,10 +4,10 @@ import { eq, and, desc } from 'drizzle-orm';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const facilityId = params.id;
+    const { id: facilityId } = await params;
 
     // Verify facility exists
     const facility = await db.query.facilities.findFirst({
@@ -47,10 +47,10 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const facilityId = params.id;
+    const { id: facilityId } = await params;
     const body = await request.json();
 
     // Verify facility exists
@@ -110,10 +110,10 @@ export async function POST(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const facilityId = params.id;
+    const { id: facilityId } = await params;
     const body = await request.json();
 
     // Handle batch update

@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, facilities, deals, facilityCensusPeriods, facilityPayerRates } from '@/db';
-import { eq, desc } from 'drizzle-orm';
+import { db, facilities, deals, facilityCensusPeriods, facilityPayerRates, financialPeriods } from '@/db';
+import { eq, desc, sql, and, gte } from 'drizzle-orm';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const dealId = params.id;
+    const { id: dealId } = await params;
 
     // Verify deal exists
     const deal = await db.query.deals.findFirst({
@@ -26,7 +26,7 @@ export async function GET(
       where: eq(facilities.dealId, dealId),
     });
 
-    // Enhance facilities with census and financial data
+    // Enhance facilities with census, CMS, and financial data
     const enhancedFacilities = await Promise.all(
       dealFacilities.map(async (facility) => {
         // Get latest census period
@@ -41,10 +41,13 @@ export async function GET(
           orderBy: [desc(facilityPayerRates.effectiveDate)],
         });
 
-        // Calculate current occupancy from census if available
+        // Calculate actual days in the period for accurate occupancy
         let currentOccupancy = 0;
-        if (latestCensus && facility.licensedBeds) {
-          const totalDays =
+        let avgDailyCensus = 0;
+        const bedCount = facility.certifiedBeds || facility.licensedBeds || 0;
+
+        if (latestCensus && bedCount > 0) {
+          const totalPatientDays =
             (latestCensus.medicarePartADays || 0) +
             (latestCensus.medicareAdvantageDays || 0) +
             (latestCensus.managedCareDays || 0) +
@@ -55,18 +58,82 @@ export async function GET(
             (latestCensus.hospiceDays || 0) +
             (latestCensus.otherDays || 0);
 
-          // Assume the period is monthly (~30 days)
-          const avgDailyCensus = totalDays / 30;
-          currentOccupancy = avgDailyCensus / facility.licensedBeds;
+          // Calculate actual days in period
+          const periodStart = new Date(latestCensus.periodStart);
+          const periodEnd = new Date(latestCensus.periodEnd);
+          const daysInPeriod = Math.max(1, Math.ceil((periodEnd.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+
+          // Calculate average daily census
+          avgDailyCensus = totalPatientDays / daysInPeriod;
+
+          // Occupancy = ADC / Beds (as decimal, e.g., 0.85 for 85%)
+          currentOccupancy = avgDailyCensus / bedCount;
         }
 
+        // Get T12 EBITDA from financial periods
+        const twelveMonthsAgo = new Date();
+        twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+
+        const t12Financials = await db.query.financialPeriods.findMany({
+          where: and(
+            eq(financialPeriods.facilityId, facility.id),
+            gte(financialPeriods.periodEnd, twelveMonthsAgo.toISOString().split('T')[0])
+          ),
+          orderBy: [desc(financialPeriods.periodEnd)],
+        });
+
+        // Sum up T12 EBITDA
+        const trailingTwelveMonthEbitda = t12Financials.reduce((sum, period) => {
+          return sum + (parseFloat(String(period.ebitda || 0)));
+        }, 0);
+
+        const trailingTwelveMonthRevenue = t12Financials.reduce((sum, period) => {
+          return sum + (parseFloat(String(period.totalRevenue || 0)));
+        }, 0);
+
+        // Extract CMS data from facility record
+        const cmsData = facility.cmsDataSnapshot as Record<string, unknown> | null;
+
         return {
-          ...facility,
+          id: facility.id,
+          dealId: facility.dealId,
+          name: facility.name,
+          assetType: facility.assetType,
+          ccn: facility.ccn,
+          address: facility.address,
+          city: facility.city,
+          state: facility.state,
+          zipCode: facility.zipCode,
+          licensedBeds: facility.licensedBeds,
+          certifiedBeds: facility.certifiedBeds,
+          yearBuilt: facility.yearBuilt,
+          isVerified: facility.isVerified,
+          verifiedAt: facility.verifiedAt,
+          verifiedBy: facility.verifiedBy,
+
+          // CMS Data - directly from facility record
+          cmsRating: facility.cmsRating,
+          healthRating: facility.healthRating,
+          staffingRating: facility.staffingRating,
+          qualityRating: facility.qualityRating,
+          isSff: facility.isSff,
+          isSffWatch: facility.isSffWatch,
+          cmsDataSnapshot: cmsData,
+
+          // Calculated metrics
           currentOccupancy,
+          avgDailyCensus,
           latestCensus,
           currentRates,
-          // Placeholder for TTM EBITDA - would come from financial data
-          trailingTwelveMonthEbitda: 0,
+          trailingTwelveMonthEbitda,
+          trailingTwelveMonthRevenue,
+
+          // If CMS data has additional info, include it
+          providerName: cmsData?.providerName || facility.name,
+          phoneNumber: cmsData?.phoneNumber,
+          ownershipType: cmsData?.ownershipType,
+          numberOfResidentsInCertifiedBeds: cmsData?.numberOfResidentsInCertifiedBeds,
+          averageNumberOfResidentsPerDay: cmsData?.averageNumberOfResidentsPerDay,
         };
       })
     );

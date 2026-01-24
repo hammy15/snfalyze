@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, dealCoaMappings, deals, documents, facilities, coaMappings } from '@/db';
 import { eq, and, isNull, or, ilike, sql } from 'drizzle-orm';
+import { findLearnedMatch, getLearnedSuggestions } from '@/lib/coa/mapping-learning';
+import { findCOAMatch } from '@/lib/coa/coa-mapper';
 
 // GET - Get all COA mappings for a deal
 export async function GET(
@@ -102,19 +104,14 @@ export async function POST(
       );
     }
 
-    // Get existing COA mappings for auto-mapping
-    const existingMappings = autoMap
-      ? await db.select().from(coaMappings)
-      : [];
-
-    // Process and create mappings
+    // Process and create mappings using the learning system
     const createdMappings = await Promise.all(
       items.map(async (item: {
         sourceLabel: string;
         sourceValue?: number;
         sourceMonth?: string;
       }) => {
-        // Try to auto-map using existing COA mappings
+        // Try to auto-map using the learning system + static rules
         let coaCode: string | null = null;
         let coaName: string | null = null;
         let mappingConfidence: number | null = null;
@@ -122,35 +119,47 @@ export async function POST(
         let isMapped = false;
         let proformaDestination: string | null = null;
 
-        if (autoMap && existingMappings.length > 0) {
-          // Try exact match first
-          const exactMatch = existingMappings.find(
-            m => m.externalTerm.toLowerCase() === item.sourceLabel.toLowerCase()
-          );
+        if (autoMap) {
+          // 1. First try learned mappings (from previous manual mappings)
+          const learnedMatch = await findLearnedMatch(item.sourceLabel, dealId, 0.75);
 
-          if (exactMatch) {
-            coaCode = exactMatch.cascadiaTerm;
-            coaName = exactMatch.category || exactMatch.cascadiaTerm;
-            mappingConfidence = 1.0;
-            mappingMethod = 'auto';
-            isMapped = true;
-            proformaDestination = exactMatch.subcategory || exactMatch.category;
+          if (learnedMatch) {
+            coaCode = learnedMatch.coaCode;
+            coaName = learnedMatch.coaName;
+            mappingConfidence = learnedMatch.confidence;
+            mappingMethod = learnedMatch.confidence >= 0.90 ? 'auto' : 'suggested';
+            isMapped = learnedMatch.confidence >= 0.90;
+            proformaDestination = learnedMatch.coaName;
           } else {
-            // Try fuzzy match
-            const normalizedLabel = item.sourceLabel.toLowerCase().replace(/[^a-z0-9]/g, '');
-            const fuzzyMatch = existingMappings.find(m => {
-              const normalizedTerm = m.externalTerm.toLowerCase().replace(/[^a-z0-9]/g, '');
-              return normalizedTerm.includes(normalizedLabel) ||
-                     normalizedLabel.includes(normalizedTerm);
-            });
+            // 2. Try static COA mapper rules
+            const staticMatch = findCOAMatch(item.sourceLabel);
 
-            if (fuzzyMatch) {
-              coaCode = fuzzyMatch.cascadiaTerm;
-              coaName = fuzzyMatch.category || fuzzyMatch.cascadiaTerm;
-              mappingConfidence = 0.7;
+            if (staticMatch && staticMatch.confidence >= 0.75) {
+              coaCode = staticMatch.coaCode;
+              coaName = staticMatch.reason;
+              mappingConfidence = staticMatch.confidence;
+              mappingMethod = staticMatch.confidence >= 0.90 ? 'auto' : 'suggested';
+              isMapped = staticMatch.confidence >= 0.90;
+              proformaDestination = staticMatch.reason;
+            } else if (staticMatch) {
+              // Low confidence match - suggest but don't auto-map
+              coaCode = staticMatch.coaCode;
+              coaName = staticMatch.reason;
+              mappingConfidence = staticMatch.confidence;
               mappingMethod = 'suggested';
-              proformaDestination = fuzzyMatch.subcategory || fuzzyMatch.category;
-              // Don't mark as mapped for suggestions - needs review
+              isMapped = false;
+              proformaDestination = staticMatch.reason;
+            } else {
+              // 3. Get suggestions from learned patterns for review
+              const suggestions = await getLearnedSuggestions(item.sourceLabel, dealId);
+              if (suggestions.length > 0 && suggestions[0].confidence >= 0.50) {
+                coaCode = suggestions[0].coaCode;
+                coaName = suggestions[0].coaName;
+                mappingConfidence = suggestions[0].confidence;
+                mappingMethod = 'suggested';
+                isMapped = false;
+                proformaDestination = suggestions[0].coaName;
+              }
             }
           }
         }

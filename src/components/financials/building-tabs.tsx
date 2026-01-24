@@ -13,6 +13,12 @@ export interface FacilityTab {
   occupancy?: number;
   ebitda?: number;
   isPortfolio?: boolean;
+  // CMS Data
+  cmsRating?: number | null;
+  healthRating?: number | null;
+  staffingRating?: number | null;
+  qualityRating?: number | null;
+  isSff?: boolean | null;
 }
 
 interface BuildingTabsProps {
@@ -88,7 +94,7 @@ export function BuildingTabs({
               </div>
               <div className="flex items-center gap-2 mt-0.5 text-xs">
                 <span>{facility.beds} beds</span>
-                {facility.occupancy !== undefined && (
+                {facility.occupancy !== undefined && facility.occupancy > 0 && (
                   <>
                     <span>·</span>
                     <span
@@ -104,7 +110,29 @@ export function BuildingTabs({
                     </span>
                   </>
                 )}
-                {facility.ebitda !== undefined && (
+                {facility.cmsRating !== undefined && facility.cmsRating !== null && (
+                  <>
+                    <span>·</span>
+                    <span
+                      className={
+                        facility.cmsRating >= 4
+                          ? 'text-green-600'
+                          : facility.cmsRating >= 3
+                          ? 'text-amber-600'
+                          : 'text-red-600'
+                      }
+                    >
+                      ★{facility.cmsRating}
+                    </span>
+                  </>
+                )}
+                {facility.isSff && (
+                  <>
+                    <span>·</span>
+                    <span className="text-red-600 font-medium">SFF</span>
+                  </>
+                )}
+                {facility.ebitda !== undefined && facility.ebitda !== 0 && (
                   <>
                     <span>·</span>
                     <span className={facility.ebitda >= 0 ? 'text-green-600' : 'text-red-600'}>

@@ -1,8 +1,10 @@
 // COA Mapper - Maps extracted document data to Chart of Accounts
 // For automatic population of proforma from deal document uploads
+// Now includes learning from manual re-mappings
 
 import { COAAccount, COAMapping } from './types';
 import { SNF_CHART_OF_ACCOUNTS, findAccountByMappingKey } from './snf-coa';
+import { findLearnedMatch, getLearnedSuggestions, learnFromMapping, LearnedSuggestion } from './mapping-learning';
 
 export interface ExtractedFinancialData {
   source: string; // Document name/ID
@@ -218,7 +220,7 @@ const LABEL_VARIATIONS: Record<string, string> = {
   'adc': '9220',
 };
 
-// Find best COA match for a label
+// Find best COA match for a label (synchronous - uses static rules only)
 export function findCOAMatch(
   label: string,
   category?: string
@@ -281,7 +283,95 @@ export function findCOAMatch(
   return null;
 }
 
-// Map extracted financial data to COA
+// Find best COA match with learning (async - checks database for learned patterns)
+export async function findCOAMatchWithLearning(
+  label: string,
+  category?: string,
+  dealId?: string
+): Promise<{ coaCode: string; confidence: number; reason: string } | null> {
+  // 1. First check learned mappings (highest priority)
+  const learnedMatch = await findLearnedMatch(label, dealId, 0.75);
+  if (learnedMatch) {
+    return learnedMatch;
+  }
+
+  // 2. Fall back to static rules
+  return findCOAMatch(label, category);
+}
+
+// Get all suggestions for a label (combines learned + static)
+export async function getAllSuggestions(
+  label: string,
+  category?: string,
+  dealId?: string
+): Promise<Array<{ coaCode: string; coaName: string; confidence: number; reason: string }>> {
+  const suggestions: Array<{ coaCode: string; coaName: string; confidence: number; reason: string }> = [];
+  const seen = new Set<string>();
+
+  // 1. Get learned suggestions
+  const learned = await getLearnedSuggestions(label, dealId);
+  for (const s of learned) {
+    if (!seen.has(s.coaCode)) {
+      seen.add(s.coaCode);
+      suggestions.push({
+        coaCode: s.coaCode,
+        coaName: s.coaName,
+        confidence: s.confidence,
+        reason: s.reason,
+      });
+    }
+  }
+
+  // 2. Add static matches
+  const staticMatch = findCOAMatch(label, category);
+  if (staticMatch && !seen.has(staticMatch.coaCode)) {
+    const account = SNF_CHART_OF_ACCOUNTS.find(a => a.code === staticMatch.coaCode);
+    seen.add(staticMatch.coaCode);
+    suggestions.push({
+      coaCode: staticMatch.coaCode,
+      coaName: account?.name || 'Unknown',
+      confidence: staticMatch.confidence,
+      reason: staticMatch.reason,
+    });
+  }
+
+  // 3. Add possible matches from static rules
+  const possibleMatches = findPossibleMatches(label, category);
+  for (const match of possibleMatches) {
+    if (!seen.has(match.coaCode)) {
+      seen.add(match.coaCode);
+      suggestions.push(match);
+    }
+  }
+
+  // Sort by confidence
+  return suggestions.sort((a, b) => b.confidence - a.confidence).slice(0, 8);
+}
+
+// Save a manual mapping for learning
+export async function saveManualMapping(
+  dealId: string,
+  sourceLabel: string,
+  coaCode: string,
+  coaName: string,
+  options?: {
+    facilityId?: string;
+    documentId?: string;
+    reviewedBy?: string;
+  }
+): Promise<void> {
+  await learnFromMapping({
+    dealId,
+    facilityId: options?.facilityId,
+    documentId: options?.documentId,
+    sourceLabel,
+    coaCode,
+    coaName,
+    reviewedBy: options?.reviewedBy,
+  });
+}
+
+// Map extracted financial data to COA (synchronous - static rules only)
 export function mapExtractedDataToCOA(
   extractedData: ExtractedFinancialData
 ): { mappings: MappingResult[]; suggestions: MappingSuggestion[] } {
@@ -314,6 +404,50 @@ export function mapExtractedDataToCOA(
       suggestions.push({
         sourceLabel: lineItem.rawLabel,
         suggestions: possibleMatches,
+      });
+    }
+  }
+
+  return { mappings, suggestions };
+}
+
+// Map extracted financial data to COA with learning (async - uses database)
+export async function mapExtractedDataToCOAWithLearning(
+  extractedData: ExtractedFinancialData,
+  dealId?: string
+): Promise<{ mappings: MappingResult[]; suggestions: MappingSuggestion[] }> {
+  const mappings: MappingResult[] = [];
+  const suggestions: MappingSuggestion[] = [];
+
+  for (const lineItem of extractedData.lineItems) {
+    // Use learning-enabled match
+    const match = await findCOAMatchWithLearning(lineItem.label, lineItem.category, dealId);
+
+    if (match && match.confidence >= 0.70) {
+      const account = SNF_CHART_OF_ACCOUNTS.find(a => a.code === match.coaCode);
+      const monthlyValues: Record<string, number> = {};
+
+      for (const mv of lineItem.values) {
+        monthlyValues[mv.month] = mv.value;
+      }
+
+      const isLearned = match.reason.includes('learned') || match.reason.includes('deal') || match.reason.includes('pattern');
+
+      mappings.push({
+        coaCode: match.coaCode,
+        coaName: account?.name || 'Unknown',
+        sourceLabel: lineItem.rawLabel,
+        monthlyValues,
+        confidence: match.confidence * lineItem.confidence,
+        mappingMethod: isLearned ? 'ml' : (match.confidence >= 0.90 ? 'exact' : 'fuzzy'),
+        needsReview: match.confidence < 0.90,
+      });
+    } else {
+      // Get enhanced suggestions including learned patterns
+      const allSuggestions = await getAllSuggestions(lineItem.label, lineItem.category, dealId);
+      suggestions.push({
+        sourceLabel: lineItem.rawLabel,
+        suggestions: allSuggestions,
       });
     }
   }

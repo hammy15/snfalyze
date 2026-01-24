@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, dealCoaMappings, deals } from '@/db';
+import { db, dealCoaMappings, deals, coaMappings } from '@/db';
 import { eq, and } from 'drizzle-orm';
+import { learnFromMapping, normalizeLabel } from '@/lib/coa/mapping-learning';
 
 // GET - Get a specific COA mapping
 export async function GET(
@@ -41,6 +42,7 @@ export async function GET(
 }
 
 // PATCH - Resolve/update a COA mapping
+// Also learns from manual mappings for future suggestions
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; mappingId: string }> }
@@ -68,13 +70,17 @@ export async function PATCH(
       );
     }
 
+    const existing = existingMappings[0];
+    const finalCoaCode = coaCode || existing.coaCode;
+    const finalCoaName = coaName || existing.coaName;
+
     // Update the mapping
     const [updated] = await db
       .update(dealCoaMappings)
       .set({
-        coaCode: coaCode || existingMappings[0].coaCode,
-        coaName: coaName || existingMappings[0].coaName,
-        proformaDestination: proformaDestination || existingMappings[0].proformaDestination,
+        coaCode: finalCoaCode,
+        coaName: finalCoaName,
+        proformaDestination: proformaDestination || existing.proformaDestination,
         mappingMethod: 'manual',
         mappingConfidence: '1.0',
         isMapped: true,
@@ -83,6 +89,26 @@ export async function PATCH(
       })
       .where(eq(dealCoaMappings.id, mappingId))
       .returning();
+
+    // Learn from this manual mapping for future suggestions
+    // This stores the mapping in the global coaMappings table
+    if (finalCoaCode && existing.sourceLabel) {
+      try {
+        await learnFromMapping({
+          dealId,
+          facilityId: existing.facilityId || undefined,
+          documentId: existing.documentId || undefined,
+          sourceLabel: existing.sourceLabel,
+          coaCode: finalCoaCode,
+          coaName: finalCoaName || finalCoaCode,
+          reviewedBy: reviewedBy || 'user',
+        });
+        console.log(`Learned mapping: "${existing.sourceLabel}" → ${finalCoaCode}`);
+      } catch (learnError) {
+        // Don't fail the request if learning fails
+        console.error('Failed to learn from mapping:', learnError);
+      }
+    }
 
     return NextResponse.json({
       success: true,

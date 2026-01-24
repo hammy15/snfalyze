@@ -186,25 +186,70 @@ export default function DealDetailPage() {
             }
           }
         }
-      // Fetch facilities for this deal
-          const facilitiesResponse = await fetch(`/api/deals/${dealId}/facilities`);
-          if (facilitiesResponse.ok) {
-            const facilitiesData = await facilitiesResponse.json();
-            if (facilitiesData.success && facilitiesData.data) {
-              const tabs: FacilityTab[] = facilitiesData.data.map((f: any) => ({
-                id: f.id,
-                name: f.name,
-                beds: f.licensedBeds || 0,
-                occupancy: f.currentOccupancy || 0,
-                ebitda: f.trailingTwelveMonthEbitda || 0,
-              }));
-              setFacilityTabs(tabs);
-              if (tabs.length > 0) {
-                setSelectedFacilityId(tabs[0].id);
-              }
+
+        // Fetch facilities for this deal
+        const facilitiesResponse = await fetch(`/api/deals/${dealId}/facilities`);
+        if (facilitiesResponse.ok) {
+          const facilitiesData = await facilitiesResponse.json();
+          if (facilitiesData.success && facilitiesData.data) {
+            const tabs: FacilityTab[] = facilitiesData.data.map((f: any) => ({
+              id: f.id,
+              name: f.name,
+              beds: f.licensedBeds || f.certifiedBeds || 0,
+              occupancy: f.currentOccupancy ?? 0,
+              ebitda: f.trailingTwelveMonthEbitda || 0,
+              // Include CMS data for display
+              cmsRating: f.cmsRating,
+              healthRating: f.healthRating,
+              staffingRating: f.staffingRating,
+              qualityRating: f.qualityRating,
+              isSff: f.isSff,
+            }));
+            setFacilityTabs(tabs);
+            if (tabs.length > 0) {
+              setSelectedFacilityId(tabs[0].id);
             }
           }
-        } catch (error) {
+        }
+
+        // Fetch stage progress for this deal
+        const stagesResponse = await fetch(`/api/deals/${dealId}/stages`);
+        if (stagesResponse.ok) {
+          const stagesData = await stagesResponse.json();
+          if (stagesData.success && stagesData.data?.stages) {
+            const apiStages: AnalysisStageProgress[] = stagesData.data.stages.map((s: any) => ({
+              id: s.id,
+              deal_id: dealId,
+              stage: s.stage,
+              status: s.status || 'not_started',
+              started_at: s.startedAt ? new Date(s.startedAt) : undefined,
+              completed_at: s.completedAt ? new Date(s.completedAt) : undefined,
+              notes: s.stageData?.notes,
+              blockers: s.stageData?.blockers || [],
+            }));
+            setStageProgress(apiStages);
+
+            // Set current stage from API
+            if (stagesData.data.currentStage) {
+              setDeal((prev) => ({
+                ...prev,
+                current_stage: stagesData.data.currentStage.stage as AnalysisStage,
+              }));
+            }
+          } else {
+            // Initialize first stage if no stages exist
+            const firstStage: AnalysisStageProgress = {
+              id: Date.now().toString(),
+              deal_id: dealId,
+              stage: 'document_understanding',
+              status: 'in_progress',
+              started_at: new Date(),
+            };
+            setStageProgress([firstStage]);
+          }
+        }
+
+      } catch (error) {
         console.error('Failed to fetch deal data:', error);
       } finally {
         setLoading(false);
@@ -221,7 +266,8 @@ export default function DealDetailPage() {
     }).format(value);
   };
 
-  const handleStageStart = (stage: AnalysisStage) => {
+  const handleStageStart = async (stage: AnalysisStage) => {
+    // Update local state immediately for UI responsiveness
     const existingProgress = stageProgress.find((p) => p.stage === stage);
     if (existingProgress) {
       setStageProgress((prev) =>
@@ -242,9 +288,27 @@ export default function DealDetailPage() {
       ]);
     }
     setDeal((prev) => ({ ...prev, current_stage: stage }));
+
+    // Persist to database
+    try {
+      const existingStage = stageProgress.find((p) => p.stage === stage);
+      if (existingStage?.id) {
+        await fetch(`/api/deals/${dealId}/stages`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stageId: existingStage.id,
+            status: 'in_progress',
+          }),
+        });
+      }
+    } catch (error) {
+      console.error('Failed to persist stage start:', error);
+    }
   };
 
-  const handleStageComplete = (stage: AnalysisStage, notes?: string) => {
+  const handleStageComplete = async (stage: AnalysisStage, notes?: string) => {
+    // Update local state immediately
     setStageProgress((prev) =>
       prev.map((p) =>
         p.stage === stage
@@ -252,16 +316,54 @@ export default function DealDetailPage() {
           : p
       )
     );
+
     // Advance to next stage if not at synthesis
     const stageOrder = Object.keys(ANALYSIS_STAGES) as AnalysisStage[];
     const currentIndex = stageOrder.indexOf(stage);
     if (currentIndex < stageOrder.length - 1) {
       const nextStage = stageOrder[currentIndex + 1];
       setDeal((prev) => ({ ...prev, current_stage: nextStage }));
+
+      // Auto-start next stage in local state
+      const existingNextProgress = stageProgress.find((p) => p.stage === nextStage);
+      if (!existingNextProgress || existingNextProgress.status === 'not_started') {
+        setStageProgress((prev) => {
+          const updated = prev.filter((p) => p.stage !== nextStage);
+          return [
+            ...updated,
+            {
+              id: Date.now().toString(),
+              deal_id: deal.id,
+              stage: nextStage,
+              status: 'in_progress',
+              started_at: new Date(),
+            },
+          ];
+        });
+      }
+    }
+
+    // Persist to database
+    try {
+      const existingStage = stageProgress.find((p) => p.stage === stage);
+      if (existingStage?.id) {
+        await fetch(`/api/deals/${dealId}/stages`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stageId: existingStage.id,
+            status: 'completed',
+            stageData: notes ? { notes } : undefined,
+          }),
+        });
+      }
+    } catch (error) {
+      console.error('Failed to persist stage completion:', error);
     }
   };
 
-  const handleStageBlock = (stage: AnalysisStage, blocker: string) => {
+  const handleStageBlock = async (stage: AnalysisStage, blocker: string) => {
+    // Update local state
     setStageProgress((prev) =>
       prev.map((p) =>
         p.stage === stage
@@ -269,6 +371,26 @@ export default function DealDetailPage() {
           : p
       )
     );
+
+    // Persist to database
+    try {
+      const existingStage = stageProgress.find((p) => p.stage === stage);
+      if (existingStage?.id) {
+        await fetch(`/api/deals/${dealId}/stages`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stageId: existingStage.id,
+            status: 'blocked',
+            stageData: {
+              blockers: [...(existingStage.blockers || []), blocker],
+            },
+          }),
+        });
+      }
+    } catch (error) {
+      console.error('Failed to persist stage block:', error);
+    }
   };
 
   const handleNavigateToStage = (stage: AnalysisStage) => {

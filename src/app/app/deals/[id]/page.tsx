@@ -246,6 +246,15 @@ export default function DealDetailPage() {
             }));
             setStageProgress(apiStages);
 
+            // Load completed tasks from all stages' stageData
+            const allCompletedTasks: Record<string, boolean> = {};
+            stagesData.data.stages.forEach((s: any) => {
+              if (s.stageData?.completedTasks) {
+                Object.assign(allCompletedTasks, s.stageData.completedTasks);
+              }
+            });
+            setCompletedTasks(allCompletedTasks);
+
             // Set current stage from API
             if (stagesData.data.currentStage) {
               setDeal((prev) => ({
@@ -462,12 +471,43 @@ export default function DealDetailPage() {
   };
 
   // Handle task completion in walkthrough
-  const handleTaskComplete = (taskId: string, completed: boolean) => {
-    setCompletedTasks((prev) => ({
-      ...prev,
+  const handleTaskComplete = async (taskId: string, completed: boolean) => {
+    // Update local state immediately for responsiveness
+    const newCompletedTasks = {
+      ...completedTasks,
       [taskId]: completed,
-    }));
-    // TODO: Persist to database via API
+    };
+    setCompletedTasks(newCompletedTasks);
+
+    // Find the current stage to persist to
+    const currentStageProgress = stageProgress.find(
+      (s) => s.stage === deal.current_stage
+    );
+
+    if (currentStageProgress?.id) {
+      try {
+        // Get existing stageData and merge with new completed tasks
+        const existingStageData = stageProgress.find(
+          (s) => s.id === currentStageProgress.id
+        );
+        const currentStageData = {
+          notes: existingStageData?.notes || '',
+          blockers: existingStageData?.blockers || [],
+          completedTasks: newCompletedTasks,
+        };
+
+        await fetch(`/api/deals/${dealId}/stages`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stageId: currentStageProgress.id,
+            stageData: currentStageData,
+          }),
+        });
+      } catch (error) {
+        console.error('Failed to persist task completion:', error);
+      }
+    }
   };
 
   // Handle tool actions from walkthrough

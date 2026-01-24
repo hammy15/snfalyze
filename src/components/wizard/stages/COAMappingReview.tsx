@@ -267,8 +267,8 @@ export function COAMappingReview({ stageData, onUpdate, dealId }: COAMappingRevi
         break;
     }
 
-    setMappings((prev) =>
-      prev.map((m) =>
+    setMappings((prev) => {
+      const newMappings = prev.map((m) =>
         m.id === mappingId
           ? {
               ...m,
@@ -280,11 +280,20 @@ export function COAMappingReview({ stageData, onUpdate, dealId }: COAMappingRevi
               mappingConfidence: 1.0,
             }
           : m
-      )
-    );
+      );
 
-    // Move to next item
-    skipItem();
+      // Check if this was the last unmapped item
+      const remainingUnmapped = newMappings.filter(m => !m.isMapped).length;
+      if (remainingUnmapped === 0) {
+        // Use setTimeout to exit guided flow after state update
+        setTimeout(() => setShowGuidedFlow(false), 0);
+      }
+
+      return newMappings;
+    });
+
+    // Don't call skipItem() - the mapped item will drop out of unmappedItems
+    // and currentItemIndex will naturally point to the next item
   };
 
   // Auto-map all unmapped items to their best category
@@ -327,18 +336,58 @@ export function COAMappingReview({ stageData, onUpdate, dealId }: COAMappingRevi
 
   // Skip an item (move to next in guided flow)
   const skipItem = () => {
-    const unmappedItems = mappings.filter((m) => !m.isMapped);
-    if (currentItemIndex < unmappedItems.length - 1) {
-      setCurrentItemIndex(currentItemIndex + 1);
+    const currentUnmappedList = mappings.filter((m) => !m.isMapped);
+    if (currentItemIndex < currentUnmappedList.length - 1) {
+      setCurrentItemIndex(prev => prev + 1);
     } else {
       setShowGuidedFlow(false);
     }
   };
 
-  // Apply and move to next
+  // Apply and move to next (item drops out of unmappedItems automatically)
   const applyAndNext = async (mappingId: string, coaCode: string) => {
-    await applyMapping(mappingId, coaCode);
-    skipItem();
+    const coaItem = COA_CATEGORIES.find((c) => c.code === coaCode);
+    if (!coaItem) return;
+
+    setMappings((prev) => {
+      const newMappings = prev.map((m) =>
+        m.id === mappingId
+          ? {
+              ...m,
+              coaCode,
+              coaName: coaItem.name,
+              proformaDestination: coaItem.proforma,
+              isMapped: true,
+              mappingConfidence: 1.0,
+            }
+          : m
+      );
+
+      // Check if this was the last unmapped item
+      const remainingUnmapped = newMappings.filter(m => !m.isMapped).length;
+      if (remainingUnmapped === 0) {
+        setTimeout(() => setShowGuidedFlow(false), 0);
+      }
+
+      return newMappings;
+    });
+
+    // Save to API if dealId exists
+    if (dealId) {
+      try {
+        await fetch(`/api/deals/${dealId}/coa-mappings/${mappingId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            coaCode,
+            coaName: coaItem.name,
+            proformaDestination: coaItem.proforma,
+          }),
+        });
+      } catch (err) {
+        console.error('Failed to save mapping:', err);
+      }
+    }
   };
 
   // Filter COA options based on search
@@ -354,7 +403,19 @@ export function COAMappingReview({ stageData, onUpdate, dealId }: COAMappingRevi
   // Get unmapped items
   const unmappedItems = mappings.filter((m) => !m.isMapped);
   const mappedItems = mappings.filter((m) => m.isMapped);
-  const currentUnmapped = unmappedItems[currentItemIndex];
+
+  // Ensure currentItemIndex is valid
+  const validIndex = Math.min(currentItemIndex, Math.max(0, unmappedItems.length - 1));
+  const currentUnmapped = unmappedItems[validIndex];
+
+  // Reset index if it's out of bounds
+  useEffect(() => {
+    if (currentItemIndex >= unmappedItems.length && unmappedItems.length > 0) {
+      setCurrentItemIndex(unmappedItems.length - 1);
+    } else if (unmappedItems.length === 0 && showGuidedFlow) {
+      setShowGuidedFlow(false);
+    }
+  }, [unmappedItems.length, currentItemIndex, showGuidedFlow]);
 
   // Calculate progress
   const progress = mappings.length > 0 ? (mappedItems.length / mappings.length) * 100 : 0;
@@ -444,7 +505,7 @@ export function COAMappingReview({ stageData, onUpdate, dealId }: COAMappingRevi
                 Unmapped Line Item
               </CardTitle>
               <Badge variant="outline">
-                {currentItemIndex + 1} of {unmappedItems.length}
+                {validIndex + 1} of {unmappedItems.length}
               </Badge>
             </div>
           </CardHeader>

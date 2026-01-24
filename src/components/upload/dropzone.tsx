@@ -111,14 +111,13 @@ export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, classNa
   return (
     <div className={cn('space-y-6', className)}>
       {/* Dropzone Area */}
-      <div
+      <label
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
         onDragOver={handleDrag}
         onDrop={handleDrop}
-        onClick={() => inputRef.current?.click()}
         className={cn(
-          'relative border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-all',
+          'relative block border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-all',
           isDragActive
             ? 'border-accent bg-accent/5'
             : 'border-cascadia-300 hover:border-accent/50 hover:bg-cascadia-50'
@@ -130,10 +129,10 @@ export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, classNa
           multiple
           accept={Object.values(acceptedTypes).flat().join(',')}
           onChange={handleChange}
-          className="hidden"
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
         />
 
-        <div className="flex flex-col items-center gap-4">
+        <div className="flex flex-col items-center gap-4 pointer-events-none">
           <div
             className={cn(
               'p-4 rounded-full transition-colors',
@@ -157,14 +156,14 @@ export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, classNa
             </p>
           </div>
 
-          <div className="flex flex-wrap justify-center gap-2 mt-2">
+          <div className="flex flex-wrap justify-center gap-2 mt-2 pointer-events-none">
             <span className="px-2 py-1 text-xs bg-cascadia-100 text-cascadia-600 rounded">PDF</span>
             <span className="px-2 py-1 text-xs bg-cascadia-100 text-cascadia-600 rounded">Excel</span>
             <span className="px-2 py-1 text-xs bg-cascadia-100 text-cascadia-600 rounded">CSV</span>
             <span className="px-2 py-1 text-xs bg-cascadia-100 text-cascadia-600 rounded">Images</span>
           </div>
         </div>
-      </div>
+      </label>
 
       {/* Uploaded Files List */}
       {uploadedFiles.length > 0 && (

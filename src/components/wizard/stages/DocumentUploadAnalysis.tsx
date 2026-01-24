@@ -298,8 +298,8 @@ export function DocumentUploadAnalysis({
   const confirmAnalysis = () => {
     if (!analysis) return;
 
-    // Update stage data with confirmed values
-    onUpdate({
+    // Build the stage data update including extraction data
+    const stageDataUpdate: Partial<WizardStageData> & { extraction?: AIAnalysis['extraction'] } = {
       dealStructure: {
         dealName,
         dealStructure: dealType,
@@ -329,8 +329,14 @@ export function DocumentUploadAnalysis({
             confirmedType: false,
           })),
       },
-    });
+    };
 
+    // IMPORTANT: Save extraction data for COA mapping stage
+    if (analysis.extraction) {
+      (stageDataUpdate as any).extraction = analysis.extraction;
+    }
+
+    onUpdate(stageDataUpdate);
     onAnalysisComplete(analysis);
   };
 

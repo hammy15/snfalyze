@@ -49,8 +49,17 @@ export function DocumentExtraction({ stageData, onUpdate, dealId }: DocumentExtr
     const existingExtraction = stageData.documentExtraction?.documents || [];
 
     // Check if we have comprehensive extraction data from analysis phase
-    const hasExtractionData = (stageData as any).extraction ||
-      uploadedDocs.some(doc => doc.type && doc.type !== 'other');
+    const extraction = (stageData as any).extraction;
+    const hasExtractionData = extraction && extraction.lineItems && extraction.lineItems.length > 0;
+
+    // Calculate actual statistics from extraction data
+    const extractedFieldsCount = hasExtractionData ? extraction.lineItems.length : 0;
+    const mappedCount = hasExtractionData
+      ? extraction.lineItems.filter((item: any) => item.coaCode && item.coaCode !== 'EXP_UNMAPPED' && item.coaCode !== 'REV_OTHER').length
+      : 0;
+    const overallConfidence = hasExtractionData
+      ? extraction.summary.dataQuality
+      : 0;
 
     const docs: ExtractionDoc[] = uploadedDocs.map((doc) => {
       const existing = existingExtraction.find((e) => e.id === doc.id);
@@ -62,10 +71,10 @@ export function DocumentExtraction({ stageData, onUpdate, dealId }: DocumentExtr
         id: doc.id,
         filename: doc.filename,
         status: existing?.status || initialStatus,
-        extractedFields: existing?.extractedFields || (hasExtractionData ? 50 : undefined),
+        extractedFields: existing?.extractedFields || (hasExtractionData ? Math.ceil(extractedFieldsCount / uploadedDocs.length) : undefined),
         clarificationsCount: existing?.clarificationsCount || 0,
         clarificationsResolved: existing?.clarificationsResolved || 0,
-        confidence: existing?.confidence || (hasExtractionData ? 0.85 : undefined),
+        confidence: existing?.confidence || (hasExtractionData ? overallConfidence : undefined),
       };
     });
 

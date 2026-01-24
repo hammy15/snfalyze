@@ -124,6 +124,58 @@ export interface WizardStageData {
     portfolioRollupGenerated?: boolean;
     proformaGenerated?: boolean;
   };
+  // Extraction data from initial analysis - used for COA mapping
+  extraction?: {
+    facilities: Array<{
+      name: string;
+      entityName: string | null;
+      metrics: {
+        avgDailyCensus: number | null;
+        occupancyRate: number | null;
+        netOperatingIncome: number | null;
+        ebitdaMargin: number | null;
+        payorMix: {
+          medicare: number | null;
+          medicaid: number | null;
+          private: number | null;
+          other: number | null;
+        };
+        revenuePPD: number | null;
+        expensePPD: number | null;
+        laborPPD: number | null;
+        ebitda: number | null;
+      };
+    }>;
+    lineItems: Array<{
+      category: string;
+      subcategory: string;
+      label: string;
+      originalLabel: string;
+      coaCode: string | null;
+      coaName: string | null;
+      annualized: number | null;
+      percentOfRevenue: number | null;
+      facility: string;
+      confidence: number;
+    }>;
+    summary: {
+      totalRevenue: number;
+      totalExpenses: number;
+      totalNOI: number;
+      avgOccupancy: number;
+      totalBeds: number;
+      dataQuality: number;
+      periodsExtracted: string[];
+      warnings: string[];
+    };
+    metadata: {
+      extractedAt: string;
+      filesProcessed: string[];
+      totalRowsProcessed: number;
+      mappedItems: number;
+      unmappedItems: number;
+    };
+  };
 }
 
 interface WizardSession {
@@ -426,6 +478,10 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
         financialConsolidation: data.financialConsolidation
           ? { ...prev.financialConsolidation, ...data.financialConsolidation }
           : prev.financialConsolidation,
+        // Preserve extraction data from initial analysis
+        extraction: (data as any).extraction
+          ? (data as any).extraction
+          : prev.extraction,
       };
       // Trigger debounced save with new data
       debouncedSave(newData);

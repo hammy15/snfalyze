@@ -101,23 +101,50 @@ export function COAMappingReview({ stageData, onUpdate, dealId }: COAMappingRevi
     const loadMappings = async () => {
       // First try to get from extraction data stored in stageData
       const extraction = (stageData as any).extraction;
-      if (extraction && extraction.lineItems && extraction.lineItems.length > 0) {
-        // Convert line items to COA mappings
-        const items: COAMapping[] = extraction.lineItems.map((item: any, idx: number) => ({
-          id: `item-${idx}`,
-          sourceLabel: item.originalLabel || item.label,
-          sourceValue: item.annualized || item.values?.[0]?.value || 0,
-          sourceMonth: item.values?.[0]?.period,
-          facilityName: item.facility,
-          coaCode: item.coaCode,
-          coaName: item.coaName,
-          category: item.category,
-          mappingConfidence: item.confidence || 0.8,
-          isMapped: !!item.coaCode && item.coaCode !== 'EXP_UNMAPPED' && item.coaCode !== 'REV_OTHER' && item.category !== 'other',
-          proformaDestination: item.proformaKey,
-        }));
 
+      if (extraction && extraction.lineItems && extraction.lineItems.length > 0) {
+        console.log('[COAMappingReview] Found extraction data with', extraction.lineItems.length, 'line items');
+
+        // Convert line items to COA mappings
+        const items: COAMapping[] = extraction.lineItems.map((item: any, idx: number) => {
+          const hasValidCoaCode = item.coaCode &&
+            item.coaCode !== 'EXP_UNMAPPED' &&
+            item.coaCode !== 'REV_OTHER' &&
+            item.coaCode !== 'STAT_OTHER';
+
+          // Determine category based on coaCode prefix or item category
+          let category: COAMapping['category'] = item.category || 'other';
+          if (item.coaCode) {
+            if (item.coaCode.startsWith('4') || item.coaCode.startsWith('REV')) category = 'revenue';
+            else if (item.coaCode.startsWith('5') || item.coaCode.startsWith('6') || item.coaCode.startsWith('EXP')) category = 'expense';
+            else if (item.coaCode.startsWith('C') || item.coaCode.startsWith('STAT')) category = 'census';
+          }
+
+          return {
+            id: `item-${idx}`,
+            sourceLabel: item.originalLabel || item.label || 'Unknown',
+            sourceValue: item.annualized || 0,
+            sourceMonth: extraction.summary?.periodsExtracted?.[extraction.summary.periodsExtracted.length - 1],
+            facilityName: item.facility,
+            coaCode: item.coaCode,
+            coaName: item.coaName || (hasValidCoaCode ? COA_CATEGORIES.find(c => c.code === item.coaCode)?.name : undefined),
+            category,
+            mappingConfidence: item.confidence || 0.8,
+            isMapped: hasValidCoaCode,
+            proformaDestination: item.proformaKey || COA_CATEGORIES.find(c => c.code === item.coaCode)?.proforma,
+          };
+        });
+
+        console.log('[COAMappingReview] Created', items.length, 'mappings,', items.filter(i => i.isMapped).length, 'already mapped');
         setMappings(items);
+        setLoading(false);
+        return;
+      }
+
+      // Fallback: try to load from coaMappingReview if previously saved
+      if (stageData.coaMappingReview?.mappings && stageData.coaMappingReview.mappings.length > 0) {
+        console.log('[COAMappingReview] Loading from saved mappings');
+        setMappings(stageData.coaMappingReview.mappings as COAMapping[]);
         setLoading(false);
         return;
       }
@@ -125,6 +152,7 @@ export function COAMappingReview({ stageData, onUpdate, dealId }: COAMappingRevi
       // Fallback: try to load from API if dealId exists
       if (dealId) {
         try {
+          console.log('[COAMappingReview] Trying to load from API');
           const response = await fetch(`/api/deals/${dealId}/coa-mappings`);
           const data = await response.json();
 
@@ -340,13 +368,23 @@ export function COAMappingReview({ stageData, onUpdate, dealId }: COAMappingRevi
   }
 
   if (mappings.length === 0) {
+    const extraction = (stageData as any).extraction;
+    const hasExtraction = extraction && extraction.lineItems;
+
     return (
       <Card variant="flat" className="text-center py-12">
         <CardContent>
           <FileText className="w-12 h-12 mx-auto text-surface-300 mb-4" />
-          <p className="text-surface-500">
-            No line items to map. Complete document extraction first.
+          <p className="text-surface-500 mb-2">
+            {hasExtraction
+              ? `Extraction found but no line items available (${extraction.lineItems?.length || 0} items).`
+              : 'No line items to map. Complete document extraction first.'}
           </p>
+          {!hasExtraction && (
+            <p className="text-xs text-surface-400">
+              Upload and analyze documents in the first step to extract financial data.
+            </p>
+          )}
         </CardContent>
       </Card>
     );

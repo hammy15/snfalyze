@@ -3,7 +3,9 @@
 import { useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { TrendingUp, TrendingDown, Building2, Users, DollarSign, Percent } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { TrendingUp, TrendingDown, Building2, Users, DollarSign, Percent, Download } from 'lucide-react';
+import { exportPortfolioToExcel } from '@/lib/export/portfolio-excel';
 import {
   FacilityFinancials,
   PortfolioMetrics,
@@ -17,11 +19,13 @@ import {
 } from './types';
 
 interface PortfolioFinancialViewProps {
+  dealName?: string;
   facilities: FacilityFinancials[];
   priorYearMetrics?: PortfolioMetrics;
 }
 
 export function PortfolioFinancialView({
+  dealName = 'Portfolio',
   facilities,
   priorYearMetrics,
 }: PortfolioFinancialViewProps) {
@@ -195,6 +199,20 @@ export function PortfolioFinancialView({
             {formatPercent(portfolioMetrics.weightedOccupancy)} Occupancy
           </p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => exportPortfolioToExcel({
+            dealName,
+            facilities,
+            portfolioMetrics,
+            includeProforma: true,
+          })}
+          className="gap-2"
+        >
+          <Download className="h-4 w-4" />
+          Export to Excel
+        </Button>
       </div>
 
       {/* Key Metrics Cards */}

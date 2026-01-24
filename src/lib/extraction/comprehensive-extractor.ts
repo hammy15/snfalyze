@@ -39,6 +39,7 @@ export interface MonthlyValue {
 export interface FacilityProfile {
   name: string;
   entityName: string | null;
+  ccn: string | null;
   city: string | null;
   state: string | null;
   facilityType: 'SNF' | 'ALF' | 'ILF';
@@ -234,6 +235,60 @@ const COA_PATTERNS: Array<{
   { pattern: /^8\d{3,4}\s*-/i, code: 'AUTO_OTH', name: 'Other Expense', category: 'expense', subcategory: 'other_auto', proformaKey: 'expenses.other' },
   { pattern: /^9\d{3,4}\s*-/i, code: 'AUTO_ADJ', name: 'Adjustments', category: 'expense', subcategory: 'adjustments', proformaKey: 'expenses.other' },
 ];
+
+// ============================================================================
+// CCN EXTRACTION PATTERNS
+// ============================================================================
+
+const CCN_PATTERNS = [
+  /CCN[:\s]*(\d{6})/i,
+  /CMS\s*(?:Certification|Provider)\s*(?:Number|#|No\.?)[:\s]*(\d{6})/i,
+  /Federal\s*Provider\s*(?:Number|#|No\.?)[:\s]*(\d{6})/i,
+  /Medicare\s*Provider\s*(?:Number|#|No\.?|ID)[:\s]*(\d{6})/i,
+  /Provider\s*(?:Number|#|No\.?|ID)[:\s]*(\d{6})/i,
+  /Facility\s*(?:ID|Number|#)[:\s]*(\d{6})/i,
+  /NPI[:\s]*(\d{6})/i, // Sometimes CCN is mislabeled as NPI in documents
+];
+
+/**
+ * Extract CCN from text using pattern matching
+ */
+function extractCCNFromText(text: string): string | null {
+  for (const pattern of CCN_PATTERNS) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      // Validate it looks like a CCN (6 digits, reasonable range)
+      const ccn = match[1];
+      // CCNs typically start with digits 0-9 for state codes
+      if (/^\d{6}$/.test(ccn)) {
+        return ccn;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract CCN from filename patterns
+ * e.g., "105001_Sunrise_SNF.xlsx" or "CCN-105001_Financial.xlsx"
+ */
+function extractCCNFromFilename(filename: string): string | null {
+  // Pattern: 6 consecutive digits that look like a CCN
+  const patterns = [
+    /CCN[_-]?(\d{6})/i,
+    /^(\d{6})[_-]/,
+    /[_-](\d{6})[_-]/,
+    /[_-](\d{6})\./,
+  ];
+
+  for (const pattern of patterns) {
+    const match = filename.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  return null;
+}
 
 // ============================================================================
 // EXTRACTION FUNCTIONS
@@ -493,11 +548,15 @@ export async function extractFromExcel(
 
     if (rawData.length === 0) continue;
 
+    // Try to extract CCN from filename
+    const filenameCCN = extractCCNFromFilename(filename);
+
     // Initialize facility profile
     const facility: Partial<FacilityProfile> = {
       name: sheetName,
       facilityType: 'SNF',
       sourceFiles: [filename],
+      ccn: filenameCCN || undefined,
       metrics: {
         avgDailyCensus: null,
         occupancyRate: null,
@@ -517,6 +576,14 @@ export async function extractFromExcel(
       if (!row) continue;
 
       const rowText = row.filter(c => c !== null).map(c => String(c)).join(' ');
+
+      // Look for CCN in header rows
+      if (!facility.ccn) {
+        const rowCCN = extractCCNFromText(rowText);
+        if (rowCCN) {
+          facility.ccn = rowCCN;
+        }
+      }
 
       // Look for entity name
       if (rowText.toLowerCase().includes('opco') || rowText.toLowerCase().includes('propco')) {
@@ -804,6 +871,7 @@ export async function comprehensiveExtract(
   const facilitiesArray: FacilityProfile[] = Array.from(allFacilities.entries()).map(([name, profile]) => ({
     name,
     entityName: profile.entityName || null,
+    ccn: profile.ccn || null,
     city: profile.city || null,
     state: profile.state || null,
     facilityType: profile.facilityType || 'SNF',

@@ -23,9 +23,18 @@ import {
   UserCheck,
   Award,
   AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  Phone,
+  Building,
+  DollarSign,
+  FileWarning,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { WizardStageData } from '../EnhancedDealWizard';
+import { FacilityRiskAlerts } from '@/components/cms/facility-risk-alerts';
+import { CMSStaffingCard } from '@/components/cms/cms-staffing-card';
+import { CMSComplianceCard } from '@/components/cms/cms-compliance-card';
 
 interface FacilitySlot {
   slot: number;
@@ -35,19 +44,35 @@ interface FacilitySlot {
   city?: string;
   state?: string;
   zipCode?: string;
+  phoneNumber?: string;
+  ownershipType?: string;
   licensedBeds?: number;
   certifiedBeds?: number;
+  averageResidentsPerDay?: number;
   cmsRating?: number;
   healthRating?: number;
   staffingRating?: number;
   qualityRating?: number;
+  // Staffing HPPD
+  reportedRnHppd?: number;
+  reportedLpnHppd?: number;
+  reportedCnaHppd?: number;
+  totalNursingHppd?: number;
+  // Compliance
+  totalDeficiencies?: number;
+  healthDeficiencies?: number;
+  finesTotal?: number;
+  // Risk flags
   isSff?: boolean;
   isSffWatch?: boolean;
+  abuseIcon?: boolean;
   isVerified: boolean;
   cmsData?: Record<string, unknown>;
   assetType?: 'SNF' | 'ALF' | 'ILF';
   yearBuilt?: number;
   cmsLookupStatus?: 'pending' | 'loading' | 'found' | 'not_found';
+  cmsMatchConfidence?: number;
+  autoVerified?: boolean;
 }
 
 interface CMSProviderData {
@@ -155,7 +180,7 @@ export function FacilityIdentification({ stageData, onUpdate }: FacilityIdentifi
               }
             }
 
-            // Update facility with CMS data
+            // Update facility with CMS data (including enhanced fields)
             setFacilities(prev => prev.map(f =>
               f.slot === facility.slot ? {
                 ...f,
@@ -165,14 +190,27 @@ export function FacilityIdentification({ stageData, onUpdate }: FacilityIdentifi
                 city: bestMatch.city || f.city,
                 state: bestMatch.state || f.state,
                 zipCode: bestMatch.zipCode || f.zipCode,
+                phoneNumber: bestMatch.phoneNumber,
+                ownershipType: bestMatch.ownershipType,
                 licensedBeds: bestMatch.numberOfBeds || f.licensedBeds,
                 certifiedBeds: bestMatch.numberOfBeds || f.certifiedBeds,
+                averageResidentsPerDay: bestMatch.averageResidentsPerDay,
                 cmsRating: bestMatch.overallRating,
                 healthRating: bestMatch.healthInspectionRating,
                 staffingRating: bestMatch.staffingRating,
                 qualityRating: bestMatch.qualityMeasureRating,
+                // Staffing HPPD
+                reportedRnHppd: bestMatch.reportedRnHppd,
+                reportedLpnHppd: bestMatch.reportedLpnHppd,
+                reportedCnaHppd: bestMatch.reportedCnaHppd,
+                totalNursingHppd: bestMatch.totalNursingHppd,
+                // Compliance
+                totalDeficiencies: bestMatch.totalDeficiencies,
+                finesTotal: bestMatch.finesTotal,
+                // Risk flags
                 isSff: bestMatch.isSff,
                 isSffWatch: bestMatch.isSffCandidate,
+                abuseIcon: bestMatch.abuseIcon,
                 cmsData: bestMatch,
                 cmsLookupStatus: 'found',
               } : f
@@ -290,14 +328,27 @@ export function FacilityIdentification({ stageData, onUpdate }: FacilityIdentifi
               city: fullProvider.city,
               state: fullProvider.state,
               zipCode: fullProvider.zipCode,
+              phoneNumber: (fullProvider as unknown as { phoneNumber?: string }).phoneNumber,
+              ownershipType: (fullProvider as unknown as { ownershipType?: string }).ownershipType,
               licensedBeds: fullProvider.numberOfBeds,
               certifiedBeds: fullProvider.numberOfBeds,
+              averageResidentsPerDay: (fullProvider as unknown as { averageResidentsPerDay?: number }).averageResidentsPerDay,
               cmsRating: fullProvider.overallRating,
               healthRating: fullProvider.healthInspectionRating,
               staffingRating: fullProvider.staffingRating,
               qualityRating: fullProvider.qualityMeasureRating,
+              // Staffing HPPD
+              reportedRnHppd: (fullProvider as unknown as { reportedRnHppd?: number }).reportedRnHppd,
+              reportedLpnHppd: (fullProvider as unknown as { reportedLpnHppd?: number }).reportedLpnHppd,
+              reportedCnaHppd: (fullProvider as unknown as { reportedCnaHppd?: number }).reportedCnaHppd,
+              totalNursingHppd: (fullProvider as unknown as { totalNursingHppd?: number }).totalNursingHppd,
+              // Compliance
+              totalDeficiencies: (fullProvider as unknown as { totalDeficiencies?: number }).totalDeficiencies,
+              finesTotal: (fullProvider as unknown as { finesTotal?: number }).finesTotal,
+              // Risk flags
               isSff: fullProvider.isSff,
               isSffWatch: fullProvider.isSffCandidate,
+              abuseIcon: (fullProvider as unknown as { abuseIcon?: boolean }).abuseIcon,
               isVerified: false,
               cmsData: fullProvider as unknown as Record<string, unknown>,
               cmsLookupStatus: 'found',
@@ -378,14 +429,27 @@ export function FacilityIdentification({ stageData, onUpdate }: FacilityIdentifi
             city: provider.city || f.city,
             state: provider.state || f.state,
             zipCode: provider.zipCode || f.zipCode,
+            phoneNumber: provider.phoneNumber,
+            ownershipType: provider.ownershipType,
             licensedBeds: provider.numberOfBeds || f.licensedBeds,
             certifiedBeds: provider.numberOfBeds || f.certifiedBeds,
+            averageResidentsPerDay: provider.averageResidentsPerDay,
             cmsRating: provider.overallRating,
             healthRating: provider.healthInspectionRating,
             staffingRating: provider.staffingRating,
             qualityRating: provider.qualityMeasureRating,
+            // Staffing HPPD
+            reportedRnHppd: provider.reportedRnHppd,
+            reportedLpnHppd: provider.reportedLpnHppd,
+            reportedCnaHppd: provider.reportedCnaHppd,
+            totalNursingHppd: provider.totalNursingHppd,
+            // Compliance
+            totalDeficiencies: provider.totalDeficiencies,
+            finesTotal: provider.finesTotal,
+            // Risk flags
             isSff: provider.isSff,
             isSffWatch: provider.isSffCandidate,
+            abuseIcon: provider.abuseIcon,
             cmsData: provider,
             cmsLookupStatus: 'found',
           } : f
@@ -644,17 +708,33 @@ export function FacilityIdentification({ stageData, onUpdate }: FacilityIdentifi
                   </div>
                 </div>
               ) : (
-                // Display mode - show detailed CMS data
+                // Display mode - show detailed CMS data with enhanced info
                 <div className="space-y-4">
-                  {/* Quick Stats Row */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-                    <div className="p-3 bg-surface-50 dark:bg-surface-800/50 rounded-lg">
-                      <div className="flex items-center gap-2 text-xs text-surface-500 mb-1">
-                        <Bed className="w-3 h-3" />
-                        Beds
-                      </div>
-                      <p className="font-semibold text-lg">{facility.licensedBeds || 'N/A'}</p>
+                  {/* SECTION 1: Risk Alerts - Always visible at top */}
+                  <FacilityRiskAlerts
+                    provider={{
+                      isSff: facility.isSff,
+                      isSffCandidate: facility.isSffWatch,
+                      abuseIcon: facility.abuseIcon,
+                      overallRating: facility.cmsRating,
+                      healthInspectionRating: facility.healthRating,
+                      totalDeficiencies: facility.totalDeficiencies,
+                      finesTotal: facility.finesTotal,
+                    }}
+                  />
+
+                  {/* Match confidence indicator */}
+                  {facility.cmsMatchConfidence && facility.cmsMatchConfidence < 0.9 && (
+                    <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                      <AlertTriangle className="w-4 h-4" />
+                      <span>
+                        Auto-matched with {Math.round(facility.cmsMatchConfidence * 100)}% confidence - please verify this is correct
+                      </span>
                     </div>
+                  )}
+
+                  {/* SECTION 2: Star Ratings Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="p-3 bg-surface-50 dark:bg-surface-800/50 rounded-lg">
                       <div className="flex items-center gap-2 text-xs text-surface-500 mb-1">
                         <Star className="w-3 h-3" />
@@ -683,23 +763,78 @@ export function FacilityIdentification({ stageData, onUpdate }: FacilityIdentifi
                       </div>
                       {renderStars(facility.qualityRating)}
                     </div>
-                    <div className="p-3 bg-surface-50 dark:bg-surface-800/50 rounded-lg">
-                      <div className="flex items-center gap-2 text-xs text-surface-500 mb-1">
-                        CCN
-                      </div>
-                      <p className="font-mono text-sm">{facility.ccn || 'N/A'}</p>
-                    </div>
                   </div>
 
-                  {/* Address */}
-                  {facility.address && (
-                    <div className="flex items-start gap-2 text-sm text-surface-600 dark:text-surface-400">
-                      <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                      <span>
-                        {facility.address}, {facility.city}, {facility.state} {facility.zipCode}
-                      </span>
-                    </div>
+                  {/* SECTION 3: Staffing HPPD (collapsible) */}
+                  {(facility.reportedRnHppd || facility.reportedLpnHppd || facility.reportedCnaHppd) && (
+                    <CMSStaffingCard
+                      provider={{
+                        reportedRnHppd: facility.reportedRnHppd,
+                        reportedLpnHppd: facility.reportedLpnHppd,
+                        reportedCnaHppd: facility.reportedCnaHppd,
+                        totalNursingHppd: facility.totalNursingHppd,
+                      }}
+                    />
                   )}
+
+                  {/* SECTION 4: Compliance Summary */}
+                  {(facility.totalDeficiencies !== undefined || facility.finesTotal !== undefined) && (
+                    <CMSComplianceCard
+                      provider={{
+                        totalDeficiencies: facility.totalDeficiencies,
+                        finesTotal: facility.finesTotal,
+                      }}
+                      variant="compact"
+                    />
+                  )}
+
+                  {/* SECTION 5: Facility Profile Info */}
+                  <div className="p-4 bg-surface-50 dark:bg-surface-800/50 rounded-lg space-y-3">
+                    <h5 className="text-xs font-medium text-surface-600 dark:text-surface-400 mb-2 flex items-center gap-2">
+                      <Building className="w-4 h-4" />
+                      Facility Information
+                    </h5>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-surface-500">CCN:</span>
+                        <span className="font-mono font-medium">{facility.ccn || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-surface-500">Beds:</span>
+                        <span className="font-medium">{facility.licensedBeds || 'N/A'} licensed{facility.certifiedBeds ? ` / ${facility.certifiedBeds} certified` : ''}</span>
+                      </div>
+                      {facility.averageResidentsPerDay && (
+                        <div className="flex justify-between">
+                          <span className="text-surface-500">Avg Census:</span>
+                          <span className="font-medium">{facility.averageResidentsPerDay.toFixed(1)} residents</span>
+                        </div>
+                      )}
+                      {facility.ownershipType && (
+                        <div className="flex justify-between">
+                          <span className="text-surface-500">Ownership:</span>
+                          <span className="font-medium truncate max-w-[150px]">{facility.ownershipType}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Address */}
+                    {facility.address && (
+                      <div className="flex items-start gap-2 text-sm text-surface-600 dark:text-surface-400 pt-2 border-t border-surface-200 dark:border-surface-700">
+                        <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <span>
+                          {facility.address}, {facility.city}, {facility.state} {facility.zipCode}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Phone */}
+                    {facility.phoneNumber && (
+                      <div className="flex items-center gap-2 text-sm text-surface-600 dark:text-surface-400">
+                        <Phone className="w-4 h-4 flex-shrink-0" />
+                        <span>{facility.phoneNumber}</span>
+                      </div>
+                    )}
+                  </div>
 
                   {/* CMS lookup status message */}
                   {facility.cmsLookupStatus === 'not_found' && (

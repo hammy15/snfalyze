@@ -4,6 +4,7 @@ import { inArray } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
 import { join } from 'path';
 import { comprehensiveExtract, type ExtractionResult } from '@/lib/extraction/comprehensive-extractor';
+import { matchExtractedFacilityToCMS, type NormalizedProviderData } from '@/lib/cms';
 
 const anthropic = new Anthropic();
 
@@ -32,6 +33,11 @@ interface FacilityInfo {
     netOperatingIncome: number | null;
     ebitdaMargin: number | null;
   };
+  // CMS auto-match data
+  ccn?: string;
+  cmsData?: NormalizedProviderData;
+  cmsMatchConfidence?: number;
+  autoVerified?: boolean;
 }
 
 interface AnalysisResult {
@@ -136,6 +142,54 @@ export async function POST(request: NextRequest) {
           sourceSheet: name,
           sourceFile: extraction.metadata.filesProcessed[0] || 'Unknown',
         });
+      }
+    }
+
+    // Auto-match facilities to CMS data
+    if (facilities.length > 0) {
+      for (const facility of facilities) {
+        try {
+          // First check if we already have a CCN from extraction
+          const extractedFacility = extraction?.facilities.find(f => f.name === facility.name);
+          if (extractedFacility?.ccn) {
+            facility.ccn = extractedFacility.ccn;
+          }
+
+          // Try to match to CMS by name/city/state
+          const cmsMatch = await matchExtractedFacilityToCMS({
+            name: facility.name,
+            city: facility.city,
+            state: facility.state,
+            licensedBeds: facility.beds,
+          });
+
+          if (cmsMatch.provider) {
+            facility.cmsData = cmsMatch.provider;
+            facility.cmsMatchConfidence = cmsMatch.matchConfidence;
+            facility.ccn = facility.ccn || cmsMatch.provider.ccn;
+            facility.autoVerified = cmsMatch.matchConfidence > 0.90;
+
+            // Update facility info with CMS data if not already set
+            if (!facility.address && cmsMatch.provider.address) {
+              facility.address = cmsMatch.provider.address;
+            }
+            if (!facility.city && cmsMatch.provider.city) {
+              facility.city = cmsMatch.provider.city;
+            }
+            if (!facility.state && cmsMatch.provider.state) {
+              facility.state = cmsMatch.provider.state;
+            }
+            if (!facility.beds && cmsMatch.provider.numberOfBeds) {
+              facility.beds = cmsMatch.provider.numberOfBeds;
+            }
+          }
+        } catch (cmsError) {
+          console.warn('CMS auto-match failed for', facility.name, cmsError);
+          // Continue without CMS data - not a critical error
+        }
+
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
     }
 

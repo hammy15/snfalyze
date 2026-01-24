@@ -275,3 +275,225 @@ export async function getFullProviderProfile(ccn: string) {
     })),
   };
 }
+
+/**
+ * Calculate Levenshtein distance between two strings
+ */
+function levenshteinDistance(str1: string, str2: string): number {
+  const m = str1.length;
+  const n = str2.length;
+  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (str1[i - 1] === str2[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1];
+      } else {
+        dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      }
+    }
+  }
+  return dp[m][n];
+}
+
+/**
+ * Calculate string similarity (0-1) based on Levenshtein distance
+ */
+function stringSimilarity(str1: string, str2: string): number {
+  const s1 = str1.toLowerCase().trim();
+  const s2 = str2.toLowerCase().trim();
+  if (s1 === s2) return 1;
+  if (!s1 || !s2) return 0;
+
+  const maxLen = Math.max(s1.length, s2.length);
+  const distance = levenshteinDistance(s1, s2);
+  return 1 - (distance / maxLen);
+}
+
+/**
+ * Normalize facility name for comparison
+ * Removes common suffixes like LLC, Inc, SNF, Healthcare, etc.
+ */
+function normalizeFacilityName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\b(llc|inc|corp|corporation|lp|healthcare|health care|skilled nursing|nursing home|snf|facility|center|care center|rehabilitation|rehab)\b/gi, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export interface FacilityMatchResult {
+  provider: NormalizedProviderData | null;
+  matchConfidence: number;
+  matchReason: string;
+  candidates?: Array<{
+    provider: NormalizedProviderData;
+    confidence: number;
+    reason: string;
+  }>;
+}
+
+/**
+ * Match an extracted facility to CMS data using name, city, state, and bed count
+ */
+export async function matchExtractedFacilityToCMS(
+  facility: {
+    name: string;
+    city?: string;
+    state?: string;
+    licensedBeds?: number;
+  }
+): Promise<FacilityMatchResult> {
+  if (!facility.name || facility.name.trim().length < 3) {
+    return {
+      provider: null,
+      matchConfidence: 0,
+      matchReason: 'Facility name too short or missing',
+    };
+  }
+
+  const normalizedName = normalizeFacilityName(facility.name);
+
+  // Search CMS by facility name and state
+  const providers = await searchProviders(
+    facility.name,
+    facility.state,
+    30 // Get more results for better matching
+  );
+
+  if (providers.length === 0) {
+    return {
+      provider: null,
+      matchConfidence: 0,
+      matchReason: 'No CMS providers found matching search criteria',
+    };
+  }
+
+  // Score each result
+  const scoredResults: Array<{
+    provider: CMSProviderInfo;
+    score: number;
+    nameSimilarity: number;
+    cityMatch: boolean;
+    bedSimilarity: number;
+    reasons: string[];
+  }> = [];
+
+  for (const provider of providers) {
+    const providerNormalizedName = normalizeFacilityName(provider.provider_name || '');
+    const nameSimilarity = stringSimilarity(normalizedName, providerNormalizedName);
+
+    // Also check if one name contains the other
+    const containsMatch =
+      normalizedName.includes(providerNormalizedName) ||
+      providerNormalizedName.includes(normalizedName);
+    const adjustedNameSimilarity = containsMatch
+      ? Math.max(nameSimilarity, 0.85)
+      : nameSimilarity;
+
+    // City match
+    const cityMatch = facility.city && provider.provider_city
+      ? stringSimilarity(facility.city.toLowerCase(), provider.provider_city.toLowerCase()) > 0.8
+      : false;
+
+    // Bed count similarity
+    let bedSimilarity = 0;
+    if (facility.licensedBeds && provider.number_of_certified_beds) {
+      const providerBeds = parseCMSInt(provider.number_of_certified_beds);
+      if (providerBeds) {
+        const bedDiff = Math.abs(facility.licensedBeds - providerBeds);
+        const maxBeds = Math.max(facility.licensedBeds, providerBeds);
+        bedSimilarity = 1 - (bedDiff / maxBeds);
+      }
+    }
+
+    // Calculate weighted score
+    // Name similarity: 50%, City match: 25%, Bed similarity: 25%
+    const score =
+      adjustedNameSimilarity * 0.50 +
+      (cityMatch ? 0.25 : 0) +
+      bedSimilarity * 0.25;
+
+    const reasons: string[] = [];
+    if (adjustedNameSimilarity > 0.7) reasons.push(`Name match: ${(adjustedNameSimilarity * 100).toFixed(0)}%`);
+    if (cityMatch) reasons.push(`City match: ${provider.provider_city}`);
+    if (bedSimilarity > 0.7) reasons.push(`Bed count similar: ${provider.number_of_certified_beds}`);
+
+    scoredResults.push({
+      provider,
+      score,
+      nameSimilarity: adjustedNameSimilarity,
+      cityMatch,
+      bedSimilarity,
+      reasons,
+    });
+  }
+
+  // Sort by score descending
+  scoredResults.sort((a, b) => b.score - a.score);
+
+  // Get best match
+  const bestMatch = scoredResults[0];
+  if (!bestMatch || bestMatch.score < 0.50) {
+    return {
+      provider: null,
+      matchConfidence: bestMatch?.score || 0,
+      matchReason: 'No sufficiently confident match found',
+      candidates: scoredResults.slice(0, 5).map(r => ({
+        provider: normalizeProviderData(r.provider),
+        confidence: r.score,
+        reason: r.reasons.join(', ') || 'Low match',
+      })),
+    };
+  }
+
+  // Fetch full provider data if we have a good match
+  const fullProvider = await lookupProviderByCCN(bestMatch.provider.federal_provider_number);
+
+  if (!fullProvider) {
+    return {
+      provider: null,
+      matchConfidence: bestMatch.score,
+      matchReason: 'Failed to fetch full provider data',
+    };
+  }
+
+  return {
+    provider: fullProvider,
+    matchConfidence: bestMatch.score,
+    matchReason: bestMatch.reasons.join(', '),
+    candidates: scoredResults.slice(1, 4).map(r => ({
+      provider: normalizeProviderData(r.provider),
+      confidence: r.score,
+      reason: r.reasons.join(', ') || 'Lower confidence match',
+    })),
+  };
+}
+
+/**
+ * Batch match multiple facilities to CMS data
+ */
+export async function batchMatchFacilitiesToCMS(
+  facilities: Array<{
+    name: string;
+    city?: string;
+    state?: string;
+    licensedBeds?: number;
+  }>
+): Promise<Map<string, FacilityMatchResult>> {
+  const results = new Map<string, FacilityMatchResult>();
+
+  // Process facilities with a small delay between each to avoid rate limiting
+  for (const facility of facilities) {
+    const result = await matchExtractedFacilityToCMS(facility);
+    results.set(facility.name, result);
+    // Small delay to be nice to the API
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+
+  return results;
+}

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, documents } from '@/db';
-import { inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
 import { join } from 'path';
 import { comprehensiveExtract, type ExtractionResult } from '@/lib/extraction/comprehensive-extractor';
+import { extractSingleFile, type PerFileExtractionResult } from '@/lib/extraction/per-file-extractor';
 import { matchExtractedFacilityToCMS, type NormalizedProviderData } from '@/lib/cms';
 
 const anthropic = new Anthropic();
@@ -103,12 +104,110 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Run comprehensive extraction
+    // Process files ONE AT A TIME with detailed logging
+    console.log('='.repeat(60));
+    console.log('STARTING PER-FILE EXTRACTION');
+    console.log(`Total files to process: ${files.length}`);
+    console.log('='.repeat(60));
+
+    const perFileResults: PerFileExtractionResult[] = [];
+    const extractionErrors: string[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      console.log('');
+      console.log('-'.repeat(60));
+      console.log(`[FILE ${i + 1}/${files.length}] Starting: ${file.filename}`);
+      console.log(`  Document ID: ${file.id}`);
+      console.log(`  Path: ${file.path}`);
+      console.log('-'.repeat(60));
+
+      try {
+        const result = await extractSingleFile(
+          file.path,
+          file.id,
+          file.filename,
+          (progress) => {
+            console.log(`  [${progress.stage.toUpperCase()}] ${progress.progress}% - ${progress.message}`);
+          }
+        );
+
+        perFileResults.push(result);
+
+        console.log('');
+        console.log(`  ✓ EXTRACTION COMPLETE for ${file.filename}`);
+        console.log(`    - Sheets found: ${result.sheets.length}`);
+        result.sheets.forEach((sheet, idx) => {
+          console.log(`      ${idx + 1}. "${sheet.sheetName}" (${sheet.sheetType}) - ${sheet.rowCount} rows, ${sheet.columnCount} cols`);
+          if (sheet.facilitiesDetected.length > 0) {
+            console.log(`         Facilities detected: ${sheet.facilitiesDetected.join(', ')}`);
+          }
+          if (sheet.periodsDetected.length > 0) {
+            console.log(`         Periods detected: ${sheet.periodsDetected.join(', ')}`);
+          }
+        });
+        console.log(`    - Financial periods: ${result.financialData.length}`);
+        console.log(`    - Census periods: ${result.censusData.length}`);
+        console.log(`    - Rate data: ${result.rateData.length}`);
+        console.log(`    - Confidence: ${(result.confidence * 100).toFixed(1)}%`);
+        console.log(`    - Processing time: ${result.processingTimeMs}ms`);
+        if (result.warnings.length > 0) {
+          console.log(`    - Warnings: ${result.warnings.join('; ')}`);
+        }
+
+        // Update document status
+        await db
+          .update(documents)
+          .set({
+            status: 'complete',
+            processedAt: new Date(),
+            extractedData: {
+              sheetsCount: result.sheets.length,
+              financialPeriods: result.financialData.length,
+              censusPeriods: result.censusData.length,
+              rates: result.rateData.length,
+              confidence: result.confidence,
+            },
+          })
+          .where(eq(documents.id, file.id));
+
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`  ✗ ERROR processing ${file.filename}: ${errorMsg}`);
+        extractionErrors.push(`${file.filename}: ${errorMsg}`);
+
+        // Update document with error
+        await db
+          .update(documents)
+          .set({
+            status: 'error',
+            processedAt: new Date(),
+            extractedData: { error: errorMsg },
+          })
+          .where(eq(documents.id, file.id));
+      }
+    }
+
+    console.log('');
+    console.log('='.repeat(60));
+    console.log('PER-FILE EXTRACTION COMPLETE');
+    console.log(`  Files processed: ${perFileResults.length}/${files.length}`);
+    console.log(`  Total sheets: ${perFileResults.reduce((sum, r) => sum + r.sheets.length, 0)}`);
+    console.log(`  Total financial periods: ${perFileResults.reduce((sum, r) => sum + r.financialData.length, 0)}`);
+    console.log(`  Total census periods: ${perFileResults.reduce((sum, r) => sum + r.censusData.length, 0)}`);
+    console.log(`  Total rates: ${perFileResults.reduce((sum, r) => sum + r.rateData.length, 0)}`);
+    if (extractionErrors.length > 0) {
+      console.log(`  Errors: ${extractionErrors.length}`);
+      extractionErrors.forEach(e => console.log(`    - ${e}`));
+    }
+    console.log('='.repeat(60));
+
+    // Also run comprehensive extraction for the summary data
     let extraction: ExtractionResult | null = null;
     try {
       extraction = await comprehensiveExtract(files);
     } catch (error) {
-      console.error('Extraction error:', error);
+      console.error('Comprehensive extraction error:', error);
     }
 
     // Build facilities from extraction

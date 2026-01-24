@@ -53,12 +53,17 @@ export function StageConfirmation({
           </p>
         </DialogHeader>
         <DialogFooter className="flex gap-3 sm:gap-2 mt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} type="button">
             {cancelLabel}
           </Button>
           <Button
             variant={variant === 'warning' ? 'destructive' : 'default'}
-            onClick={onConfirm}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onConfirm();
+            }}
+            type="button"
           >
             {confirmLabel}
           </Button>

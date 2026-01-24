@@ -491,9 +491,14 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
 
   // Navigate to next/previous stage
   const navigateStage = async (direction: 'next' | 'back') => {
-    if (!session) return;
+    if (!session) {
+      console.error('No session available for navigation');
+      return;
+    }
 
+    console.log(`[Wizard] Navigating ${direction} from stage: ${session.currentStage}`);
     setSaving(true);
+
     try {
       // First save the current local state
       const response = await fetch(`/api/wizard/session/${session.id}`, {
@@ -505,15 +510,20 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
           [direction === 'next' ? 'advanceStage' : 'goBack']: true,
         }),
       });
+
       const result = await response.json();
+      console.log('[Wizard] Navigation response:', result.success, result.data?.currentStage);
+
       if (result.success) {
         setSession(result.data);
         setLocalStageData(result.data.stageData || {});
-        setShowConfirmation(false);
-        setPendingStageChange(null);
+      } else {
+        console.error('[Wizard] Navigation failed:', result.error);
+        setError(result.error || 'Failed to navigate');
       }
     } catch (err) {
-      console.error('Failed to navigate stage:', err);
+      console.error('[Wizard] Navigation error:', err);
+      setError('Failed to navigate to next stage');
     } finally {
       setSaving(false);
     }
@@ -564,9 +574,20 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
   };
 
   const handleConfirm = async () => {
-    if (pendingStageChange) {
-      setShowConfirmation(false);
-      await navigateStage(pendingStageChange);
+    if (!pendingStageChange) return;
+
+    const direction = pendingStageChange;
+    setShowConfirmation(false);
+    setPendingStageChange(null);
+
+    // Small delay to ensure dialog closes before navigation
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    try {
+      await navigateStage(direction);
+    } catch (err) {
+      console.error('Navigation failed:', err);
+      setError('Failed to navigate to next stage');
     }
   };
 

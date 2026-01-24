@@ -91,7 +91,12 @@ export function StageWalkthrough({
 }: StageWalkthroughProps) {
   const stages = Object.keys(ANALYSIS_STAGES) as AnalysisStage[];
   const currentStageIndex = stages.indexOf(currentStage);
-  const guide = STAGE_GUIDES[currentStage];
+  const guide = STAGE_GUIDES[currentStage] || STAGE_GUIDES['document_understanding'];
+
+  // Early return if guide is somehow still undefined
+  if (!guide) {
+    return <div className="p-4 text-muted-foreground">Loading walkthrough...</div>;
+  }
 
   // Calculate task completion for current stage
   const taskCompletion = guide.tasks.map((task) => ({
@@ -338,7 +343,7 @@ export function StageWalkthrough({
             </CardHeader>
             <CardContent>
               <ul className="space-y-2">
-                {ANALYSIS_STAGES[currentStage].key_questions.map((q, index) => (
+                {(ANALYSIS_STAGES[currentStage]?.key_questions || []).map((q, index) => (
                   <li key={index} className="flex items-start gap-2 text-sm">
                     <span className="text-primary font-medium">{index + 1}.</span>
                     <span>{q}</span>

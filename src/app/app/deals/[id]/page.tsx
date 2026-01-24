@@ -687,7 +687,7 @@ export default function DealDetailPage() {
           <CardContent className="pt-6">
             <div className="text-sm text-muted-foreground">Current Stage</div>
             <div className="text-lg font-medium mt-1">
-              {ANALYSIS_STAGES[deal.current_stage].label}
+              {ANALYSIS_STAGES[deal.current_stage || 'document_understanding']?.label || 'Document Understanding'}
             </div>
           </CardContent>
         </Card>
@@ -725,7 +725,7 @@ export default function DealDetailPage() {
             </div>
             <StageWalkthrough
               dealId={deal.id}
-              currentStage={deal.current_stage}
+              currentStage={deal.current_stage || 'document_understanding'}
               completedTasks={completedTasks}
               onTaskComplete={handleTaskComplete}
               onStageComplete={(stage) => handleStageComplete(stage)}
@@ -756,7 +756,7 @@ export default function DealDetailPage() {
             </div>
             <StageTracker
               dealId={deal.id}
-              currentStage={deal.current_stage}
+              currentStage={deal.current_stage || 'document_understanding'}
               stageProgress={stageProgress}
               onStageStart={handleStageStart}
               onStageComplete={handleStageComplete}
@@ -989,7 +989,7 @@ export default function DealDetailPage() {
             <TabsContent value="assumptions" className="mt-4">
               <AssumptionsPanel
                 dealId={deal.id}
-                currentStage={deal.current_stage}
+                currentStage={deal.current_stage || 'document_understanding'}
                 assumptions={assumptions}
                 onAddAssumption={handleAddAssumption}
                 onUpdateAssumption={handleUpdateAssumption}

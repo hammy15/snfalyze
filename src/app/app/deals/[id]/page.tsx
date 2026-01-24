@@ -19,6 +19,8 @@ import {
   StageTracker,
   AssumptionsPanel,
   SynthesisBuilder,
+  StageWalkthrough,
+  type StageTool,
 } from '@/components/deals';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -48,6 +50,8 @@ import {
   Plus,
   ArrowLeftRight,
   RefreshCw,
+  BookOpen,
+  ListChecks,
 } from 'lucide-react';
 import { SaleLeasebackDashboard } from '@/components/sale-leaseback/SaleLeasebackDashboard';
 import {
@@ -126,6 +130,8 @@ export default function DealDetailPage() {
   const [facilityTabs, setFacilityTabs] = useState<FacilityTab[]>([]);
   const [cmsSyncing, setCmsSyncing] = useState(false);
   const [cmsSyncMessage, setCmsSyncMessage] = useState<string | null>(null);
+  const [completedTasks, setCompletedTasks] = useState<Record<string, boolean>>({});
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
 
   // Fetch deal data from API
   useEffect(() => {
@@ -435,6 +441,65 @@ export default function DealDetailPage() {
     });
   };
 
+  // Handle task completion in walkthrough
+  const handleTaskComplete = (taskId: string, completed: boolean) => {
+    setCompletedTasks((prev) => ({
+      ...prev,
+      [taskId]: completed,
+    }));
+    // TODO: Persist to database via API
+  };
+
+  // Handle tool actions from walkthrough
+  const handleToolAction = (tool: StageTool) => {
+    switch (tool) {
+      case 'view_documents':
+        setActiveTab('documents');
+        break;
+      case 'extract_financials':
+        setActiveTab('documents');
+        // Could trigger extraction
+        break;
+      case 'verify_facilities':
+        // Could open facility verification modal
+        handleSyncCMS();
+        break;
+      case 'map_coa':
+        setActiveTab('financials');
+        break;
+      case 'review_census':
+      case 'review_ppd':
+      case 'review_pl':
+        setActiveTab('financials');
+        break;
+      case 'sync_cms':
+        handleSyncCMS();
+        break;
+      case 'review_survey':
+        // Could open survey review modal or external link
+        break;
+      case 'add_risk':
+        setActiveTab('risks');
+        break;
+      case 'run_valuation':
+        if (deal.dealStructure === 'sale_leaseback') {
+          setActiveTab('sale-leaseback');
+        } else {
+          setActiveTab('financials');
+        }
+        break;
+      case 'review_proforma':
+        setActiveTab('financials');
+        break;
+      case 'generate_synthesis':
+      case 'export_report':
+        setActiveTab('synthesis');
+        break;
+      default:
+        console.log('Tool action:', tool);
+    }
+  };
+
   // Sync all facilities in deal with CMS data
   const handleSyncCMS = async () => {
     setCmsSyncing(true);
@@ -640,22 +705,69 @@ export default function DealDetailPage() {
       </div>
 
       {/* Main Content */}
-      <div className="grid grid-cols-3 gap-6">
-        {/* Left Column - Stage Tracker */}
-        <div className="col-span-1">
-          <StageTracker
-            dealId={deal.id}
-            currentStage={deal.current_stage}
-            stageProgress={stageProgress}
-            onStageStart={handleStageStart}
-            onStageComplete={handleStageComplete}
-            onStageBlock={handleStageBlock}
-            onNavigateToStage={handleNavigateToStage}
-          />
-        </div>
+      <div className={showWalkthrough ? 'space-y-6' : 'grid grid-cols-3 gap-6'}>
+        {/* Left Column - Stage Tracker or Full Walkthrough */}
+        {showWalkthrough ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <BookOpen className="h-5 w-5" />
+                Analysis Walkthrough
+              </h2>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowWalkthrough(false)}
+              >
+                <ListChecks className="h-4 w-4 mr-1" />
+                Compact View
+              </Button>
+            </div>
+            <StageWalkthrough
+              dealId={deal.id}
+              currentStage={deal.current_stage}
+              completedTasks={completedTasks}
+              onTaskComplete={handleTaskComplete}
+              onStageComplete={(stage) => handleStageComplete(stage)}
+              onNavigateToStage={handleNavigateToStage}
+              onToolAction={handleToolAction}
+              documentCount={documents.length}
+              hasFinancials={documents.some((d) => d.category === 'financials')}
+              hasCensusData={facilityTabs.some((f) => f.occupancy && f.occupancy > 0)}
+              agencyPercentage={0} // TODO: Calculate from financials
+              isSff={facilityTabs.some((f: any) => f.isSff)}
+              occupancyTrend="stable" // TODO: Calculate from historical data
+              coverageRatio={0} // TODO: Calculate from financials
+              unmappedItemCount={0} // TODO: Get from COA mapping status
+            />
+          </div>
+        ) : (
+          <div className="col-span-1 space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Stage Progress</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowWalkthrough(true)}
+              >
+                <BookOpen className="h-4 w-4 mr-1" />
+                Full Guide
+              </Button>
+            </div>
+            <StageTracker
+              dealId={deal.id}
+              currentStage={deal.current_stage}
+              stageProgress={stageProgress}
+              onStageStart={handleStageStart}
+              onStageComplete={handleStageComplete}
+              onStageBlock={handleStageBlock}
+              onNavigateToStage={handleNavigateToStage}
+            />
+          </div>
+        )}
 
         {/* Right Column - Tabbed Content */}
-        <div className="col-span-2">
+        <div className={showWalkthrough ? '' : 'col-span-2'}>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="w-full justify-start">
               <TabsTrigger value="overview">Overview</TabsTrigger>

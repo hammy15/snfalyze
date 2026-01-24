@@ -1243,6 +1243,7 @@ export default function DealDetailPage() {
 
               {selectedFacilityId === null ? (
                 <PortfolioFinancialView
+                  dealId={deal.id}
                   dealName={deal.name}
                   facilities={fullFacilityData.map((f: any) => {
                     const census = f.latestCensus || {};

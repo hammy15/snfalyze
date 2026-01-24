@@ -1,11 +1,12 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { TrendingUp, TrendingDown, Building2, Users, DollarSign, Percent, Download } from 'lucide-react';
 import { exportPortfolioToExcel } from '@/lib/export/portfolio-excel';
+import { ScenarioComparison } from './scenario-comparison';
 import {
   FacilityFinancials,
   PortfolioMetrics,
@@ -19,16 +20,42 @@ import {
 } from './types';
 
 interface PortfolioFinancialViewProps {
+  dealId?: string;
   dealName?: string;
   facilities: FacilityFinancials[];
   priorYearMetrics?: PortfolioMetrics;
 }
 
 export function PortfolioFinancialView({
+  dealId,
   dealName = 'Portfolio',
   facilities,
   priorYearMetrics,
 }: PortfolioFinancialViewProps) {
+  const [scenarios, setScenarios] = useState<any[]>([]);
+  const [scenariosLoading, setScenariosLoading] = useState(false);
+
+  // Fetch scenarios for the deal
+  useEffect(() => {
+    async function fetchScenarios() {
+      if (!dealId) return;
+      setScenariosLoading(true);
+      try {
+        const res = await fetch(`/api/deals/${dealId}/scenarios`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.data) {
+            setScenarios(data.data);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching scenarios:', err);
+      } finally {
+        setScenariosLoading(false);
+      }
+    }
+    fetchScenarios();
+  }, [dealId]);
   // Calculate portfolio-wide metrics
   const portfolioMetrics = useMemo((): PortfolioMetrics => {
     const totalFacilities = facilities.length;
@@ -398,21 +425,32 @@ export function PortfolioFinancialView({
         </CardContent>
       </Card>
 
+      {/* Scenario Comparison */}
+      {dealId && (
+        <ScenarioComparison
+          dealId={dealId}
+          dealName={dealName}
+          availableScenarios={scenarios}
+        />
+      )}
+
       {/* Combined Pro Forma Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Combined Pro Forma (5-Year)</CardTitle>
-          <CardDescription>Portfolio-level projections</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8 text-muted-foreground">
-            <p>
-              Pro forma projections are calculated at the facility level. Select a facility tab to view
-              individual pro formas, or export all to Excel for combined analysis.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      {!dealId && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Combined Pro Forma (5-Year)</CardTitle>
+            <CardDescription>Portfolio-level projections</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center py-8 text-muted-foreground">
+              <p>
+                Pro forma projections are calculated at the facility level. Select a facility tab to view
+                individual pro formas, or export all to Excel for combined analysis.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

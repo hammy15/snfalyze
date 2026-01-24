@@ -61,6 +61,7 @@ import {
   type FacilityTab,
 } from '@/components/financials';
 import { DealScoreCard } from '@/components/scoring';
+import { PortfolioFacilitiesOverview } from '@/components/deals/portfolio-facilities-overview';
 
 // Default deal data (used as fallback)
 const defaultDeal: Deal & { dealStructure?: string } = {
@@ -128,6 +129,8 @@ export default function DealDetailPage() {
   const [loading, setLoading] = useState(true);
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
   const [facilityTabs, setFacilityTabs] = useState<FacilityTab[]>([]);
+  // Store full facility data with census and rates for PortfolioFinancialView
+  const [fullFacilityData, setFullFacilityData] = useState<any[]>([]);
   const [cmsSyncing, setCmsSyncing] = useState(false);
   const [cmsSyncMessage, setCmsSyncMessage] = useState<string | null>(null);
   const [completedTasks, setCompletedTasks] = useState<Record<string, boolean>>({});
@@ -159,8 +162,8 @@ export default function DealDetailPage() {
               deal_id: apiDeal.dealId || `CAS-${new Date().getFullYear()}-${apiDeal.id.slice(0, 4).toUpperCase()}`,
               name: apiDeal.name,
               asset_types: apiDeal.assetTypes || [],
-              is_portfolio: (apiDeal.facilityCount || 0) > 1,
-              facility_count: apiDeal.facilityCount || 1,
+              is_portfolio: (apiDeal.facilities?.length || 0) > 1,
+              facility_count: apiDeal.facilities?.length || 1,
               total_beds: apiDeal.beds || 0,
               states: apiDeal.primaryState ? [apiDeal.primaryState] : [],
               source: 'broker',
@@ -209,6 +212,9 @@ export default function DealDetailPage() {
         if (facilitiesResponse.ok) {
           const facilitiesData = await facilitiesResponse.json();
           if (facilitiesData.success && facilitiesData.data) {
+            // Store full facility data for financial views
+            setFullFacilityData(facilitiesData.data);
+
             const tabs: FacilityTab[] = facilitiesData.data.map((f: any) => ({
               id: f.id,
               name: f.name,
@@ -580,12 +586,20 @@ export default function DealDetailPage() {
         if (facilitiesResponse.ok) {
           const facilitiesData = await facilitiesResponse.json();
           if (facilitiesData.success && facilitiesData.data) {
+            // Store full facility data for financial views
+            setFullFacilityData(facilitiesData.data);
+
             const tabs: FacilityTab[] = facilitiesData.data.map((f: any) => ({
               id: f.id,
               name: f.name,
-              beds: f.licensedBeds || 0,
+              beds: f.licensedBeds || f.certifiedBeds || 0,
               occupancy: f.currentOccupancy || 0,
               ebitda: f.trailingTwelveMonthEbitda || 0,
+              cmsRating: f.cmsRating,
+              healthRating: f.healthRating,
+              staffingRating: f.staffingRating,
+              qualityRating: f.qualityRating,
+              isSff: f.isSff,
             }));
             setFacilityTabs(tabs);
           }
@@ -857,6 +871,11 @@ export default function DealDetailPage() {
             <TabsContent value="overview" className="mt-4 space-y-4">
               {/* Deal Score Card */}
               <DealScoreCard dealId={deal.id} />
+
+              {/* Portfolio & Facilities Overview */}
+              {facilityTabs.length > 0 && (
+                <PortfolioFacilitiesOverview facilities={facilityTabs} />
+              )}
 
               <Card>
                 <CardHeader>
@@ -1159,44 +1178,78 @@ export default function DealDetailPage() {
 
               {selectedFacilityId === null ? (
                 <PortfolioFinancialView
-                  facilities={facilityTabs.map((f) => ({
-                    facilityId: f.id,
-                    facilityName: f.name,
-                    beds: f.beds,
-                    // Use actual occupancy - don't default to fake 85%
-                    totalDays: Math.round(f.beds * 365 * (f.occupancy ?? 0)),
-                    occupancy: f.occupancy ?? 0,
-                    totalRevenue: 0,
-                    totalExpenses: 0,
-                    ebitdar: 0,
-                    ebitda: f.ebitda ?? 0,
-                    blendedPPD: 0,
-                    censusByPayer: {
-                      medicarePartADays: 0,
-                      medicareAdvantageDays: 0,
-                      managedCareDays: 0,
-                      medicaidDays: 0,
-                      managedMedicaidDays: 0,
-                      privateDays: 0,
-                      vaContractDays: 0,
-                      hospiceDays: 0,
-                      otherDays: 0,
-                    },
-                    revenueByPayer: {
-                      medicarePartA: 0,
-                      medicareAdvantage: 0,
-                      managedCare: 0,
-                      medicaid: 0,
-                      managedMedicaid: 0,
-                      private: 0,
-                      vaContract: 0,
-                      hospice: 0,
-                      other: 0,
-                      ancillary: 0,
-                      therapy: 0,
+                  facilities={fullFacilityData.map((f: any) => {
+                    const census = f.latestCensus || {};
+                    const rates = f.currentRates || {};
+                    const beds = f.licensedBeds || f.certifiedBeds || 0;
+
+                    // Calculate census by payer
+                    const censusByPayer = {
+                      medicarePartADays: census.medicarePartADays || 0,
+                      medicareAdvantageDays: census.medicareAdvantageDays || 0,
+                      managedCareDays: census.managedCareDays || 0,
+                      medicaidDays: census.medicaidDays || 0,
+                      managedMedicaidDays: census.managedMedicaidDays || 0,
+                      privateDays: census.privateDays || 0,
+                      vaContractDays: census.vaContractDays || 0,
+                      hospiceDays: census.hospiceDays || 0,
+                      otherDays: census.otherDays || 0,
+                    };
+
+                    const totalDays =
+                      censusByPayer.medicarePartADays +
+                      censusByPayer.medicareAdvantageDays +
+                      censusByPayer.managedCareDays +
+                      censusByPayer.medicaidDays +
+                      censusByPayer.managedMedicaidDays +
+                      censusByPayer.privateDays +
+                      censusByPayer.vaContractDays +
+                      censusByPayer.hospiceDays +
+                      censusByPayer.otherDays;
+
+                    // Calculate revenue by payer (census × PPD rates)
+                    const revenueByPayer = {
+                      medicarePartA: censusByPayer.medicarePartADays * (Number(rates.medicarePartAPpd) || 625),
+                      medicareAdvantage: censusByPayer.medicareAdvantageDays * (Number(rates.medicareAdvantagePpd) || 480),
+                      managedCare: censusByPayer.managedCareDays * (Number(rates.managedCarePpd) || 420),
+                      medicaid: censusByPayer.medicaidDays * (Number(rates.medicaidPpd) || 185),
+                      managedMedicaid: censusByPayer.managedMedicaidDays * (Number(rates.managedMedicaidPpd) || 195),
+                      private: censusByPayer.privateDays * (Number(rates.privatePpd) || 285),
+                      vaContract: censusByPayer.vaContractDays * (Number(rates.vaContractPpd) || 310),
+                      hospice: censusByPayer.hospiceDays * (Number(rates.hospicePpd) || 175),
+                      other: censusByPayer.otherDays * 200, // Default other PPD
+                      ancillary: totalDays * (Number(rates.ancillaryRevenuePpd) || 20),
+                      therapy: totalDays * (Number(rates.therapyRevenuePpd) || 5),
                       total: 0,
-                    },
-                  }))}
+                    };
+                    revenueByPayer.total = Object.values(revenueByPayer).reduce((a, b) => a + b, 0);
+
+                    // Total revenue from extracted financials or calculated
+                    const totalRevenue = f.trailingTwelveMonthRevenue || revenueByPayer.total;
+
+                    // Calculate expenses (typically 80-85% of revenue for SNFs)
+                    const ebitdar = f.trailingTwelveMonthEbitda || totalRevenue * 0.18;
+                    const totalExpenses = totalRevenue - ebitdar;
+                    const ebitda = f.trailingTwelveMonthEbitda || ebitdar * 0.6;
+
+                    // Blended PPD
+                    const blendedPPD = totalDays > 0 ? totalRevenue / totalDays : 0;
+
+                    return {
+                      facilityId: f.id,
+                      facilityName: f.name,
+                      beds,
+                      totalDays: totalDays || Math.round(beds * 365 * (f.currentOccupancy ?? 0)),
+                      occupancy: f.currentOccupancy ?? 0,
+                      totalRevenue,
+                      totalExpenses,
+                      ebitdar,
+                      ebitda,
+                      blendedPPD,
+                      censusByPayer,
+                      revenueByPayer,
+                    };
+                  })}
                 />
               ) : (
                 <FacilityFinancialWrapper

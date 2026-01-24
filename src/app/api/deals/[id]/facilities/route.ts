@@ -29,17 +29,23 @@ export async function GET(
     // Enhance facilities with census, CMS, and financial data
     const enhancedFacilities = await Promise.all(
       dealFacilities.map(async (facility) => {
-        // Get latest census period
-        const latestCensus = await db.query.facilityCensusPeriods.findFirst({
-          where: eq(facilityCensusPeriods.facilityId, facility.id),
-          orderBy: [desc(facilityCensusPeriods.periodEnd)],
-        });
+        // Get latest census period using direct select
+        const censusPeriods = await db
+          .select()
+          .from(facilityCensusPeriods)
+          .where(eq(facilityCensusPeriods.facilityId, facility.id))
+          .orderBy(desc(facilityCensusPeriods.periodEnd))
+          .limit(1);
+        const latestCensus = censusPeriods[0] || null;
 
-        // Get current payer rates
-        const currentRates = await db.query.facilityPayerRates.findFirst({
-          where: eq(facilityPayerRates.facilityId, facility.id),
-          orderBy: [desc(facilityPayerRates.effectiveDate)],
-        });
+        // Get current payer rates using direct select
+        const payerRates = await db
+          .select()
+          .from(facilityPayerRates)
+          .where(eq(facilityPayerRates.facilityId, facility.id))
+          .orderBy(desc(facilityPayerRates.effectiveDate))
+          .limit(1);
+        const currentRates = payerRates[0] || null;
 
         // Calculate actual days in the period for accurate occupancy
         let currentOccupancy = 0;

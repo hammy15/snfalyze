@@ -117,9 +117,11 @@ export function ProformaEditor({
     for (let i = 0; i < projectionYears; i++) {
       const year = baseYear + i;
 
-      // Census & Days
+      // Census & Days - handle 0 baseline occupancy
       const occupancy = getOccupancyForYear(i);
-      const totalDays = Math.round(baselineData.totalDays * (occupancy / baselineData.occupancy));
+      const totalDays = baselineData.occupancy > 0
+        ? Math.round(baselineData.totalDays * (occupancy / baselineData.occupancy))
+        : 0;
 
       // Revenue growth (weighted average of rate increases)
       const revenueGrowth = i === 0 ? 1 : 1 + (
@@ -128,10 +130,12 @@ export function ProformaEditor({
         getAssumption('private_rate_increase') * 0.2
       );
 
-      // Revenue calculation
+      // Revenue calculation - handle 0 days case
       const revenue = i === 0
         ? baselineData.revenue
-        : years[i - 1].revenue * revenueGrowth * (totalDays / years[i - 1].totalDays);
+        : years[i - 1].totalDays > 0
+          ? years[i - 1].revenue * revenueGrowth * (totalDays / years[i - 1].totalDays)
+          : 0;
 
       // Expense growth (weighted)
       const expenseGrowth = i === 0 ? 1 : 1 + (
@@ -140,9 +144,12 @@ export function ProformaEditor({
         getAssumption('general_inflation') * 0.25
       );
 
+      // Expenses - handle 0 days case
       const expenses = i === 0
         ? baselineData.expenses
-        : years[i - 1].expenses * expenseGrowth * (totalDays / years[i - 1].totalDays) * 0.95; // Slight efficiency gain
+        : years[i - 1].totalDays > 0
+          ? years[i - 1].expenses * expenseGrowth * (totalDays / years[i - 1].totalDays) * 0.95 // Slight efficiency gain
+          : 0;
 
       // EBITDAR
       const ebitdar = revenue - expenses;

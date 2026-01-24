@@ -249,7 +249,9 @@ export function PPDRatesEditor({
                     {formatCurrency(row.revenue)}
                   </td>
                   <td className="py-2 px-3 text-right tabular-nums text-muted-foreground">
-                    {formatPercent(row.revenue / calculations.grandTotalRevenue)}
+                    {calculations.grandTotalRevenue > 0
+                      ? formatPercent(row.revenue / calculations.grandTotalRevenue)
+                      : '—'}
                   </td>
                 </tr>
               ))}

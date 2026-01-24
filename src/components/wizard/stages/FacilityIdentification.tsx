@@ -703,9 +703,14 @@ export function FacilityIdentification({ stageData, onUpdate }: FacilityIdentifi
 
                   {/* CMS lookup status message */}
                   {facility.cmsLookupStatus === 'not_found' && (
-                    <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg flex items-center gap-2 text-amber-700 dark:text-amber-400 text-sm">
-                      <AlertTriangle className="w-4 h-4" />
-                      Could not find this facility in CMS database. Data may be incomplete.
+                    <div className="p-3 bg-surface-100 dark:bg-surface-800 rounded-lg text-sm">
+                      <div className="flex items-center gap-2 text-surface-600 dark:text-surface-400">
+                        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                        <span>
+                          <strong>Not found in CMS database.</strong> This is normal for non-Medicare SNFs, ALFs, ILFs, or facilities with different names.
+                          You can manually enter data or search by CCN.
+                        </span>
+                      </div>
                     </div>
                   )}
 

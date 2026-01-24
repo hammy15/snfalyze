@@ -82,9 +82,9 @@ export async function GET(
           orderBy: [desc(financialPeriods.periodEnd)],
         });
 
-        // Sum up T12 EBITDA
+        // Sum up T12 EBITDAR (using ebitdar field from schema)
         const trailingTwelveMonthEbitda = t12Financials.reduce((sum, period) => {
-          return sum + (parseFloat(String(period.ebitda || 0)));
+          return sum + (parseFloat(String(period.ebitdar || 0)));
         }, 0);
 
         const trailingTwelveMonthRevenue = t12Financials.reduce((sum, period) => {

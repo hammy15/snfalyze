@@ -813,12 +813,13 @@ export default function DealDetailPage() {
                     facilityId: f.id,
                     facilityName: f.name,
                     beds: f.beds,
-                    totalDays: Math.round(f.beds * 365 * (f.occupancy || 0.85)),
-                    occupancy: f.occupancy || 0.85,
+                    // Use actual occupancy - don't default to fake 85%
+                    totalDays: Math.round(f.beds * 365 * (f.occupancy ?? 0)),
+                    occupancy: f.occupancy ?? 0,
                     totalRevenue: 0,
                     totalExpenses: 0,
                     ebitdar: 0,
-                    ebitda: f.ebitda || 0,
+                    ebitda: f.ebitda ?? 0,
                     blendedPPD: 0,
                     censusByPayer: {
                       medicarePartADays: 0,

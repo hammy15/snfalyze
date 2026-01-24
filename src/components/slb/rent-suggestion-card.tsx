@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { Settings, TrendingUp, Building2, AlertTriangle, CheckCircle } from 'lucide-react';
-import type { RentSuggestion, PortfolioRentSuggestion, SLBAssumptions } from '@/lib/sale-leaseback/auto-calculator';
-import { formatCurrency, formatPercent, formatCoverage, DEFAULT_ASSUMPTIONS } from '@/lib/sale-leaseback/auto-calculator';
+import type { RentSuggestion, PortfolioRentSuggestion, SLBAssumptions } from '@/lib/sale-leaseback/types';
+import { formatCurrency, formatPercent, formatCoverage, DEFAULT_ASSUMPTIONS } from '@/lib/sale-leaseback/types';
 
 interface RentSuggestionCardProps {
   portfolioData: PortfolioRentSuggestion | null;

@@ -61,15 +61,22 @@ const defaultPlLineItems: PLLineItem[] = [
   { coaCode: '7999', label: 'EBITDA', category: 'total', actual: 0, ppd: 0, isHighlighted: true },
 ];
 
-// Default proforma assumptions
+// Default proforma assumptions - must match keys expected by ProformaEditor
 const defaultAssumptions: ProformaAssumption[] = [
-  { key: 'revenue_growth_rate', label: 'Revenue Growth Rate', value: 0.03, category: 'revenue' },
-  { key: 'expense_inflation_rate', label: 'Expense Inflation Rate', value: 0.025, category: 'expense' },
-  { key: 'occupancy_target', label: 'Target Occupancy', value: 0.92, category: 'census' },
-  { key: 'medicare_rate_increase', label: 'Medicare Rate Increase', value: 0.03, category: 'growth' },
-  { key: 'medicaid_rate_increase', label: 'Medicaid Rate Increase', value: 0.015, category: 'growth' },
+  // Revenue growth rates
+  { key: 'medicare_rate_increase', label: 'Medicare Rate Increase', value: 0.03, category: 'revenue' },
+  { key: 'medicaid_rate_increase', label: 'Medicaid Rate Increase', value: 0.015, category: 'revenue' },
+  { key: 'private_rate_increase', label: 'Private Pay Rate Increase', value: 0.04, category: 'revenue' },
+  // Expense inflation
   { key: 'wage_increase', label: 'Wage Increase', value: 0.035, category: 'expense' },
-  { key: 'rent_escalation', label: 'Rent Escalation', value: 0.02, category: 'expense' },
+  { key: 'benefits_inflation', label: 'Benefits Inflation', value: 0.05, category: 'expense' },
+  { key: 'general_inflation', label: 'General Inflation', value: 0.025, category: 'expense' },
+  // Occupancy targets by year
+  { key: 'occupancy_target_y1', label: 'Occupancy Target Y1', value: 0.86, category: 'census' },
+  { key: 'occupancy_target_y3', label: 'Occupancy Target Y3', value: 0.90, category: 'census' },
+  { key: 'occupancy_target_y5', label: 'Occupancy Target Y5', value: 0.92, category: 'census' },
+  // Growth
+  { key: 'rent_escalation', label: 'Rent Escalation', value: 0.02, category: 'growth' },
 ];
 
 export function FacilityFinancialWrapper({
@@ -153,6 +160,15 @@ export function FacilityFinancialWrapper({
             if (ratesData.data.historicalRates) {
               setHistoricalRates(ratesData.data.historicalRates);
             }
+          }
+        }
+
+        // Fetch financial data (P&L from financial_periods)
+        const financialRes = await fetch(`/api/facilities/${facilityId}/financial?months=12`);
+        if (financialRes.ok) {
+          const financialData = await financialRes.json();
+          if (financialData.success && financialData.data?.plLineItems?.length > 0) {
+            setPlLineItems(financialData.data.plLineItems);
           }
         }
 

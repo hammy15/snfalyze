@@ -137,12 +137,12 @@ export function FacilityFinancialDashboard({
     const ebitdar = totalRevenue - totalExpenses;
     const ebitda = ebitdar - rent;
 
-    const avgOccupancy = totalBeds > 0 ? (totalPatientDays / 365) / totalBeds : 0.85;
+    const avgOccupancy = totalBeds > 0 && totalPatientDays > 0 ? (totalPatientDays / 365) / totalBeds : 0.85;
 
     return {
       year: new Date().getFullYear(),
       totalDays: totalPatientDays || totalBeds * 365 * 0.85,
-      occupancy: avgOccupancy,
+      occupancy: avgOccupancy || 0.85,
       revenue: totalRevenue || totalBeds * 365 * avgOccupancy * 280,
       expenses: totalExpenses || (totalRevenue || totalBeds * 365 * avgOccupancy * 280) * 0.82,
       ebitdar: ebitdar || (totalRevenue || totalBeds * 365 * avgOccupancy * 280) * 0.18,

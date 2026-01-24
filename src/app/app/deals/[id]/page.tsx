@@ -63,7 +63,7 @@ import {
 import { DealScoreCard } from '@/components/scoring';
 import { PortfolioFacilitiesOverview } from '@/components/deals/portfolio-facilities-overview';
 import { RentSuggestionCard } from '@/components/slb/rent-suggestion-card';
-import type { PortfolioRentSuggestion, SLBAssumptions } from '@/lib/sale-leaseback/auto-calculator';
+import type { PortfolioRentSuggestion, SLBAssumptions } from '@/lib/sale-leaseback/types';
 
 // Default deal data (used as fallback)
 const defaultDeal: Deal & { dealStructure?: string } = {

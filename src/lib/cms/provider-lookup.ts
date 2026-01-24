@@ -59,24 +59,66 @@ export interface ProviderSearchResult {
 }
 
 /**
+ * Get CCN from provider (handles both old and new field names)
+ */
+function getProviderCCN(provider: CMSProviderInfo): string {
+  return provider.cms_certification_number_ccn || provider.federal_provider_number || '';
+}
+
+/**
+ * Get city from provider (handles both old and new field names)
+ */
+function getProviderCity(provider: CMSProviderInfo): string {
+  return provider.citytown || provider.provider_city || '';
+}
+
+/**
+ * Get state from provider (handles both old and new field names)
+ */
+function getProviderState(provider: CMSProviderInfo): string {
+  return provider.state || provider.provider_state || '';
+}
+
+/**
+ * Get zip code from provider (handles both old and new field names)
+ */
+function getProviderZipCode(provider: CMSProviderInfo): string {
+  return provider.zip_code || provider.provider_zip_code || '';
+}
+
+/**
+ * Get phone number from provider (handles both old and new field names)
+ */
+function getProviderPhone(provider: CMSProviderInfo): string {
+  return provider.telephone_number || provider.provider_phone_number || '';
+}
+
+/**
+ * Get quality measure rating from provider (handles both old and new field names)
+ */
+function getProviderQMRating(provider: CMSProviderInfo): number | null {
+  return parseCMSInt(provider.qm_rating || provider.quality_measure_rating);
+}
+
+/**
  * Normalize CMS API response to our internal format
  */
 function normalizeProviderData(provider: CMSProviderInfo): NormalizedProviderData {
   return {
-    ccn: provider.federal_provider_number,
+    ccn: getProviderCCN(provider),
     providerName: provider.provider_name || '',
     address: provider.provider_address || '',
-    city: provider.provider_city || '',
-    state: provider.provider_state || '',
-    zipCode: provider.provider_zip_code || '',
-    phoneNumber: provider.provider_phone_number || '',
+    city: getProviderCity(provider),
+    state: getProviderState(provider),
+    zipCode: getProviderZipCode(provider),
+    phoneNumber: getProviderPhone(provider),
     ownershipType: provider.ownership_type || '',
     numberOfBeds: parseCMSInt(provider.number_of_certified_beds),
     averageResidentsPerDay: parseNumeric(provider.average_number_of_residents_per_day),
     overallRating: parseCMSInt(provider.overall_rating),
     healthInspectionRating: parseCMSInt(provider.health_inspection_rating),
     staffingRating: parseCMSInt(provider.staffing_rating),
-    qualityMeasureRating: parseCMSInt(provider.quality_measure_rating),
+    qualityMeasureRating: getProviderQMRating(provider),
     reportedRnHppd: parseNumeric(provider.reported_rn_staffing_hours_per_resident_per_day),
     reportedLpnHppd: parseNumeric(provider.reported_lpn_staffing_hours_per_resident_per_day),
     reportedCnaHppd: parseNumeric(provider.reported_nurse_aide_staffing_hours_per_resident_per_day),
@@ -236,10 +278,10 @@ export async function searchProvidersByName(
   const providers = await searchProviders(query, state, limit);
 
   return providers.map((p) => ({
-    ccn: p.federal_provider_number,
+    ccn: getProviderCCN(p),
     name: p.provider_name || '',
-    city: p.provider_city || '',
-    state: p.provider_state || '',
+    city: getProviderCity(p),
+    state: getProviderState(p),
     beds: parseCMSInt(p.number_of_certified_beds),
     overallRating: parseCMSInt(p.overall_rating),
     isSff: isSFF(p),
@@ -396,8 +438,9 @@ export async function matchExtractedFacilityToCMS(
       : nameSimilarity;
 
     // City match
-    const cityMatch = facility.city && provider.provider_city
-      ? stringSimilarity(facility.city.toLowerCase(), provider.provider_city.toLowerCase()) > 0.8
+    const providerCity = getProviderCity(provider);
+    const cityMatch = facility.city && providerCity
+      ? stringSimilarity(facility.city.toLowerCase(), providerCity.toLowerCase()) > 0.8
       : false;
 
     // Bed count similarity
@@ -420,7 +463,7 @@ export async function matchExtractedFacilityToCMS(
 
     const reasons: string[] = [];
     if (adjustedNameSimilarity > 0.7) reasons.push(`Name match: ${(adjustedNameSimilarity * 100).toFixed(0)}%`);
-    if (cityMatch) reasons.push(`City match: ${provider.provider_city}`);
+    if (cityMatch) reasons.push(`City match: ${providerCity}`);
     if (bedSimilarity > 0.7) reasons.push(`Bed count similar: ${provider.number_of_certified_beds}`);
 
     scoredResults.push({
@@ -452,7 +495,7 @@ export async function matchExtractedFacilityToCMS(
   }
 
   // Fetch full provider data if we have a good match
-  const fullProvider = await lookupProviderByCCN(bestMatch.provider.federal_provider_number);
+  const fullProvider = await lookupProviderByCCN(getProviderCCN(bestMatch.provider));
 
   if (!fullProvider) {
     return {

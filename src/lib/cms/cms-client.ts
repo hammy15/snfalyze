@@ -1,28 +1,28 @@
 /**
  * CMS Care Compare API Client
  *
- * Uses the CMS SOCRATA API to fetch nursing home quality data.
+ * Uses the CMS Provider Data API to fetch nursing home quality data.
  * Dataset: 4pq5-n9py (Provider Information)
  *
- * API Documentation: https://data.medicare.gov/developer
+ * API Documentation: https://data.cms.gov/provider-data/
  */
 
-const CMS_API_BASE = 'https://data.cms.gov/data-api/v1/dataset';
+const CMS_API_BASE = 'https://data.cms.gov/provider-data/api/1/datastore/query';
 const PROVIDER_INFO_DATASET = '4pq5-n9py'; // Nursing Home Provider Information
 const PENALTIES_DATASET = 'g6vv-u9sr'; // Nursing Home Penalties
 const HEALTH_DEFICIENCIES_DATASET = 'r5ix-sfxw'; // Health Deficiencies
 
 export interface CMSProviderInfo {
-  federal_provider_number: string; // CCN
+  // New API field names
+  cms_certification_number_ccn: string; // CCN
   provider_name: string;
   provider_address: string;
-  provider_city: string;
-  provider_state: string;
-  provider_zip_code: string;
-  provider_phone_number: string;
+  citytown: string; // was provider_city
+  state: string; // was provider_state
+  zip_code: string; // was provider_zip_code
+  telephone_number: string; // was provider_phone_number
   ownership_type: string;
   number_of_certified_beds: string;
-  number_of_residents_in_certified_beds: string;
   average_number_of_residents_per_day: string;
   provider_type: string;
   provider_resides_in_hospital: string;
@@ -30,7 +30,7 @@ export interface CMSProviderInfo {
   overall_rating: string;
   health_inspection_rating: string;
   staffing_rating: string;
-  quality_measure_rating: string;
+  qm_rating: string; // was quality_measure_rating
   location?: string;
   processing_date: string;
   // Staffing hours
@@ -50,17 +50,39 @@ export interface CMSProviderInfo {
   with_a_resident_and_family_council: string;
   special_focus_status: string;
   abuse_icon: string;
+  // Additional useful fields
+  chain_name?: string;
+  chain_id?: string;
+  countyparish?: string;
+  latitude?: string;
+  longitude?: string;
+  // Deficiency scores
+  rating_cycle_1_total_number_of_health_deficiencies?: string;
+  rating_cycle_1_standard_survey_health_date?: string;
+
+  // Legacy field aliases for backward compatibility
+  federal_provider_number?: string;
+  provider_city?: string;
+  provider_state?: string;
+  provider_zip_code?: string;
+  provider_phone_number?: string;
+  quality_measure_rating?: string;
 }
 
 export interface CMSPenalty {
-  federal_provider_number: string;
+  cms_certification_number_ccn: string;
   penalty_type: string;
   penalty_date: string;
   fine_amount: string;
+  payment_denial_length_in_days?: string;
+  payment_denial_start_date?: string;
+  provider_name?: string;
+  // Legacy alias
+  federal_provider_number?: string;
 }
 
 export interface CMSDeficiency {
-  federal_provider_number: string;
+  cms_certification_number_ccn: string;
   survey_date: string;
   deficiency_prefix: string;
   deficiency_tag_number: string;
@@ -68,6 +90,14 @@ export interface CMSDeficiency {
   scope_severity_code: string;
   deficiency_corrected: string;
   correction_date: string;
+  deficiency_category?: string;
+  complaint_deficiency?: string;
+  standard_deficiency?: string;
+  survey_type?: string;
+  inspection_cycle?: string;
+  provider_name?: string;
+  // Legacy alias
+  federal_provider_number?: string;
 }
 
 interface CacheEntry<T> {
@@ -92,17 +122,55 @@ function setCache<T>(key: string, data: T): void {
   cache.set(key, { data, timestamp: Date.now() });
 }
 
+interface CMSQueryCondition {
+  property: string;
+  value: string;
+  operator?: '=' | '!=' | '<' | '>' | '<=' | '>=';
+}
+
+interface CMSQueryParams {
+  conditions?: CMSQueryCondition[];
+  limit?: number;
+  offset?: number;
+  fulltext?: string;
+}
+
+interface CMSApiResponse<T> {
+  results: T[];
+  count: number;
+  schema?: Record<string, unknown>;
+  query?: Record<string, unknown>;
+}
+
 async function fetchCMSData<T>(
   dataset: string,
-  params: Record<string, string> = {}
+  params: CMSQueryParams = {}
 ): Promise<T[]> {
-  const searchParams = new URLSearchParams(params);
-  const url = `${CMS_API_BASE}/${dataset}/data?${searchParams.toString()}`;
+  const url = `${CMS_API_BASE}/${dataset}/0`;
+
+  const body: Record<string, unknown> = {
+    limit: params.limit || 100,
+  };
+
+  if (params.offset) {
+    body.offset = params.offset;
+  }
+
+  if (params.conditions && params.conditions.length > 0) {
+    body.conditions = params.conditions;
+  }
+
+  if (params.fulltext) {
+    body.fulltext = params.fulltext;
+  }
 
   const response = await fetch(url, {
+    method: 'POST',
     headers: {
       'Accept': 'application/json',
+      'Content-Type': 'application/json',
     },
+    body: JSON.stringify(body),
     next: { revalidate: 86400 }, // Cache for 24 hours in Next.js
   });
 
@@ -110,7 +178,26 @@ async function fetchCMSData<T>(
     throw new Error(`CMS API error: ${response.status} ${response.statusText}`);
   }
 
-  return response.json();
+  const data: CMSApiResponse<T> = await response.json();
+
+  // Add backward compatibility field aliases
+  return data.results.map(item => addLegacyFields(item as Record<string, unknown>) as T);
+}
+
+/**
+ * Add legacy field aliases for backward compatibility
+ */
+function addLegacyFields(item: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...item,
+    // Legacy field aliases
+    federal_provider_number: item.cms_certification_number_ccn,
+    provider_city: item.citytown,
+    provider_state: item.state,
+    provider_zip_code: item.zip_code,
+    provider_phone_number: item.telephone_number,
+    quality_measure_rating: item.qm_rating,
+  };
 }
 
 /**
@@ -125,8 +212,10 @@ export async function getProviderByCCN(ccn: string): Promise<CMSProviderInfo | n
 
   try {
     const results = await fetchCMSData<CMSProviderInfo>(PROVIDER_INFO_DATASET, {
-      'filter[federal_provider_number]': normalizedCCN,
-      'size': '1',
+      conditions: [
+        { property: 'cms_certification_number_ccn', value: normalizedCCN, operator: '=' }
+      ],
+      limit: 1,
     });
 
     if (results.length === 0) return null;
@@ -142,6 +231,8 @@ export async function getProviderByCCN(ccn: string): Promise<CMSProviderInfo | n
 
 /**
  * Search providers by name and/or state
+ * Uses state filter + local name filtering since the API's fulltext search
+ * doesn't reliably match provider names
  */
 export async function searchProviders(
   query: string,
@@ -153,22 +244,53 @@ export async function searchProviders(
   if (cached) return cached;
 
   try {
-    const params: Record<string, string> = {
-      'size': limit.toString(),
-    };
-
-    // Build keyword search
-    if (query) {
-      params['keyword'] = query;
-    }
+    const conditions: CMSQueryCondition[] = [];
 
     if (state) {
-      params['filter[provider_state]'] = state.toUpperCase();
+      conditions.push({ property: 'state', value: state.toUpperCase(), operator: '=' });
     }
 
-    const results = await fetchCMSData<CMSProviderInfo>(PROVIDER_INFO_DATASET, params);
-    setCache(cacheKey, results);
-    return results;
+    // Fetch a larger set to filter locally (API fulltext search is unreliable for names)
+    const fetchLimit = query ? Math.max(limit * 10, 200) : limit;
+
+    const results = await fetchCMSData<CMSProviderInfo>(PROVIDER_INFO_DATASET, {
+      conditions: conditions.length > 0 ? conditions : undefined,
+      limit: fetchLimit,
+    });
+
+    // Filter by name locally if query provided
+    let filtered = results;
+    if (query) {
+      const queryLower = query.toLowerCase();
+      filtered = results.filter(p =>
+        p.provider_name?.toLowerCase().includes(queryLower)
+      );
+    }
+
+    // Sort by name similarity (exact matches first, then starts-with, then contains)
+    if (query) {
+      const queryLower = query.toLowerCase();
+      filtered.sort((a, b) => {
+        const aName = a.provider_name?.toLowerCase() || '';
+        const bName = b.provider_name?.toLowerCase() || '';
+
+        const aExact = aName === queryLower;
+        const bExact = bName === queryLower;
+        if (aExact && !bExact) return -1;
+        if (bExact && !aExact) return 1;
+
+        const aStarts = aName.startsWith(queryLower);
+        const bStarts = bName.startsWith(queryLower);
+        if (aStarts && !bStarts) return -1;
+        if (bStarts && !aStarts) return 1;
+
+        return aName.localeCompare(bName);
+      });
+    }
+
+    const finalResults = filtered.slice(0, limit);
+    setCache(cacheKey, finalResults);
+    return finalResults;
   } catch (error) {
     console.error('Error searching providers:', error);
     return [];
@@ -187,8 +309,10 @@ export async function getProviderPenalties(ccn: string): Promise<CMSPenalty[]> {
 
   try {
     const results = await fetchCMSData<CMSPenalty>(PENALTIES_DATASET, {
-      'filter[federal_provider_number]': normalizedCCN,
-      'size': '100',
+      conditions: [
+        { property: 'cms_certification_number_ccn', value: normalizedCCN, operator: '=' }
+      ],
+      limit: 100,
     });
 
     setCache(cacheKey, results);
@@ -211,8 +335,10 @@ export async function getProviderDeficiencies(ccn: string): Promise<CMSDeficienc
 
   try {
     const results = await fetchCMSData<CMSDeficiency>(HEALTH_DEFICIENCIES_DATASET, {
-      'filter[federal_provider_number]': normalizedCCN,
-      'size': '500',
+      conditions: [
+        { property: 'cms_certification_number_ccn', value: normalizedCCN, operator: '=' }
+      ],
+      limit: 500,
     });
 
     setCache(cacheKey, results);

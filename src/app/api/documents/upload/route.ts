@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, documents, deals, extractionClarifications } from '@/db';
+import { db, documents, deals, extractionClarifications, facilities, financialPeriods, facilityCensusPeriods, facilityPayerRates } from '@/db';
 import { eq } from 'drizzle-orm';
 import { classifyDocument, extractFinancialValues } from '@/lib/documents/processor';
 import { analyzeDocument, type DocumentAnalysisResult } from '@/lib/documents/ai-analyzer';
+import { extractPLData } from '@/lib/extraction/pl-extractor';
+import { extractCensusData } from '@/lib/extraction/census-extractor';
+import { extractRatesFromText, extractRatesFromTable } from '@/lib/extraction/rate-extractor';
 import pdfParse from 'pdf-parse';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
@@ -173,6 +176,7 @@ async function processDocument(documentId: string, file: File) {
     // Extract financial values using regex patterns
     const extractedValues = extractFinancialValues(rawText);
     extractedData = {
+      ...extractedData,  // Preserve sheets data from Excel parsing
       values: extractedValues,
       documentType,
     };
@@ -232,16 +236,37 @@ async function processDocument(documentId: string, file: File) {
       }
     }
 
-    // Mark as complete
+    // Mark as complete (basic processing done)
     await db
       .update(documents)
       .set({
-        status: 'complete',
+        status: 'extracting',
         rawText,
         extractedData,
         processedAt: new Date(),
       })
       .where(eq(documents.id, documentId));
+
+    // Run deep extraction to populate financial_periods, census, and rates tables
+    const deepExtractionResult = await runDeepExtraction(
+      documentId,
+      extractedData.sheets,
+      rawText
+    );
+
+    // Update with deep extraction results
+    await db
+      .update(documents)
+      .set({
+        status: 'complete',
+        extractedData: {
+          ...extractedData,
+          deepExtraction: deepExtractionResult,
+        },
+      })
+      .where(eq(documents.id, documentId));
+
+    console.log(`Deep extraction complete for ${documentId}:`, deepExtractionResult);
   } catch (error) {
     console.error('Error processing document:', error);
 
@@ -253,4 +278,291 @@ async function processDocument(documentId: string, file: File) {
       })
       .where(eq(documents.id, documentId));
   }
+}
+
+/**
+ * Classify sheet type based on content
+ */
+function classifySheetType(data: any[][]): 'pl' | 'census' | 'rates' | 'unknown' {
+  if (!data || data.length < 2) return 'unknown';
+
+  const sampleText = data
+    .slice(0, 30)
+    .flat()
+    .filter(c => c != null)
+    .map(c => String(c).toLowerCase())
+    .join(' ');
+
+  // P&L indicators
+  if (
+    (sampleText.includes('revenue') && sampleText.includes('expense')) ||
+    sampleText.includes('ebitda') ||
+    sampleText.includes('income statement') ||
+    sampleText.includes('p&l')
+  ) {
+    return 'pl';
+  }
+
+  // Census indicators
+  if (
+    sampleText.includes('patient days') ||
+    sampleText.includes('census') ||
+    (sampleText.includes('medicare') && sampleText.includes('days'))
+  ) {
+    return 'census';
+  }
+
+  // Rate indicators
+  if (
+    sampleText.includes('ppd') ||
+    sampleText.includes('per diem') ||
+    (sampleText.includes('rate') && sampleText.includes('payer'))
+  ) {
+    return 'rates';
+  }
+
+  return 'unknown';
+}
+
+/**
+ * Run deep extraction on document sheets to populate database tables
+ */
+async function runDeepExtraction(
+  documentId: string,
+  sheets: Record<string, any[][]> | undefined,
+  rawText: string
+): Promise<{
+  financialPeriodsCreated: number;
+  censusPeriodsCreated: number;
+  payerRatesCreated: number;
+  sheetsProcessed: number;
+  warnings: string[];
+}> {
+  const result = {
+    financialPeriodsCreated: 0,
+    censusPeriodsCreated: 0,
+    payerRatesCreated: 0,
+    sheetsProcessed: 0,
+    warnings: [] as string[],
+  };
+
+  // Get document to find dealId
+  const [document] = await db
+    .select()
+    .from(documents)
+    .where(eq(documents.id, documentId))
+    .limit(1);
+
+  if (!document?.dealId) {
+    result.warnings.push('No deal associated with document');
+    return result;
+  }
+
+  // Get facility for this deal (use first facility if multiple)
+  const [facility] = await db
+    .select()
+    .from(facilities)
+    .where(eq(facilities.dealId, document.dealId))
+    .limit(1);
+
+  if (!facility) {
+    result.warnings.push('No facility found for deal');
+    return result;
+  }
+
+  // Process Excel sheets
+  if (sheets && Object.keys(sheets).length > 0) {
+    for (const [sheetName, sheetData] of Object.entries(sheets)) {
+      if (!Array.isArray(sheetData) || sheetData.length < 2) continue;
+
+      const sheetType = classifySheetType(sheetData);
+      result.sheetsProcessed++;
+
+      try {
+        switch (sheetType) {
+          case 'pl': {
+            const plData = extractPLData(sheetData, sheetName, []);
+            for (const period of plData) {
+              try {
+                await db.insert(financialPeriods).values({
+                  dealId: document.dealId,
+                  facilityId: facility.id,
+                  periodStart: period.periodStart.toISOString().split('T')[0],
+                  periodEnd: period.periodEnd.toISOString().split('T')[0],
+                  isAnnualized: period.isAnnualized,
+                  totalRevenue: period.totalRevenue.toFixed(2),
+                  medicareRevenue: period.medicareRevenue?.toFixed(2),
+                  medicaidRevenue: period.medicaidRevenue?.toFixed(2),
+                  managedCareRevenue: period.managedCareRevenue?.toFixed(2),
+                  privatePayRevenue: period.privatePayRevenue?.toFixed(2),
+                  otherRevenue: period.otherRevenue?.toFixed(2),
+                  totalExpenses: period.totalExpenses.toFixed(2),
+                  laborCost: period.totalLaborCost?.toFixed(2),
+                  agencyLabor: period.agencyLabor?.toFixed(2),
+                  foodCost: period.foodCost?.toFixed(2),
+                  suppliesCost: period.suppliesCost?.toFixed(2),
+                  utilitiesCost: period.utilitiesCost?.toFixed(2),
+                  insuranceCost: period.insuranceCost?.toFixed(2),
+                  managementFee: period.managementFee?.toFixed(2),
+                  otherExpenses: period.otherExpenses?.toFixed(2),
+                  noi: period.noi?.toFixed(2),
+                  ebitdar: period.ebitdar?.toFixed(2),
+                  source: 'extracted',
+                  sourceDocumentId: documentId,
+                });
+                result.financialPeriodsCreated++;
+              } catch (err: any) {
+                if (err.code !== '23505') {
+                  result.warnings.push(`Error inserting financial period: ${err.message}`);
+                }
+              }
+            }
+            break;
+          }
+
+          case 'census': {
+            const censusData = extractCensusData(sheetData, sheetName, []);
+            for (const census of censusData) {
+              try {
+                await db.insert(facilityCensusPeriods).values({
+                  facilityId: facility.id,
+                  periodStart: census.periodStart.toISOString().split('T')[0],
+                  periodEnd: census.periodEnd.toISOString().split('T')[0],
+                  medicarePartADays: census.medicarePartADays,
+                  medicareAdvantageDays: census.medicareAdvantageDays,
+                  managedCareDays: census.managedCareDays,
+                  medicaidDays: census.medicaidDays,
+                  managedMedicaidDays: census.managedMedicaidDays,
+                  privateDays: census.privateDays,
+                  vaContractDays: census.vaContractDays,
+                  hospiceDays: census.hospiceDays,
+                  otherDays: census.otherDays,
+                  totalBeds: census.totalBeds || facility.licensedBeds || facility.certifiedBeds,
+                  occupancyRate: census.occupancyRate?.toString(),
+                  source: 'extracted',
+                });
+                result.censusPeriodsCreated++;
+              } catch (err: any) {
+                if (err.code !== '23505') {
+                  result.warnings.push(`Error inserting census period: ${err.message}`);
+                }
+              }
+            }
+            break;
+          }
+
+          case 'rates': {
+            const rateData = extractRatesFromTable(sheetData, documentId, []);
+            for (const rate of rateData) {
+              try {
+                await db.insert(facilityPayerRates).values({
+                  facilityId: facility.id,
+                  effectiveDate: rate.effectiveDate.toISOString().split('T')[0],
+                  medicarePartAPpd: rate.medicarePartAPpd?.toFixed(2),
+                  medicareAdvantagePpd: rate.medicareAdvantagePpd?.toFixed(2),
+                  managedCarePpd: rate.managedCarePpd?.toFixed(2),
+                  medicaidPpd: rate.medicaidPpd?.toFixed(2),
+                  managedMedicaidPpd: rate.managedMedicaidPpd?.toFixed(2),
+                  privatePpd: rate.privatePpd?.toFixed(2),
+                  vaContractPpd: rate.vaContractPpd?.toFixed(2),
+                  hospicePpd: rate.hospicePpd?.toFixed(2),
+                  ancillaryRevenuePpd: rate.ancillaryRevenuePpd?.toFixed(2),
+                  therapyRevenuePpd: rate.therapyRevenuePpd?.toFixed(2),
+                  source: 'extracted',
+                });
+                result.payerRatesCreated++;
+              } catch (err: any) {
+                if (err.code !== '23505') {
+                  result.warnings.push(`Error inserting payer rate: ${err.message}`);
+                }
+              }
+            }
+            break;
+          }
+
+          default: {
+            // Try to extract any recognizable data from unknown sheets
+            const plData = extractPLData(sheetData, sheetName, []);
+            const censusData = extractCensusData(sheetData, sheetName, []);
+
+            for (const period of plData) {
+              try {
+                await db.insert(financialPeriods).values({
+                  dealId: document.dealId,
+                  facilityId: facility.id,
+                  periodStart: period.periodStart.toISOString().split('T')[0],
+                  periodEnd: period.periodEnd.toISOString().split('T')[0],
+                  isAnnualized: period.isAnnualized,
+                  totalRevenue: period.totalRevenue.toFixed(2),
+                  totalExpenses: period.totalExpenses.toFixed(2),
+                  ebitdar: period.ebitdar?.toFixed(2),
+                  source: 'extracted',
+                  sourceDocumentId: documentId,
+                });
+                result.financialPeriodsCreated++;
+              } catch (err: any) {
+                if (err.code !== '23505') {
+                  // Ignore duplicate errors
+                }
+              }
+            }
+
+            for (const census of censusData) {
+              try {
+                await db.insert(facilityCensusPeriods).values({
+                  facilityId: facility.id,
+                  periodStart: census.periodStart.toISOString().split('T')[0],
+                  periodEnd: census.periodEnd.toISOString().split('T')[0],
+                  medicarePartADays: census.medicarePartADays,
+                  medicaidDays: census.medicaidDays,
+                  privateDays: census.privateDays,
+                  totalBeds: facility.licensedBeds || facility.certifiedBeds,
+                  source: 'extracted',
+                });
+                result.censusPeriodsCreated++;
+              } catch (err: any) {
+                if (err.code !== '23505') {
+                  // Ignore duplicate errors
+                }
+              }
+            }
+            break;
+          }
+        }
+      } catch (err) {
+        result.warnings.push(`Error processing sheet "${sheetName}": ${err instanceof Error ? err.message : 'Unknown'}`);
+      }
+    }
+  }
+
+  // Also extract rates from PDF text if available
+  if (rawText && rawText.length > 100 && !rawText.startsWith('[Error')) {
+    const pdfRates = extractRatesFromText(rawText, documentId, []);
+    for (const rate of pdfRates) {
+      try {
+        await db.insert(facilityPayerRates).values({
+          facilityId: facility.id,
+          effectiveDate: rate.effectiveDate.toISOString().split('T')[0],
+          medicarePartAPpd: rate.medicarePartAPpd?.toFixed(2),
+          medicareAdvantagePpd: rate.medicareAdvantagePpd?.toFixed(2),
+          managedCarePpd: rate.managedCarePpd?.toFixed(2),
+          medicaidPpd: rate.medicaidPpd?.toFixed(2),
+          managedMedicaidPpd: rate.managedMedicaidPpd?.toFixed(2),
+          privatePpd: rate.privatePpd?.toFixed(2),
+          vaContractPpd: rate.vaContractPpd?.toFixed(2),
+          hospicePpd: rate.hospicePpd?.toFixed(2),
+          ancillaryRevenuePpd: rate.ancillaryRevenuePpd?.toFixed(2),
+          therapyRevenuePpd: rate.therapyRevenuePpd?.toFixed(2),
+          source: 'rate_letter',
+        });
+        result.payerRatesCreated++;
+      } catch (err: any) {
+        if (err.code !== '23505') {
+          result.warnings.push(`Error inserting PDF rate: ${err.message}`);
+        }
+      }
+    }
+  }
+
+  return result;
 }

@@ -71,15 +71,105 @@ export function FinancialConsolidation({ stageData, onUpdate, dealId }: Financia
   const [generatingProforma, setGeneratingProforma] = useState(false);
   const [proformaGenerated, setProformaGenerated] = useState(false);
 
-  // Load financial data
+  // Load financial data from extraction or API
   useEffect(() => {
     const loadData = async () => {
+      setLoading(true);
+
+      // First, try to load from extraction data (available before deal is created)
+      const extraction = (stageData as any).extraction;
+      const facilities = stageData.facilityIdentification?.facilities || [];
+
+      if (extraction && extraction.summary) {
+        // Build data from extraction
+        const extractionFacilities = extraction.facilities || [];
+
+        // Build census data from extraction
+        const censusFromExtraction: CensusData[] = facilities.map((f: any, idx: number) => {
+          const extractedFacility = extractionFacilities.find(
+            (ef: any) => ef.name?.toLowerCase().includes(f.name?.toLowerCase()) ||
+                        f.name?.toLowerCase().includes(ef.name?.toLowerCase())
+          ) || extractionFacilities[idx];
+
+          return {
+            facilityId: `facility-${idx}`,
+            facilityName: f.name || `Facility ${idx + 1}`,
+            licensedBeds: f.licensedBeds || extractedFacility?.metrics?.licensedBeds || 100,
+            averageDailyCensus: extractedFacility?.metrics?.avgDailyCensus || (f.licensedBeds || 100) * 0.85,
+            occupancyRate: extractedFacility?.metrics?.occupancyRate ? extractedFacility.metrics.occupancyRate / 100 : 0.85,
+            isVerified: f.isVerified || false,
+          };
+        });
+        setCensusData(censusFromExtraction);
+
+        // Build PPD data from extraction
+        const ppdFromExtraction: PPDData[] = facilities.map((f: any, idx: number) => {
+          const extractedFacility = extractionFacilities.find(
+            (ef: any) => ef.name?.toLowerCase().includes(f.name?.toLowerCase()) ||
+                        f.name?.toLowerCase().includes(ef.name?.toLowerCase())
+          ) || extractionFacilities[idx];
+
+          return {
+            facilityId: `facility-${idx}`,
+            facilityName: f.name || `Facility ${idx + 1}`,
+            revenuePpd: extractedFacility?.metrics?.revenuePPD || 350,
+            laborPpd: extractedFacility?.metrics?.laborPPD || 180,
+            expensesPpd: extractedFacility?.metrics?.expensePPD || 300,
+            noiPpd: (extractedFacility?.metrics?.revenuePPD || 350) - (extractedFacility?.metrics?.expensePPD || 300),
+          };
+        });
+        setPpdData(ppdFromExtraction);
+
+        // Build P&L from extraction summary
+        const totalRevenue = extraction.summary.totalRevenue || 0;
+        const totalExpenses = extraction.summary.totalExpenses || 0;
+        const totalNoi = extraction.summary.totalNOI || (totalRevenue - totalExpenses);
+        const totalBeds = facilities.reduce((sum: number, f: any) => sum + (f.licensedBeds || 100), 0);
+
+        setRollup({
+          totalRevenue,
+          totalExpenses,
+          totalNoi,
+          noiMargin: totalRevenue > 0 ? (totalNoi / totalRevenue) * 100 : 0,
+          totalBeds,
+          averageOccupancy: extraction.summary.avgOccupancy || 85,
+        });
+
+        // Build facility P&L
+        const facilityPnlFromExtraction: FacilityPnL[] = facilities.map((f: any, idx: number) => {
+          const extractedFacility = extractionFacilities.find(
+            (ef: any) => ef.name?.toLowerCase().includes(f.name?.toLowerCase()) ||
+                        f.name?.toLowerCase().includes(ef.name?.toLowerCase())
+          ) || extractionFacilities[idx];
+
+          const facilityRevenue = extractedFacility?.metrics?.netOperatingIncome
+            ? (extractedFacility.metrics.netOperatingIncome / (extractedFacility.metrics.ebitdaMargin || 0.15))
+            : totalRevenue / Math.max(facilities.length, 1);
+          const facilityNoi = extractedFacility?.metrics?.netOperatingIncome || totalNoi / Math.max(facilities.length, 1);
+          const facilityExpenses = facilityRevenue - facilityNoi;
+
+          return {
+            facilityId: `facility-${idx}`,
+            facilityName: f.name || `Facility ${idx + 1}`,
+            revenue: facilityRevenue,
+            expenses: facilityExpenses,
+            noi: facilityNoi,
+            margin: facilityRevenue > 0 ? (facilityNoi / facilityRevenue) * 100 : 0,
+          };
+        });
+        setFacilityPnl(facilityPnlFromExtraction);
+
+        setLoading(false);
+        return;
+      }
+
+      // If no extraction data and no dealId, show empty state
       if (!dealId) {
         setLoading(false);
         return;
       }
 
-      setLoading(true);
+      // Load from API if dealId exists
       try {
         // Load census
         const censusRes = await fetch(`/api/deals/${dealId}/financial/census`);
@@ -142,7 +232,7 @@ export function FinancialConsolidation({ stageData, onUpdate, dealId }: Financia
     };
 
     loadData();
-  }, [dealId, stageData.financialConsolidation]);
+  }, [dealId, stageData]);
 
   // Sync to parent
   useEffect(() => {

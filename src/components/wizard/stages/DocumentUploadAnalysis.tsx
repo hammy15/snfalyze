@@ -332,8 +332,33 @@ export function DocumentUploadAnalysis({
     };
 
     // IMPORTANT: Save extraction data for COA mapping stage
+    // Only save essential data to avoid 413 Request Too Large errors
     if (analysis.extraction) {
-      (stageDataUpdate as any).extraction = analysis.extraction;
+      // Limit lineItems to first 500 to avoid payload size issues
+      const limitedLineItems = analysis.extraction.lineItems?.slice(0, 500) || [];
+
+      (stageDataUpdate as any).extraction = {
+        facilities: analysis.extraction.facilities,
+        lineItems: limitedLineItems.map(item => ({
+          // Only keep essential fields for COA mapping
+          category: item.category,
+          label: item.label,
+          originalLabel: item.originalLabel,
+          coaCode: item.coaCode,
+          coaName: item.coaName,
+          annualized: item.annualized,
+          facility: item.facility,
+          confidence: item.confidence,
+        })),
+        summary: analysis.extraction.summary,
+        metadata: {
+          extractedAt: analysis.extraction.metadata.extractedAt,
+          filesProcessed: analysis.extraction.metadata.filesProcessed,
+          mappedItems: analysis.extraction.metadata.mappedItems,
+          unmappedItems: analysis.extraction.metadata.unmappedItems,
+          // Don't save totalRowsProcessed as it's not essential
+        },
+      };
     }
 
     onUpdate(stageDataUpdate);

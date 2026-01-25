@@ -1,11 +1,15 @@
 /**
  * P&L / Income Statement Extractor
  *
- * Extracts financial period data including:
- * - Revenue by payer type
- * - Operating expenses by category
- * - EBITDAR/EBITDA calculations
- * - Per-patient-day (PPD) metrics
+ * UPDATED: Handles hierarchical accounting P&L format where:
+ * - EBITDAR, EBITDA, Net Income appear as category headers at TOP (no values)
+ * - Actual calculated values appear at the BOTTOM of the sheet
+ * - Summary rows like "Total Operating Revenue", "Total Operating Expense" have values
+ *
+ * Extraction strategy:
+ * 1. Find date columns by scanning first 20 rows for date patterns
+ * 2. Scan ENTIRE sheet for rows that have BOTH matching labels AND numeric values
+ * 3. Prioritize rows at the BOTTOM of the sheet for calculated metrics
  */
 
 // ============================================================================
@@ -54,6 +58,7 @@ export interface FinancialPeriod {
   ebitdar: number;
   rent: number;
   ebitda: number;
+  netIncome: number;
   noi: number;
 
   // Per-Day Metrics
@@ -74,424 +79,254 @@ export interface FinancialPeriod {
   confidence: number;
 }
 
-// Type for numeric fields in FinancialPeriod
-type NumericFinancialField =
-  | 'totalRevenue' | 'medicareRevenue' | 'medicaidRevenue' | 'managedCareRevenue'
-  | 'privatePayRevenue' | 'ancillaryRevenue' | 'otherRevenue'
-  | 'totalLaborCost' | 'nursingLabor' | 'dietaryLabor' | 'housekeepingLabor'
-  | 'administrationLabor' | 'therapyLabor' | 'agencyLabor' | 'employeeBenefits'
-  | 'foodCost' | 'suppliesCost' | 'utilitiesCost' | 'insuranceCost'
-  | 'propertyTax' | 'managementFee' | 'otherExpenses'
-  | 'totalExpenses' | 'ebitdar' | 'rent' | 'ebitda' | 'noi';
-
-/**
- * Type-safe setter for numeric financial period fields
- */
-function setFinancialFieldValue(period: FinancialPeriod, field: keyof FinancialPeriod, value: number): void {
-  switch (field) {
-    case 'totalRevenue': period.totalRevenue = value; break;
-    case 'medicareRevenue': period.medicareRevenue = value; break;
-    case 'medicaidRevenue': period.medicaidRevenue = value; break;
-    case 'managedCareRevenue': period.managedCareRevenue = value; break;
-    case 'privatePayRevenue': period.privatePayRevenue = value; break;
-    case 'ancillaryRevenue': period.ancillaryRevenue = value; break;
-    case 'otherRevenue': period.otherRevenue = value; break;
-    case 'totalLaborCost': period.totalLaborCost = value; break;
-    case 'nursingLabor': period.nursingLabor = value; break;
-    case 'dietaryLabor': period.dietaryLabor = value; break;
-    case 'housekeepingLabor': period.housekeepingLabor = value; break;
-    case 'administrationLabor': period.administrationLabor = value; break;
-    case 'therapyLabor': period.therapyLabor = value; break;
-    case 'agencyLabor': period.agencyLabor = value; break;
-    case 'employeeBenefits': period.employeeBenefits = value; break;
-    case 'foodCost': period.foodCost = value; break;
-    case 'suppliesCost': period.suppliesCost = value; break;
-    case 'utilitiesCost': period.utilitiesCost = value; break;
-    case 'insuranceCost': period.insuranceCost = value; break;
-    case 'propertyTax': period.propertyTax = value; break;
-    case 'managementFee': period.managementFee = value; break;
-    case 'otherExpenses': period.otherExpenses = value; break;
-    case 'totalExpenses': period.totalExpenses = value; break;
-    case 'ebitdar': period.ebitdar = value; break;
-    case 'rent': period.rent = value; break;
-    case 'ebitda': period.ebitda = value; break;
-    case 'noi': period.noi = value; break;
-    // Non-numeric fields - ignore
-    default: break;
-  }
-}
-
-/**
- * Get numeric field value from financial period
- */
-function getFinancialFieldValue(period: FinancialPeriod, field: keyof FinancialPeriod): number {
-  switch (field) {
-    case 'totalRevenue': return period.totalRevenue;
-    case 'medicareRevenue': return period.medicareRevenue;
-    case 'medicaidRevenue': return period.medicaidRevenue;
-    case 'managedCareRevenue': return period.managedCareRevenue;
-    case 'privatePayRevenue': return period.privatePayRevenue;
-    case 'ancillaryRevenue': return period.ancillaryRevenue;
-    case 'otherRevenue': return period.otherRevenue;
-    case 'totalLaborCost': return period.totalLaborCost;
-    case 'nursingLabor': return period.nursingLabor;
-    case 'dietaryLabor': return period.dietaryLabor;
-    case 'housekeepingLabor': return period.housekeepingLabor;
-    case 'administrationLabor': return period.administrationLabor;
-    case 'therapyLabor': return period.therapyLabor;
-    case 'agencyLabor': return period.agencyLabor;
-    case 'employeeBenefits': return period.employeeBenefits;
-    case 'foodCost': return period.foodCost;
-    case 'suppliesCost': return period.suppliesCost;
-    case 'utilitiesCost': return period.utilitiesCost;
-    case 'insuranceCost': return period.insuranceCost;
-    case 'propertyTax': return period.propertyTax;
-    case 'managementFee': return period.managementFee;
-    case 'otherExpenses': return period.otherExpenses;
-    case 'totalExpenses': return period.totalExpenses;
-    case 'ebitdar': return period.ebitdar;
-    case 'rent': return period.rent;
-    case 'ebitda': return period.ebitda;
-    case 'noi': return period.noi;
-    default: return 0;
-  }
-}
-
-/**
- * Add value to a numeric field (for component fields)
- */
-function addToFinancialField(period: FinancialPeriod, field: keyof FinancialPeriod, value: number): void {
-  const currentValue = getFinancialFieldValue(period, field);
-  setFinancialFieldValue(period, field, currentValue + value);
-}
-
 // ============================================================================
-// LINE ITEM PATTERNS
+// SUMMARY ROW PATTERNS (for rows at bottom of sheet with totals)
 // ============================================================================
 
-interface LineItemPattern {
-  category: 'revenue' | 'labor' | 'nonlabor' | 'calculated';
+interface SummaryPattern {
   field: keyof FinancialPeriod;
   patterns: RegExp[];
+  priority: 'high' | 'medium' | 'low';  // higher priority overrides lower
 }
 
-const LINE_ITEM_PATTERNS: LineItemPattern[] = [
-  // Revenue patterns
+// These patterns match summary rows that have ACTUAL values
+const SUMMARY_PATTERNS: SummaryPattern[] = [
+  // EBITDAR - look for exact match or variations
   {
-    category: 'revenue',
+    field: 'ebitdar',
+    patterns: [
+      /^ebitdar$/i,
+      /^total\s+ebitdar$/i,
+      /ebitdar\s*[:\-\|]\s*$/i,
+      /net\s+operating\s+income\s+before\s+rent/i,
+      /operating\s+income\s+before\s+rent/i,
+    ],
+    priority: 'high',
+  },
+  // EBITDA
+  {
+    field: 'ebitda',
+    patterns: [
+      /^ebitda$/i,
+      /^total\s+ebitda$/i,
+      /ebitda\s*[:\-\|]\s*$/i,
+      /net\s+operating\s+income\s+after\s+rent/i,
+      /operating\s+income\s+after\s+rent/i,
+    ],
+    priority: 'high',
+  },
+  // Net Income
+  {
+    field: 'netIncome',
+    patterns: [
+      /^net\s+income$/i,
+      /^total\s+net\s+income$/i,
+      /net\s+income\s*[:\-\|]\s*$/i,
+      /^income\s+\(loss\)$/i,
+      /net\s+profit/i,
+    ],
+    priority: 'high',
+  },
+  // Total Operating Revenue
+  {
     field: 'totalRevenue',
     patterns: [
-      /total\s+(patient\s+)?revenue/i,
-      /gross\s+revenue/i,
-      /net\s+patient\s+revenue/i,
-      /total\s+income/i,
-      /^revenue$/i,
-      /total\s+net\s+revenue/i,
-      /operating\s+revenue/i,
-      /patient\s+service\s+revenue/i,
-      /net\s+revenue/i,
-      /facility\s+revenue/i,
+      /^total\s+operating\s+revenue$/i,
+      /^total\s+revenue$/i,
+      /^total\s+net\s+revenue$/i,
+      /^total\s+patient\s+revenue$/i,
+      /^gross\s+revenue$/i,
+      /^net\s+patient\s+revenue$/i,
+      /total\s+revenue\s*[:\-\|]\s*$/i,
     ],
+    priority: 'high',
   },
+  // Total Operating Expense
   {
-    category: 'revenue',
+    field: 'totalExpenses',
+    patterns: [
+      /^total\s+operating\s+expense$/i,
+      /^total\s+expense(s)?$/i,
+      /^total\s+operating\s+cost$/i,
+      /^total\s+cost$/i,
+      /total\s+expense\s*[:\-\|]\s*$/i,
+    ],
+    priority: 'high',
+  },
+  // Total Rent Expense
+  {
+    field: 'rent',
+    patterns: [
+      /^total\s+rent\s+expense$/i,
+      /^rent\s+expense$/i,
+      /^building\s+rent$/i,
+      /^facility\s+rent$/i,
+      /^lease\s+expense$/i,
+      /rent\s*[:\-\|]\s*$/i,
+    ],
+    priority: 'high',
+  },
+  // Medicare Revenue
+  {
     field: 'medicareRevenue',
     patterns: [
-      /medicare\s+revenue/i,
-      /revenue[:\s-]+medicare/i,
-      /medicare\s+part\s+a\s+revenue/i,
-      /skilled\s+medicare\s+revenue/i,
+      /medicare\s+(part\s+a\s+)?revenue/i,
+      /^medicare$/i,
+      /skilled\s+nursing\s+medicare/i,
     ],
+    priority: 'medium',
   },
+  // Medicaid Revenue
   {
-    category: 'revenue',
     field: 'medicaidRevenue',
     patterns: [
       /medicaid\s+revenue/i,
-      /revenue[:\s-]+medicaid/i,
-      /title\s+xix\s+revenue/i,
+      /^medicaid$/i,
+      /state\s+medicaid/i,
     ],
+    priority: 'medium',
   },
+  // Private Pay Revenue
   {
-    category: 'revenue',
-    field: 'managedCareRevenue',
-    patterns: [
-      /managed\s+care\s+revenue/i,
-      /commercial\s+revenue/i,
-      /insurance\s+revenue/i,
-      /hmo\/ppo\s+revenue/i,
-    ],
-  },
-  {
-    category: 'revenue',
     field: 'privatePayRevenue',
     patterns: [
       /private\s+(pay\s+)?revenue/i,
-      /self[\s-]?pay\s+revenue/i,
+      /^private$/i,
+      /self[\s-]?pay/i,
     ],
+    priority: 'medium',
   },
+  // Managed Care Revenue
   {
-    category: 'revenue',
-    field: 'ancillaryRevenue',
+    field: 'managedCareRevenue',
     patterns: [
-      /ancillary\s+revenue/i,
-      /therapy\s+revenue/i,
-      /rehab\s+revenue/i,
-      /other\s+patient\s+revenue/i,
+      /managed\s+care/i,
+      /^hmo$/i,
+      /commercial\s+insurance/i,
     ],
+    priority: 'medium',
   },
-
-  // Labor expense patterns
+  // Total Labor
   {
-    category: 'labor',
     field: 'totalLaborCost',
     patterns: [
-      /total\s+(labor|salaries|wages|payroll)/i,
-      /labor\s+expense/i,
-      /payroll\s+expense/i,
-      /personnel\s+expense/i,
+      /^total\s+(labor|salaries|wages|payroll)/i,
+      /^labor\s+expense$/i,
+      /^personnel\s+expense$/i,
+      /^total\s+personnel$/i,
     ],
+    priority: 'medium',
   },
+  // Nursing Labor
   {
-    category: 'labor',
     field: 'nursingLabor',
     patterns: [
-      /nursing\s+(salaries|wages|labor|expense)/i,
-      /nursing\s+department/i,
-      /rn\/lpn\/cna\s+wages/i,
+      /nursing\s+(department|expense|labor|salaries)/i,
       /direct\s+care\s+labor/i,
+      /^nursing$/i,
     ],
+    priority: 'medium',
   },
+  // Dietary
   {
-    category: 'labor',
     field: 'dietaryLabor',
     patterns: [
-      /dietary\s+(salaries|wages|labor)/i,
+      /dietary\s+(department|expense|labor)/i,
       /food\s+service\s+labor/i,
-      /kitchen\s+staff/i,
     ],
+    priority: 'medium',
   },
+  // Agency/Contract Labor
   {
-    category: 'labor',
-    field: 'housekeepingLabor',
-    patterns: [
-      /housekeeping\s+(salaries|wages|labor)/i,
-      /environmental\s+services?\s+(salaries|labor)/i,
-      /janitorial\s+(salaries|labor)/i,
-    ],
-  },
-  {
-    category: 'labor',
-    field: 'administrationLabor',
-    patterns: [
-      /admin(istrative)?\s+(salaries|wages|labor)/i,
-      /management\s+salaries/i,
-      /g&a\s+salaries/i,
-      /office\s+staff\s+wages/i,
-    ],
-  },
-  {
-    category: 'labor',
-    field: 'therapyLabor',
-    patterns: [
-      /therapy\s+(salaries|wages|labor)/i,
-      /pt\/ot\s+(salaries|wages)/i,
-      /rehab\s+(salaries|labor)/i,
-    ],
-  },
-  {
-    category: 'labor',
     field: 'agencyLabor',
     patterns: [
       /agency\s+(staff|labor|expense)/i,
       /contract\s+labor/i,
-      /temp\s+staff/i,
       /registry\s+expense/i,
-      /staffing\s+agency/i,
+      /temp\s+staff/i,
     ],
+    priority: 'medium',
   },
+  // Employee Benefits
   {
-    category: 'labor',
     field: 'employeeBenefits',
     patterns: [
       /employee\s+benefits?/i,
       /benefits?\s+expense/i,
       /payroll\s+taxes?/i,
-      /fica/i,
-      /health\s+insurance\s+expense/i,
     ],
+    priority: 'medium',
   },
-
-  // Non-labor expense patterns
+  // Utilities
   {
-    category: 'nonlabor',
-    field: 'foodCost',
-    patterns: [
-      /food\s+cost/i,
-      /raw\s+food/i,
-      /dietary\s+supplies/i,
-      /food\s+expense/i,
-    ],
-  },
-  {
-    category: 'nonlabor',
-    field: 'suppliesCost',
-    patterns: [
-      /medical\s+supplies/i,
-      /nursing\s+supplies/i,
-      /supplies?\s+expense/i,
-      /general\s+supplies/i,
-    ],
-  },
-  {
-    category: 'nonlabor',
     field: 'utilitiesCost',
     patterns: [
-      /utilities?/i,
-      /electric(ity)?/i,
-      /gas\s+expense/i,
-      /water\s+(and\s+)?sewer/i,
+      /^utilities?$/i,
+      /utilities?\s+expense/i,
     ],
+    priority: 'low',
   },
+  // Insurance
   {
-    category: 'nonlabor',
     field: 'insuranceCost',
     patterns: [
       /insurance\s+expense/i,
       /liability\s+insurance/i,
       /property\s+insurance/i,
-      /professional\s+liability/i,
     ],
+    priority: 'low',
   },
+  // Property Tax
   {
-    category: 'nonlabor',
     field: 'propertyTax',
     patterns: [
       /property\s+tax(es)?/i,
-      /real\s+estate\s+tax(es)?/i,
+      /real\s+estate\s+tax/i,
     ],
+    priority: 'low',
   },
+  // Management Fee
   {
-    category: 'nonlabor',
     field: 'managementFee',
     patterns: [
       /management\s+fee/i,
       /mgmt\s+fee/i,
-      /administrative\s+fee/i,
-      /operator\s+fee/i,
+      /admin(istrative)?\s+fee/i,
     ],
+    priority: 'low',
   },
+  // Patient Days
   {
-    category: 'nonlabor',
-    field: 'otherExpenses',
-    patterns: [
-      /other\s+(operating\s+)?expense/i,
-      /misc(ellaneous)?\s+expense/i,
-    ],
-  },
-  {
-    category: 'nonlabor',
-    field: 'totalExpenses',
-    patterns: [
-      /total\s+(operating\s+)?expense/i,
-      /total\s+costs?/i,
-      /operating\s+expense/i,
-      /total\s+opex/i,
-      /opco\s+expense/i,
-      /facility\s+expense/i,
-    ],
-  },
-  // Catch-all for unmatched labor expenses
-  {
-    category: 'labor',
-    field: 'otherExpenses',
-    patterns: [
-      /salary|salaries|wages/i,
-    ],
-  },
-  // Catch-all for unmatched operating costs
-  {
-    category: 'nonlabor',
-    field: 'otherExpenses',
-    patterns: [
-      /operating\s+cost/i,
-      /facility\s+cost/i,
-      /overhead/i,
-    ],
-  },
-
-  // Calculated patterns
-  {
-    category: 'calculated',
-    field: 'ebitdar',
-    patterns: [
-      /ebitdar/i,
-      /earnings\s+before\s+.*rent/i,
-      /operating\s+income\s+before\s+rent/i,
-      /income\s+from\s+operations/i,
-      /net\s+income\s+before\s+rent/i,
-      /cash\s+flow\s+before\s+rent/i,
-      /facility\s+ebitdar/i,
-    ],
-  },
-  {
-    category: 'calculated',
-    field: 'rent',
-    patterns: [
-      /^rent$/i,
-      /rent\s+expense/i,
-      /lease\s+expense/i,
-      /building\s+rent/i,
-    ],
-  },
-  {
-    category: 'calculated',
-    field: 'ebitda',
-    patterns: [
-      /^ebitda$/i,
-      /earnings\s+before\s+interest.*depreciation/i,
-      /ebitda\s+after\s+rent/i,
-      /net\s+cash\s+flow/i,
-      /facility\s+ebitda/i,
-    ],
-  },
-  {
-    category: 'calculated',
-    field: 'noi',
-    patterns: [
-      /^noi$/i,
-      /net\s+operating\s+income/i,
-      /operating\s+income/i,
-    ],
-  },
-  {
-    category: 'calculated',
     field: 'totalPatientDays',
     patterns: [
       /total\s+patient\s+days/i,
       /resident\s+days/i,
-      /bed\s+days/i,
+      /census\s+days/i,
     ],
+    priority: 'medium',
   },
 ];
 
 // ============================================================================
-// EXTRACTION FUNCTIONS
+// PARSING UTILITIES
 // ============================================================================
 
 /**
- * Parse numeric value from cell
+ * Parse numeric value from cell - handles accounting formats
  */
-function parseNumericValue(cell: string | number | null): number {
+function parseNumericValue(cell: string | number | null | undefined): number {
   if (cell === null || cell === undefined) return 0;
   if (typeof cell === 'number') return cell;
 
   const str = String(cell).trim();
-  if (str === '' || str === '-' || str === 'N/A' || str === '#N/A') return 0;
+  if (str === '' || str === '-' || str === 'N/A' || str === '#N/A' || str === '#VALUE!') return 0;
 
+  // Remove currency symbols and thousands separators
   let cleaned = str.replace(/[$,]/g, '');
-  const isNegative = cleaned.includes('(') && cleaned.includes(')');
-  cleaned = cleaned.replace(/[()]/g, '');
+
+  // Handle accounting negative format: (123) or -123
+  const isNegative = cleaned.includes('(') && cleaned.includes(')') || cleaned.startsWith('-');
+  cleaned = cleaned.replace(/[()]/g, '').replace(/^-/, '');
   cleaned = cleaned.replace(/%/g, '');
 
   const num = parseFloat(cleaned);
@@ -501,96 +336,153 @@ function parseNumericValue(cell: string | number | null): number {
 }
 
 /**
- * Parse period from label
+ * Check if cell has a meaningful numeric value
  */
-function parsePeriodFromLabel(label: string): { start: Date; end: Date; label: string } | null {
-  const monthMap: Record<string, number> = {
-    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
-  };
+function hasNumericValue(cell: string | number | null | undefined): boolean {
+  const value = parseNumericValue(cell);
+  return value !== 0;
+}
 
-  // Format: "Jan 2024" or "January 2024"
-  const monthYearMatch = label.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*['"]?(\d{2,4})/i);
-  if (monthYearMatch) {
-    const month = monthMap[monthYearMatch[1].toLowerCase().substring(0, 3)];
-    const year = monthYearMatch[2].length === 2 ? 2000 + parseInt(monthYearMatch[2]) : parseInt(monthYearMatch[2]);
-    const start = new Date(year, month, 1);
-    const end = new Date(year, month + 1, 0);
-    return { start, end, label: `${monthYearMatch[1].substring(0, 3)} ${year}` };
-  }
+/**
+ * Parse date from various formats
+ */
+function parseDateFromCell(cell: string | number | null): Date | null {
+  if (cell === null || cell === undefined) return null;
 
-  // Format: "01/2024" or "1/24"
-  const slashMatch = label.match(/(\d{1,2})\/(\d{2,4})/);
+  const str = String(cell).trim();
+
+  // Format: "01/31/2022" or "1/31/22"
+  const slashMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
   if (slashMatch) {
     const month = parseInt(slashMatch[1]) - 1;
-    const year = slashMatch[2].length === 2 ? 2000 + parseInt(slashMatch[2]) : parseInt(slashMatch[2]);
-    const start = new Date(year, month, 1);
-    const end = new Date(year, month + 1, 0);
-    return { start, end, label: `${start.toLocaleDateString('en-US', { month: 'short' })} ${year}` };
+    const day = parseInt(slashMatch[2]);
+    let year = parseInt(slashMatch[3]);
+    if (year < 100) year += 2000;
+    return new Date(year, month, day);
   }
 
-  // Format: "2024-01"
-  const isoMatch = label.match(/(\d{4})-(\d{2})/);
+  // Format: "2022-01-31"
+  const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (isoMatch) {
-    const year = parseInt(isoMatch[1]);
-    const month = parseInt(isoMatch[2]) - 1;
-    const start = new Date(year, month, 1);
-    const end = new Date(year, month + 1, 0);
-    return { start, end, label: `${start.toLocaleDateString('en-US', { month: 'short' })} ${year}` };
+    return new Date(parseInt(isoMatch[1]), parseInt(isoMatch[2]) - 1, parseInt(isoMatch[3]));
   }
 
-  // Format: "Q1 2024"
-  const quarterMatch = label.match(/Q([1-4])\s*['"]?(\d{4})/i);
-  if (quarterMatch) {
-    const quarter = parseInt(quarterMatch[1]);
-    const year = parseInt(quarterMatch[2]);
-    const startMonth = (quarter - 1) * 3;
-    const start = new Date(year, startMonth, 1);
-    const end = new Date(year, startMonth + 3, 0);
-    return { start, end, label: `Q${quarter} ${year}` };
-  }
-
-  // Format: "YTD 2024" or "TTM"
-  const ytdMatch = label.match(/(YTD|TTM|Annual)\s*['"]?(\d{4})?/i);
-  if (ytdMatch) {
-    const year = ytdMatch[2] ? parseInt(ytdMatch[2]) : new Date().getFullYear();
-    return {
-      start: new Date(year, 0, 1),
-      end: new Date(year, 11, 31),
-      label: ytdMatch[0],
+  // Format: "Jan 2022" or "January 2022"
+  const monthYearMatch = str.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*['"]?(\d{2,4})$/i);
+  if (monthYearMatch) {
+    const monthMap: Record<string, number> = {
+      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
     };
+    const month = monthMap[monthYearMatch[1].toLowerCase().substring(0, 3)];
+    let year = parseInt(monthYearMatch[2]);
+    if (year < 100) year += 2000;
+    // Return end of month
+    return new Date(year, month + 1, 0);
+  }
+
+  // Try Excel date number
+  if (typeof cell === 'number' && cell > 10000 && cell < 100000) {
+    // Excel date serial number
+    const excelEpoch = new Date(1899, 11, 30);
+    return new Date(excelEpoch.getTime() + cell * 24 * 60 * 60 * 1000);
   }
 
   return null;
 }
 
 /**
- * Find period columns in header row
+ * Get period start from period end (assume monthly)
  */
-function findPeriodColumns(
-  headerRow: (string | number | null)[]
-): { colIdx: number; period: { start: Date; end: Date; label: string } }[] {
-  const columns: { colIdx: number; period: { start: Date; end: Date; label: string } }[] = [];
-
-  for (let colIdx = 1; colIdx < headerRow.length; colIdx++) {
-    const cell = headerRow[colIdx];
-    if (cell === null) continue;
-
-    const parsed = parsePeriodFromLabel(String(cell));
-    if (parsed) {
-      columns.push({ colIdx, period: parsed });
-    }
-  }
-
-  return columns.sort((a, b) => a.period.start.getTime() - b.period.start.getTime());
+function getPeriodStart(periodEnd: Date): Date {
+  return new Date(periodEnd.getFullYear(), periodEnd.getMonth(), 1);
 }
 
 /**
- * Match row label to financial field
+ * Format date as period label
  */
-function matchLabelToField(label: string): LineItemPattern | null {
-  for (const pattern of LINE_ITEM_PATTERNS) {
-    if (pattern.patterns.some(p => p.test(label))) {
+function formatPeriodLabel(date: Date): string {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${months[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+// ============================================================================
+// EXTRACTION FUNCTIONS
+// ============================================================================
+
+interface DateColumn {
+  colIdx: number;
+  date: Date;
+  label: string;
+}
+
+/**
+ * Find date columns by scanning first N rows for date patterns
+ */
+function findDateColumns(data: (string | number | null)[][]): DateColumn[] {
+  const columns: DateColumn[] = [];
+  const foundCols = new Set<number>();
+
+  // Scan first 20 rows for date patterns
+  for (let rowIdx = 0; rowIdx < Math.min(20, data.length); rowIdx++) {
+    const row = data[rowIdx];
+    if (!row) continue;
+
+    for (let colIdx = 1; colIdx < row.length; colIdx++) {
+      if (foundCols.has(colIdx)) continue;
+
+      const cell = row[colIdx];
+      const date = parseDateFromCell(cell);
+
+      if (date && date.getFullYear() >= 2015 && date.getFullYear() <= 2030) {
+        columns.push({
+          colIdx,
+          date,
+          label: formatPeriodLabel(date),
+        });
+        foundCols.add(colIdx);
+      }
+    }
+  }
+
+  // Also check for "Month Ending" or similar header row
+  for (let rowIdx = 0; rowIdx < Math.min(15, data.length); rowIdx++) {
+    const row = data[rowIdx];
+    if (!row) continue;
+
+    const label = String(row[0] || '').toLowerCase();
+    if (label.includes('month') || label.includes('period') || label.includes('ending')) {
+      // This row contains period labels, scan it for dates
+      for (let colIdx = 1; colIdx < row.length; colIdx++) {
+        if (foundCols.has(colIdx)) continue;
+
+        const cell = row[colIdx];
+        const date = parseDateFromCell(cell);
+
+        if (date && date.getFullYear() >= 2015 && date.getFullYear() <= 2030) {
+          columns.push({
+            colIdx,
+            date,
+            label: formatPeriodLabel(date),
+          });
+          foundCols.add(colIdx);
+        }
+      }
+    }
+  }
+
+  // Sort by date ascending
+  return columns.sort((a, b) => a.date.getTime() - b.date.getTime());
+}
+
+/**
+ * Check if row label matches any summary pattern
+ */
+function matchSummaryPattern(label: string): SummaryPattern | null {
+  const cleanLabel = label.trim();
+
+  for (const pattern of SUMMARY_PATTERNS) {
+    if (pattern.patterns.some(p => p.test(cleanLabel))) {
       return pattern;
     }
   }
@@ -598,98 +490,133 @@ function matchLabelToField(label: string): LineItemPattern | null {
 }
 
 /**
- * Extract P&L data from sheet data
+ * Check if a row has any numeric values in the data columns
+ */
+function rowHasValues(row: (string | number | null)[], dateColumns: DateColumn[]): boolean {
+  for (const { colIdx } of dateColumns) {
+    if (hasNumericValue(row[colIdx])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Main extraction function - scans entire sheet for summary rows with values
  */
 export function extractPLData(
   data: (string | number | null)[][],
   sheetName: string,
   facilitiesDetected: string[]
 ): FinancialPeriod[] {
-  const periods: FinancialPeriod[] = [];
+  console.log(`[PL Extractor] Processing sheet: ${sheetName}, rows: ${data.length}`);
 
-  // Find header row with periods
-  let headerRowIdx = -1;
-  let periodColumns: { colIdx: number; period: { start: Date; end: Date; label: string } }[] = [];
+  // Step 1: Find date columns
+  const dateColumns = findDateColumns(data);
+  console.log(`[PL Extractor] Found ${dateColumns.length} date columns:`, dateColumns.map(c => c.label));
 
-  for (let rowIdx = 0; rowIdx < Math.min(20, data.length); rowIdx++) {
-    const row = data[rowIdx];
-    if (!row) continue;
-
-    const columns = findPeriodColumns(row);
-    if (columns.length >= 2) {
-      headerRowIdx = rowIdx;
-      periodColumns = columns;
-      break;
-    }
+  if (dateColumns.length === 0) {
+    console.log(`[PL Extractor] No date columns found, trying fallback extraction`);
+    return extractFallbackPL(data, sheetName, facilitiesDetected);
   }
 
-  if (periodColumns.length === 0) {
-    // Fallback: Look for a single annual period
-    return extractAnnualPL(data, sheetName, facilitiesDetected);
-  }
-
-  // Initialize financial periods
-  const periodMap = new Map<number, FinancialPeriod>();
-  for (const { colIdx, period } of periodColumns) {
-    periodMap.set(colIdx, createEmptyFinancialPeriod(
+  // Step 2: Initialize periods for each date column
+  const periods: Map<number, FinancialPeriod> = new Map();
+  for (const { colIdx, date, label } of dateColumns) {
+    periods.set(colIdx, createEmptyFinancialPeriod(
       facilitiesDetected[0] || sheetName,
-      period
+      {
+        start: getPeriodStart(date),
+        end: date,
+        label,
+      }
     ));
   }
 
-  // Extract line items
-  for (let rowIdx = headerRowIdx + 1; rowIdx < data.length; rowIdx++) {
+  // Step 3: Scan ENTIRE sheet for matching rows (bottom-up to prioritize summary rows at end)
+  const matchedRows: { rowIdx: number; pattern: SummaryPattern; label: string }[] = [];
+
+  for (let rowIdx = 0; rowIdx < data.length; rowIdx++) {
     const row = data[rowIdx];
     if (!row || !row[0]) continue;
 
     const label = String(row[0]).trim();
-    const matchedPattern = matchLabelToField(label);
+    const pattern = matchSummaryPattern(label);
 
-    if (matchedPattern) {
-      for (const { colIdx } of periodColumns) {
-        const value = parseNumericValue(row[colIdx]);
-        const fp = periodMap.get(colIdx);
-        if (fp && value !== 0) {
-          const field = matchedPattern.field;
-          // Handle additive fields vs replacement fields
-          if (field === 'totalRevenue' || field === 'totalExpenses' ||
-              field === 'totalLaborCost' || field === 'ebitdar' ||
-              field === 'ebitda' || field === 'noi') {
-            // These are total fields, replace only if current is 0
-            if (getFinancialFieldValue(fp, field) === 0) {
-              setFinancialFieldValue(fp, field, value);
-            }
-          } else {
-            // Component fields, add to existing
-            addToFinancialField(fp, field, value);
-          }
-        }
+    if (pattern && rowHasValues(row, dateColumns)) {
+      matchedRows.push({ rowIdx, pattern, label });
+    }
+  }
+
+  console.log(`[PL Extractor] Found ${matchedRows.length} matching rows with values`);
+
+  // Step 4: Process matched rows, prioritizing later rows (which have actual totals)
+  // Group by field and take the one from the latest row (closest to bottom)
+  const fieldToRows = new Map<keyof FinancialPeriod, { rowIdx: number; pattern: SummaryPattern; label: string }[]>();
+
+  for (const match of matchedRows) {
+    const existing = fieldToRows.get(match.pattern.field) || [];
+    existing.push(match);
+    fieldToRows.set(match.pattern.field, existing);
+  }
+
+  // For each field, pick the best row (prioritize high priority patterns and later rows)
+  for (const [field, rows] of fieldToRows) {
+    // Sort by priority (high first) then by row index (later first)
+    rows.sort((a, b) => {
+      const priorityOrder = { high: 0, medium: 1, low: 2 };
+      const priorityDiff = priorityOrder[a.pattern.priority] - priorityOrder[b.pattern.priority];
+      if (priorityDiff !== 0) return priorityDiff;
+      return b.rowIdx - a.rowIdx; // Later row wins
+    });
+
+    const bestMatch = rows[0];
+    const row = data[bestMatch.rowIdx];
+
+    console.log(`[PL Extractor] Field "${field}" matched at row ${bestMatch.rowIdx}: "${bestMatch.label}"`);
+
+    // Extract values for each period
+    for (const { colIdx } of dateColumns) {
+      const value = parseNumericValue(row[colIdx]);
+      const period = periods.get(colIdx);
+
+      if (period && value !== 0) {
+        setFinancialField(period, field, value);
       }
     }
   }
 
-  // Calculate derived metrics for each period
-  for (const fp of periodMap.values()) {
-    calculateDerivedMetrics(fp);
+  // Step 5: Calculate derived metrics
+  const result: FinancialPeriod[] = [];
+  for (const period of periods.values()) {
+    calculateDerivedMetrics(period);
 
     // Only include periods with meaningful data
-    if (fp.totalRevenue > 0 || fp.totalExpenses > 0) {
-      periods.push(fp);
+    if (period.totalRevenue > 0 || period.ebitdar !== 0 || period.ebitda !== 0) {
+      result.push(period);
     }
   }
 
-  return periods.sort((a, b) => a.periodStart.getTime() - b.periodStart.getTime());
+  console.log(`[PL Extractor] Returning ${result.length} periods`);
+
+  // Log summary of what was extracted
+  if (result.length > 0) {
+    const sample = result[result.length - 1];
+    console.log(`[PL Extractor] Sample period (${sample.periodLabel}): Revenue=${sample.totalRevenue}, Expenses=${sample.totalExpenses}, EBITDAR=${sample.ebitdar}, EBITDA=${sample.ebitda}`);
+  }
+
+  return result.sort((a, b) => a.periodStart.getTime() - b.periodStart.getTime());
 }
 
 /**
- * Extract annual P&L when monthly data isn't available
+ * Fallback extraction when no date columns found
  */
-function extractAnnualPL(
+function extractFallbackPL(
   data: (string | number | null)[][],
   sheetName: string,
   facilitiesDetected: string[]
 ): FinancialPeriod[] {
-  // Look for annual/total column
+  // Look for a "Total" or "Annual" column
   let valueColIdx = -1;
 
   for (let rowIdx = 0; rowIdx < Math.min(15, data.length); rowIdx++) {
@@ -701,12 +628,11 @@ function extractAnnualPL(
       if (cell === null) continue;
       const label = String(cell).toLowerCase();
 
-      if (label.includes('annual') || label.includes('total') || label.includes('ytd') || label.includes('ttm')) {
+      if (label.includes('total') || label.includes('annual') || label.includes('ytd') || label.includes('ttm')) {
         valueColIdx = colIdx;
         break;
       }
     }
-
     if (valueColIdx >= 0) break;
   }
 
@@ -714,7 +640,7 @@ function extractAnnualPL(
   if (valueColIdx < 0) valueColIdx = 1;
 
   const currentYear = new Date().getFullYear();
-  const fp = createEmptyFinancialPeriod(
+  const period = createEmptyFinancialPeriod(
     facilitiesDetected[0] || sheetName,
     {
       start: new Date(currentYear, 0, 1),
@@ -722,28 +648,28 @@ function extractAnnualPL(
       label: 'Annual',
     }
   );
-  fp.isAnnualized = true;
+  period.isAnnualized = true;
 
-  // Extract values
+  // Scan for summary rows
   for (let rowIdx = 0; rowIdx < data.length; rowIdx++) {
     const row = data[rowIdx];
     if (!row || !row[0]) continue;
 
     const label = String(row[0]).trim();
-    const matchedPattern = matchLabelToField(label);
+    const pattern = matchSummaryPattern(label);
 
-    if (matchedPattern) {
+    if (pattern) {
       const value = parseNumericValue(row[valueColIdx]);
       if (value !== 0) {
-        setFinancialFieldValue(fp, matchedPattern.field, value);
+        setFinancialField(period, pattern.field, value);
       }
     }
   }
 
-  calculateDerivedMetrics(fp);
+  calculateDerivedMetrics(period);
 
-  if (fp.totalRevenue > 0 || fp.totalExpenses > 0) {
-    return [fp];
+  if (period.totalRevenue > 0 || period.ebitdar !== 0) {
+    return [period];
   }
 
   return [];
@@ -788,6 +714,7 @@ function createEmptyFinancialPeriod(
     ebitdar: 0,
     rent: 0,
     ebitda: 0,
+    netIncome: 0,
     noi: 0,
     source: 'extracted',
     confidence: 0.7,
@@ -795,10 +722,70 @@ function createEmptyFinancialPeriod(
 }
 
 /**
- * Calculate derived metrics
+ * Type-safe setter for financial period fields
+ */
+function setFinancialField(period: FinancialPeriod, field: keyof FinancialPeriod, value: number): void {
+  switch (field) {
+    case 'totalRevenue': period.totalRevenue = value; break;
+    case 'medicareRevenue': period.medicareRevenue = value; break;
+    case 'medicaidRevenue': period.medicaidRevenue = value; break;
+    case 'managedCareRevenue': period.managedCareRevenue = value; break;
+    case 'privatePayRevenue': period.privatePayRevenue = value; break;
+    case 'ancillaryRevenue': period.ancillaryRevenue = value; break;
+    case 'otherRevenue': period.otherRevenue = value; break;
+    case 'totalLaborCost': period.totalLaborCost = value; break;
+    case 'nursingLabor': period.nursingLabor = value; break;
+    case 'dietaryLabor': period.dietaryLabor = value; break;
+    case 'housekeepingLabor': period.housekeepingLabor = value; break;
+    case 'administrationLabor': period.administrationLabor = value; break;
+    case 'therapyLabor': period.therapyLabor = value; break;
+    case 'agencyLabor': period.agencyLabor = value; break;
+    case 'employeeBenefits': period.employeeBenefits = value; break;
+    case 'foodCost': period.foodCost = value; break;
+    case 'suppliesCost': period.suppliesCost = value; break;
+    case 'utilitiesCost': period.utilitiesCost = value; break;
+    case 'insuranceCost': period.insuranceCost = value; break;
+    case 'propertyTax': period.propertyTax = value; break;
+    case 'managementFee': period.managementFee = value; break;
+    case 'otherExpenses': period.otherExpenses = value; break;
+    case 'totalExpenses': period.totalExpenses = value; break;
+    case 'ebitdar': period.ebitdar = value; break;
+    case 'rent': period.rent = value; break;
+    case 'ebitda': period.ebitda = value; break;
+    case 'netIncome': period.netIncome = value; break;
+    case 'noi': period.noi = value; break;
+    case 'totalPatientDays': period.totalPatientDays = value; break;
+    default: break;
+  }
+}
+
+/**
+ * Calculate derived metrics after extraction
  */
 function calculateDerivedMetrics(fp: FinancialPeriod): void {
-  // Calculate total labor from components if not provided
+  // If we have EBITDAR directly from extraction, use it
+  // Otherwise calculate from revenue - expenses
+  if (fp.ebitdar === 0 && fp.totalRevenue > 0 && fp.totalExpenses > 0) {
+    fp.ebitdar = fp.totalRevenue - fp.totalExpenses;
+  }
+
+  // If we have EBITDA directly, use it
+  // Otherwise calculate from EBITDAR - rent
+  if (fp.ebitda === 0 && fp.ebitdar !== 0) {
+    fp.ebitda = fp.ebitdar - fp.rent;
+  }
+
+  // If we have rent but EBITDAR = 0 and EBITDA is set, calculate EBITDAR
+  if (fp.ebitdar === 0 && fp.ebitda !== 0 && fp.rent > 0) {
+    fp.ebitdar = fp.ebitda + fp.rent;
+  }
+
+  // Set NOI = EBITDA if not separately provided
+  if (fp.noi === 0 && fp.ebitda !== 0) {
+    fp.noi = fp.ebitda;
+  }
+
+  // Calculate labor from components if total not provided
   const laborFromComponents =
     fp.nursingLabor +
     fp.dietaryLabor +
@@ -812,25 +799,7 @@ function calculateDerivedMetrics(fp: FinancialPeriod): void {
     fp.totalLaborCost = laborFromComponents;
   }
 
-  // Calculate non-labor expenses
-  const nonLaborExpenses =
-    fp.foodCost +
-    fp.suppliesCost +
-    fp.utilitiesCost +
-    fp.insuranceCost +
-    fp.propertyTax +
-    fp.managementFee +
-    fp.otherExpenses;
-
-  // Calculate total expenses from components if not provided
-  if (fp.totalExpenses === 0) {
-    const calculatedExpenses = fp.totalLaborCost + nonLaborExpenses;
-    if (calculatedExpenses > 0) {
-      fp.totalExpenses = calculatedExpenses;
-    }
-  }
-
-  // Calculate total revenue from components if not provided
+  // Calculate revenue from components if total not provided
   const revenueFromComponents =
     fp.medicareRevenue +
     fp.medicaidRevenue +
@@ -843,39 +812,11 @@ function calculateDerivedMetrics(fp: FinancialPeriod): void {
     fp.totalRevenue = revenueFromComponents;
   }
 
-  // Calculate EBITDAR - always calculate if we have revenue
-  if (fp.ebitdar === 0 && fp.totalRevenue > 0) {
-    // EBITDAR = Revenue - Operating Expenses (before rent)
-    fp.ebitdar = fp.totalRevenue - fp.totalExpenses;
-  }
-
-  // If EBITDAR is still 0 but we have expenses, try to estimate
-  // (This handles cases where only certain line items were extracted)
-  if (fp.ebitdar === 0 && fp.totalRevenue > 0 && fp.totalExpenses === 0) {
-    // If we have labor but no total expenses, estimate EBITDAR margin at 15-20%
-    if (fp.totalLaborCost > 0) {
-      // Estimate total expenses as ~85% of revenue for typical SNF
-      const estimatedExpenses = fp.totalRevenue * 0.85;
-      fp.totalExpenses = estimatedExpenses;
-      fp.ebitdar = fp.totalRevenue - estimatedExpenses;
-      fp.confidence = 0.5; // Lower confidence for estimated values
-    }
-  }
-
-  // Calculate EBITDA (EBITDAR minus rent)
-  if (fp.ebitda === 0) {
-    fp.ebitda = fp.ebitdar - fp.rent;
-  }
-
-  // Calculate NOI (typically same as EBITDA for SNFs)
-  if (fp.noi === 0) {
-    fp.noi = fp.ebitda;
-  }
-
   // Calculate margins
   if (fp.totalRevenue > 0) {
     fp.ebitdarMargin = (fp.ebitdar / fp.totalRevenue) * 100;
     fp.ebitdaMargin = (fp.ebitda / fp.totalRevenue) * 100;
+
     if (fp.totalLaborCost > 0) {
       fp.laborPercentOfRevenue = (fp.totalLaborCost / fp.totalRevenue) * 100;
     }
@@ -895,12 +836,16 @@ function calculateDerivedMetrics(fp: FinancialPeriod): void {
   }
 
   // Adjust confidence based on data completeness
-  const filledFields = [
-    fp.totalRevenue,
-    fp.totalExpenses,
-    fp.totalLaborCost,
-    fp.ebitdar,
-  ].filter(v => v > 0).length;
-
-  fp.confidence = Math.max(fp.confidence, 0.4 + (filledFields / 4) * 0.4);
+  const criticalFields = [
+    fp.totalRevenue !== 0,
+    fp.totalExpenses !== 0,
+    fp.ebitdar !== 0,
+    fp.ebitda !== 0,
+    fp.rent > 0,
+  ];
+  const filledCount = criticalFields.filter(Boolean).length;
+  fp.confidence = 0.4 + (filledCount / criticalFields.length) * 0.5;
 }
+
+// Export additional types for use by other modules
+export type { DateColumn, SummaryPattern };

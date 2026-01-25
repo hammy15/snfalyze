@@ -45,7 +45,7 @@ interface Deal {
   stage: DealStage;
   value: number;
   beds: number;
-  facilities: { id: string; name: string }[];
+  facilities: { id: string; name: string; licensedBeds?: number }[];
   assignee: string;
   assigneeAvatar?: string;
   createdAt: Date;
@@ -54,6 +54,9 @@ interface Deal {
   nextActionDate?: Date;
   probability?: number;
   notes?: string;
+  assetType?: string;
+  primaryState?: string;
+  confidenceScore?: number;
 }
 
 const stageConfig: { stage: DealStage; label: string; color: string }[] = [
@@ -78,7 +81,7 @@ export default function DealsPage() {
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  // Fetch deals from API
+  // Fetch deals from API with facilities
   useEffect(() => {
     async function fetchDeals() {
       try {
@@ -87,18 +90,50 @@ export default function DealsPage() {
           const data = await response.json();
           if (data.success && data.data) {
             // Transform API data to Deal format
-            const transformedDeals: Deal[] = data.data.map((deal: Record<string, unknown>) => ({
-              id: deal.id as string,
-              name: deal.name as string,
-              stage: mapStatusToStage(deal.status as string),
-              value: 0,
-              beds: 0,
-              facilities: [],
-              assignee: 'Unassigned',
-              createdAt: new Date(deal.createdAt as string),
-              lastActivity: new Date(deal.updatedAt as string || deal.createdAt as string),
-              probability: 50,
-            }));
+            const transformedDeals: Deal[] = data.data.map((deal: Record<string, unknown>) => {
+              // Parse facilities array if present
+              const facilities = Array.isArray(deal.facilities)
+                ? (deal.facilities as { id: string; name: string }[])
+                : [];
+
+              // Get beds from deal or sum from facilities
+              const beds = typeof deal.beds === 'number'
+                ? deal.beds
+                : facilities.reduce((sum: number, f: { licensedBeds?: number }) => sum + (f.licensedBeds || 0), 0);
+
+              // Parse asking price
+              const askingPrice = deal.askingPrice
+                ? parseFloat(String(deal.askingPrice))
+                : 0;
+
+              // Calculate probability based on stage
+              const stageProbabilities: Record<string, number> = {
+                new: 10,
+                analyzing: 25,
+                reviewed: 40,
+                under_loi: 60,
+                due_diligence: 75,
+                closed: 100,
+                passed: 0,
+              };
+
+              return {
+                id: deal.id as string,
+                name: deal.name as string,
+                stage: mapStatusToStage(deal.status as string),
+                value: askingPrice,
+                beds: beds,
+                facilities: facilities,
+                assignee: (deal.brokerName as string) || 'Unassigned',
+                createdAt: new Date(deal.createdAt as string),
+                lastActivity: new Date(deal.updatedAt as string || deal.createdAt as string),
+                probability: stageProbabilities[deal.status as string] || 50,
+                notes: deal.thesis as string,
+                assetType: deal.assetType as string,
+                primaryState: deal.primaryState as string,
+                confidenceScore: deal.confidenceScore as number,
+              };
+            });
             setDeals(transformedDeals);
           }
         }
@@ -242,6 +277,7 @@ export default function DealsPage() {
       nextAction: deal.nextAction,
       nextActionDate: deal.nextActionDate,
       probability: deal.probability,
+      assetType: deal.assetType,
     }));
   }, [filteredDeals]);
 

@@ -8,16 +8,34 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const assetType = searchParams.get('assetType');
 
-    let query = db.select().from(deals).orderBy(desc(deals.updatedAt));
+    // Fetch all deals
+    const allDeals = await db.select().from(deals).orderBy(desc(deals.updatedAt));
 
-    // Apply filters if provided
-    // Note: In production, use proper query building with drizzle
+    // Fetch facilities for each deal
+    const dealsWithFacilities = await Promise.all(
+      allDeals.map(async (deal) => {
+        const dealFacilities = await db
+          .select({
+            id: facilities.id,
+            name: facilities.name,
+            licensedBeds: facilities.licensedBeds,
+            city: facilities.city,
+            state: facilities.state,
+            assetType: facilities.assetType,
+          })
+          .from(facilities)
+          .where(eq(facilities.dealId, deal.id));
 
-    const allDeals = await query;
+        return {
+          ...deal,
+          facilities: dealFacilities,
+        };
+      })
+    );
 
     return NextResponse.json({
       success: true,
-      data: allDeals,
+      data: dealsWithFacilities,
     });
   } catch (error) {
     console.error('Error fetching deals:', error);

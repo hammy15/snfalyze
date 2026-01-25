@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { FilterBar, facilityFilters, ActiveFilter } from '@/components/ui/filter-bar';
@@ -17,184 +17,43 @@ import {
   AlertTriangle,
   LayoutGrid,
   List,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// Mock facility data
-const mockFacilities = [
-  {
-    id: '1',
-    name: 'Sunrise Care Center',
-    address: '1234 Healthcare Ave',
-    city: 'Los Angeles',
-    state: 'CA',
-    zip: '90210',
-    type: 'snf' as const,
-    beds: 120,
-    occupancy: 87,
-    riskLevel: 'high' as const,
-    riskScore: 78,
-    qualityRating: 3 as const,
-    owner: 'ABC Healthcare Holdings',
-    operator: 'Sunrise Operations LLC',
-    phone: '(310) 555-1234',
-    website: 'https://sunrisecare.example.com',
-    lastSurvey: new Date('2024-01-15'),
-    deficiencies: 8,
-    isTarget: true,
-  },
-  {
-    id: '2',
-    name: 'Valley View SNF',
-    address: '567 Valley Rd',
-    city: 'San Diego',
-    state: 'CA',
-    zip: '92101',
-    type: 'snf' as const,
-    beds: 85,
-    occupancy: 92,
-    riskLevel: 'medium' as const,
-    riskScore: 58,
-    qualityRating: 4 as const,
-    owner: 'Valley Health Partners',
-    operator: 'Valley View Operations',
-    phone: '(619) 555-5678',
-    website: 'https://valleyview.example.com',
-    lastSurvey: new Date('2024-02-20'),
-    deficiencies: 3,
-    isTarget: false,
-  },
-  {
-    id: '3',
-    name: 'Harbor Health Facility',
-    address: '890 Harbor Blvd',
-    city: 'San Francisco',
-    state: 'CA',
-    zip: '94102',
-    type: 'snf' as const,
-    beds: 150,
-    occupancy: 78,
-    riskLevel: 'low' as const,
-    riskScore: 32,
-    qualityRating: 5 as const,
-    owner: 'XYZ Capital',
-    operator: 'Harbor Health Management',
-    phone: '(415) 555-9012',
-    website: 'https://harborhealth.example.com',
-    lastSurvey: new Date('2024-03-10'),
-    deficiencies: 1,
-    isTarget: true,
-  },
-  {
-    id: '4',
-    name: 'Desert Palms SNF',
-    address: '234 Palm Desert Way',
-    city: 'Phoenix',
-    state: 'AZ',
-    zip: '85001',
-    type: 'snf' as const,
-    beds: 95,
-    occupancy: 81,
-    riskLevel: 'high' as const,
-    riskScore: 72,
-    qualityRating: 2 as const,
-    owner: 'Desert Healthcare Inc',
-    operator: 'Desert Palms Management',
-    phone: '(602) 555-3456',
-    website: 'https://desertpalms.example.com',
-    lastSurvey: new Date('2024-01-28'),
-    deficiencies: 12,
-    isTarget: false,
-  },
-  {
-    id: '5',
-    name: 'Mountain View ALF',
-    address: '456 Mountain View Dr',
-    city: 'Denver',
-    state: 'CO',
-    zip: '80202',
-    type: 'alf' as const,
-    beds: 65,
-    occupancy: 95,
-    riskLevel: 'low' as const,
-    riskScore: 28,
-    qualityRating: 5 as const,
-    owner: 'Mountain Healthcare Group',
-    operator: 'Mountain View Senior Living',
-    phone: '(303) 555-7890',
-    website: 'https://mountainview.example.com',
-    lastSurvey: new Date('2024-02-05'),
-    deficiencies: 0,
-    isTarget: true,
-  },
-  {
-    id: '6',
-    name: 'Lakeside Senior Living',
-    address: '789 Lake Shore Dr',
-    city: 'Seattle',
-    state: 'WA',
-    zip: '98101',
-    type: 'ilf' as const,
-    beds: 110,
-    occupancy: 89,
-    riskLevel: 'medium' as const,
-    riskScore: 45,
-    qualityRating: 4 as const,
-    owner: 'Lakeside Holdings LLC',
-    operator: 'Lakeside Senior Management',
-    phone: '(206) 555-2345',
-    website: 'https://lakeside.example.com',
-    lastSurvey: new Date('2024-03-01'),
-    deficiencies: 4,
-    isTarget: false,
-  },
-  {
-    id: '7',
-    name: 'Evergreen Care Home',
-    address: '321 Evergreen Terrace',
-    city: 'Portland',
-    state: 'OR',
-    zip: '97201',
-    type: 'snf' as const,
-    beds: 75,
-    occupancy: 84,
-    riskLevel: 'low' as const,
-    riskScore: 35,
-    qualityRating: 4 as const,
-    owner: 'Evergreen Healthcare',
-    operator: 'Evergreen Operations',
-    phone: '(503) 555-6789',
-    website: 'https://evergreencare.example.com',
-    lastSurvey: new Date('2024-02-15'),
-    deficiencies: 2,
-    isTarget: false,
-  },
-  {
-    id: '8',
-    name: 'Golden State SNF',
-    address: '654 Golden Gate Ave',
-    city: 'Oakland',
-    state: 'CA',
-    zip: '94612',
-    type: 'snf' as const,
-    beds: 130,
-    occupancy: 76,
-    riskLevel: 'medium' as const,
-    riskScore: 52,
-    qualityRating: 3 as const,
-    owner: 'Golden State Healthcare',
-    operator: 'Golden State Operations',
-    phone: '(510) 555-0123',
-    website: 'https://goldenstatesnf.example.com',
-    lastSurvey: new Date('2024-01-20'),
-    deficiencies: 6,
-    isTarget: true,
-  },
-];
-
-type Facility = typeof mockFacilities[0];
+interface Facility {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode?: string;
+  assetType: 'SNF' | 'ALF' | 'ILF';
+  licensedBeds: number;
+  certifiedBeds?: number;
+  cmsRating?: number;
+  healthRating?: number;
+  staffingRating?: number;
+  qualityRating?: number;
+  yearBuilt?: number;
+  isSff?: boolean;
+  isSffWatch?: boolean;
+  hasImmediateJeopardy?: boolean;
+  dealId?: string;
+  // Computed/display fields
+  type?: 'snf' | 'alf' | 'ilf';
+  beds?: number;
+  occupancy?: number;
+  riskLevel?: 'high' | 'medium' | 'low';
+  riskScore?: number;
+  owner?: string;
+  operator?: string;
+  isTarget?: boolean;
+}
 
 export default function FacilitiesPage() {
+  const [facilities, setFacilities] = useState<Facility[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortColumn, setSortColumn] = useState<string>('name');
@@ -203,9 +62,61 @@ export default function FacilitiesPage() {
   const [selectedFacility, setSelectedFacility] = useState<Facility | null>(null);
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
 
+  // Fetch facilities from API
+  useEffect(() => {
+    async function fetchFacilities() {
+      try {
+        const response = await fetch('/api/facilities');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data) {
+            // Transform API data to display format
+            const transformedFacilities: Facility[] = data.data.map((f: Facility) => {
+              // Calculate risk level based on CMS rating and other factors
+              let riskLevel: 'high' | 'medium' | 'low' = 'low';
+              let riskScore = 30;
+
+              if (f.hasImmediateJeopardy || f.isSff) {
+                riskLevel = 'high';
+                riskScore = 85;
+              } else if (f.isSffWatch || (f.cmsRating && f.cmsRating <= 2)) {
+                riskLevel = 'high';
+                riskScore = 70;
+              } else if (f.cmsRating && f.cmsRating === 3) {
+                riskLevel = 'medium';
+                riskScore = 50;
+              } else if (f.cmsRating && f.cmsRating >= 4) {
+                riskLevel = 'low';
+                riskScore = 25;
+              }
+
+              return {
+                ...f,
+                type: f.assetType?.toLowerCase() as 'snf' | 'alf' | 'ilf',
+                beds: f.licensedBeds,
+                occupancy: 85 + Math.floor(Math.random() * 10), // Simulated for now
+                riskLevel,
+                riskScore,
+                owner: 'Cascadia Healthcare',
+                operator: 'Cascadia Operations',
+                isTarget: false,
+              };
+            });
+            setFacilities(transformedFacilities);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch facilities:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchFacilities();
+  }, []);
+
   // Filter and sort data
   const filteredData = useMemo(() => {
-    let result = [...mockFacilities];
+    let result = [...facilities];
 
     // Apply search
     if (searchQuery) {
@@ -255,16 +166,17 @@ export default function FacilitiesPage() {
     });
 
     return result;
-  }, [mockFacilities, searchQuery, activeFilters, sortColumn, sortDirection]);
+  }, [facilities, searchQuery, activeFilters, sortColumn, sortDirection]);
 
   // Calculate summary stats
   const stats = useMemo(() => {
     const highRisk = filteredData.filter((f) => f.riskLevel === 'high').length;
-    const targets = filteredData.filter((f) => f.isTarget).length;
-    const avgOccupancy = Math.round(
-      filteredData.reduce((sum, f) => sum + f.occupancy, 0) / filteredData.length
-    );
-    return { total: filteredData.length, highRisk, targets, avgOccupancy };
+    const totalBeds = filteredData.reduce((sum, f) => sum + (f.licensedBeds || 0), 0);
+    const avgRating = filteredData.filter(f => f.cmsRating).length > 0
+      ? (filteredData.reduce((sum, f) => sum + (f.cmsRating || 0), 0) / filteredData.filter(f => f.cmsRating).length).toFixed(1)
+      : 0;
+    const stateCount = new Set(filteredData.map(f => f.state)).size;
+    return { total: filteredData.length, highRisk, totalBeds, avgRating, stateCount };
   }, [filteredData]);
 
   const columns: Column<Facility>[] = [
@@ -285,25 +197,32 @@ export default function FacilitiesPage() {
       ),
     },
     {
-      id: 'type',
+      id: 'assetType',
       header: 'Type',
-      accessor: 'type',
+      accessor: 'assetType',
       sortable: true,
       width: 80,
-      cell: (value) => (
-        <span className="uppercase text-xs font-medium text-[var(--color-text-secondary)]">
-          {value}
-        </span>
-      ),
+      cell: (value) => {
+        const colors: Record<string, string> = {
+          SNF: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+          ALF: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+          ILF: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+        };
+        return (
+          <span className={cn('px-2 py-0.5 text-xs font-medium rounded', colors[value] || 'bg-gray-100 text-gray-600')}>
+            {value}
+          </span>
+        );
+      },
     },
     {
-      id: 'beds',
+      id: 'licensedBeds',
       header: 'Beds',
-      accessor: 'beds',
+      accessor: 'licensedBeds',
       sortable: true,
       align: 'right',
       width: 80,
-      cell: (value) => <span className="tabular-nums">{value}</span>,
+      cell: (value) => <span className="tabular-nums font-medium">{value}</span>,
     },
     {
       id: 'occupancy',
@@ -318,16 +237,24 @@ export default function FacilitiesPage() {
             <div
               className={cn(
                 'h-full rounded-full',
-                value >= 90 ? 'bg-[var(--status-success-icon)]' :
-                value >= 75 ? 'bg-[var(--status-warning-icon)]' :
+                value && value >= 90 ? 'bg-[var(--status-success-icon)]' :
+                value && value >= 75 ? 'bg-[var(--status-warning-icon)]' :
                 'bg-[var(--status-error-icon)]'
               )}
-              style={{ width: `${value}%` }}
+              style={{ width: `${value || 0}%` }}
             />
           </div>
-          <span className="tabular-nums text-xs">{value}%</span>
+          <span className="tabular-nums text-xs">{value || '—'}%</span>
         </div>
       ),
+    },
+    {
+      id: 'cmsRating',
+      header: 'CMS Rating',
+      accessor: 'cmsRating',
+      sortable: true,
+      width: 100,
+      cell: (value) => value ? <QualityRating rating={value as 1|2|3|4|5} size="sm" /> : <span className="text-[var(--color-text-tertiary)]">—</span>,
     },
     {
       id: 'riskLevel',
@@ -335,24 +262,16 @@ export default function FacilitiesPage() {
       accessor: 'riskLevel',
       sortable: true,
       width: 100,
-      cell: (value, row) => <RiskBadge level={value} score={row.riskScore} showScore size="sm" />,
+      cell: (value, row) => value ? <RiskBadge level={value} score={row.riskScore} showScore size="sm" /> : <span className="text-[var(--color-text-tertiary)]">—</span>,
     },
     {
-      id: 'qualityRating',
-      header: 'Quality',
-      accessor: 'qualityRating',
+      id: 'state',
+      header: 'State',
+      accessor: 'state',
       sortable: true,
-      width: 120,
-      cell: (value) => <QualityRating rating={value} size="sm" />,
-    },
-    {
-      id: 'owner',
-      header: 'Owner',
-      accessor: 'owner',
-      sortable: true,
-      minWidth: 150,
+      width: 80,
       cell: (value) => (
-        <span className="text-sm text-[var(--color-text-secondary)] truncate block max-w-[200px]">
+        <span className="text-sm font-medium text-[var(--color-text-secondary)]">
           {value}
         </span>
       ),
@@ -378,6 +297,20 @@ export default function FacilitiesPage() {
     alert('Exporting facility data...');
   };
 
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="page-header">
+          <h1 className="page-header-title">Facility Explorer</h1>
+          <p className="page-header-subtitle">Loading facilities...</p>
+        </div>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 animate-spin text-[var(--accent-solid)]" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -386,7 +319,7 @@ export default function FacilitiesPage() {
           <div>
             <h1 className="page-header-title">Facility Explorer</h1>
             <p className="page-header-subtitle">
-              Browse and analyze {stats.total.toLocaleString()} facilities across your tracked markets.
+              Browse and analyze {stats.total.toLocaleString()} Cascadia portfolio facilities.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -413,21 +346,21 @@ export default function FacilitiesPage() {
           size="sm"
         />
         <StatCard
-          label="Active Targets"
-          value={stats.targets}
+          label="Total Beds"
+          value={stats.totalBeds}
           icon={<Target className="w-5 h-5" />}
           size="sm"
         />
         <StatCard
-          label="High Risk"
-          value={stats.highRisk}
-          icon={<AlertTriangle className="w-5 h-5" />}
+          label="States"
+          value={stats.stateCount}
+          icon={<MapPin className="w-5 h-5" />}
           size="sm"
         />
         <StatCard
-          label="Avg Occupancy"
-          value={stats.avgOccupancy}
-          format="percent"
+          label="Avg CMS Rating"
+          value={Number(stats.avgRating)}
+          suffix="/5"
           icon={<TrendingUp className="w-5 h-5" />}
           size="sm"
         />
@@ -489,45 +422,55 @@ export default function FacilitiesPage() {
         />
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredData.map((facility) => (
-            <div
-              key={facility.id}
-              onClick={() => handleRowClick(facility)}
-              className={cn(
-                'card p-4 cursor-pointer transition-all hover:shadow-md',
-                selectedFacility?.id === facility.id && 'ring-2 ring-[var(--accent-solid)]'
-              )}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <h3 className="font-medium text-[var(--color-text-primary)]">{facility.name}</h3>
-                  <p className="text-xs text-[var(--color-text-tertiary)] flex items-center gap-1 mt-0.5">
-                    <MapPin className="w-3 h-3" />
-                    {facility.city}, {facility.state}
-                  </p>
+          {filteredData.map((facility) => {
+            const typeColors: Record<string, string> = {
+              SNF: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+              ALF: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+              ILF: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+            };
+            return (
+              <div
+                key={facility.id}
+                onClick={() => handleRowClick(facility)}
+                className={cn(
+                  'card p-4 cursor-pointer transition-all hover:shadow-md border-l-4',
+                  selectedFacility?.id === facility.id && 'ring-2 ring-[var(--accent-solid)]',
+                  facility.assetType === 'SNF' && 'border-l-blue-500',
+                  facility.assetType === 'ALF' && 'border-l-purple-500',
+                  facility.assetType === 'ILF' && 'border-l-green-500'
+                )}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h3 className="font-medium text-[var(--color-text-primary)] line-clamp-1">{facility.name}</h3>
+                    <p className="text-xs text-[var(--color-text-tertiary)] flex items-center gap-1 mt-0.5">
+                      <MapPin className="w-3 h-3" />
+                      {facility.city}, {facility.state}
+                    </p>
+                  </div>
+                  <span className={cn('text-xs font-medium px-2 py-0.5 rounded', typeColors[facility.assetType] || 'bg-gray-100 text-gray-600')}>
+                    {facility.assetType}
+                  </span>
                 </div>
-                <span className="uppercase text-xs font-medium text-[var(--color-text-disabled)] bg-[var(--gray-100)] px-2 py-0.5 rounded">
-                  {facility.type}
-                </span>
-              </div>
 
-              <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                <div>
-                  <div className="text-[var(--color-text-tertiary)] text-xs">Beds</div>
-                  <div className="font-medium tabular-nums">{facility.beds}</div>
+                <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                  <div>
+                    <div className="text-[var(--color-text-tertiary)] text-xs">Licensed Beds</div>
+                    <div className="font-semibold tabular-nums">{facility.licensedBeds}</div>
+                  </div>
+                  <div>
+                    <div className="text-[var(--color-text-tertiary)] text-xs">CMS Rating</div>
+                    <div className="font-semibold tabular-nums">{facility.cmsRating ? `${facility.cmsRating}/5` : '—'}</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-[var(--color-text-tertiary)] text-xs">Occupancy</div>
-                  <div className="font-medium tabular-nums">{facility.occupancy}%</div>
-                </div>
-              </div>
 
-              <div className="flex items-center justify-between">
-                <RiskBadge level={facility.riskLevel} score={facility.riskScore} showScore size="sm" />
-                <QualityRating rating={facility.qualityRating} size="sm" />
+                <div className="flex items-center justify-between">
+                  {facility.riskLevel && <RiskBadge level={facility.riskLevel} score={facility.riskScore} showScore size="sm" />}
+                  {facility.cmsRating && <QualityRating rating={facility.cmsRating as 1|2|3|4|5} size="sm" />}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

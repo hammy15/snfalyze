@@ -420,6 +420,31 @@ export function DocumentUploadAnalysis({
         )}
       </div>
 
+      {/* Explicit file input button */}
+      <div className="flex justify-center">
+        <label className="cursor-pointer">
+          <input
+            type="file"
+            multiple
+            accept=".pdf,.xlsx,.xls,.csv"
+            onChange={(e) => {
+              const files = e.target.files ? Array.from(e.target.files) : [];
+              if (files.length > 0) {
+                onDrop(files);
+              }
+              e.target.value = '';
+            }}
+            className="hidden"
+          />
+          <Button type="button" variant="outline" size="lg" asChild>
+            <span>
+              <Upload className="w-5 h-5 mr-2" />
+              Click to Select Files
+            </span>
+          </Button>
+        </label>
+      </div>
+
       {/* File list */}
       {files.length > 0 && (
         <div className="space-y-2">

@@ -20,13 +20,13 @@ interface FacilityData {
   id: string;
   name: string;
   beds: number;
-  occupancy: number;
-  ebitda: number;
-  cmsRating?: number;
-  healthRating?: number;
-  staffingRating?: number;
-  qualityRating?: number;
-  isSff?: boolean;
+  occupancy?: number;
+  ebitda?: number;
+  cmsRating?: number | null;
+  healthRating?: number | null;
+  staffingRating?: number | null;
+  qualityRating?: number | null;
+  isSff?: boolean | null;
 }
 
 interface PortfolioFacilitiesOverviewProps {
@@ -49,7 +49,7 @@ function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
-function StarRating({ rating, size = 'sm' }: { rating?: number; size?: 'sm' | 'md' }) {
+function StarRating({ rating, size = 'sm' }: { rating?: number | null; size?: 'sm' | 'md' }) {
   if (!rating) return <span className="text-muted-foreground text-xs">N/A</span>;
 
   const sizeClass = size === 'sm' ? 'h-3 w-3' : 'h-4 w-4';
@@ -178,11 +178,12 @@ export function PortfolioFacilitiesOverview({
               </thead>
               <tbody>
                 {facilities.map((facility) => {
-                  const occupancyColor = facility.occupancy >= 0.85
+                  const occ = facility.occupancy ?? 0;
+                  const occupancyColor = occ >= 0.85
                     ? 'text-green-600'
-                    : facility.occupancy >= 0.75
+                    : occ >= 0.75
                     ? 'text-amber-600'
-                    : facility.occupancy > 0
+                    : occ > 0
                     ? 'text-red-600'
                     : 'text-muted-foreground';
 
@@ -200,11 +201,11 @@ export function PortfolioFacilitiesOverview({
                       <td className="py-3 px-2 text-center">{facility.beds}</td>
                       <td className="py-3 px-2 text-center">
                         <span className={cn('font-medium', occupancyColor)}>
-                          {facility.occupancy > 0 ? formatPercent(facility.occupancy) : '—'}
+                          {occ > 0 ? formatPercent(occ) : '—'}
                         </span>
                       </td>
                       <td className="py-3 px-2 text-right font-medium">
-                        {facility.ebitda > 0 ? formatCurrency(facility.ebitda) : '—'}
+                        {(facility.ebitda ?? 0) > 0 ? formatCurrency(facility.ebitda!) : '—'}
                       </td>
                       <td className="py-3 px-2">
                         <div className="flex justify-center">

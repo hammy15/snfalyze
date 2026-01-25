@@ -1,13 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, facilityCensusPeriods, facilities } from '@/db';
-import { eq, and, desc } from 'drizzle-orm';
+import { db, facilities, facilityCensusPeriods } from '@/db';
+import { eq, desc, and, gte, lte } from 'drizzle-orm';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+interface RouteParams {
+  params: Promise<{ id: string }>;
+}
+
+/**
+ * GET - Fetch census periods for a facility
+ */
+export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id: facilityId } = await params;
+    const searchParams = request.nextUrl.searchParams;
+
+    // Optional date range filters
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+    const limit = parseInt(searchParams.get('limit') || '12');
 
     // Verify facility exists
     const facility = await db.query.facilities.findFirst({
@@ -21,34 +31,66 @@ export async function GET(
       );
     }
 
-    // Fetch census periods for this facility
+    // Build query conditions
+    const conditions = [eq(facilityCensusPeriods.facilityId, facilityId)];
+
+    if (startDate) {
+      conditions.push(gte(facilityCensusPeriods.periodStart, startDate));
+    }
+    if (endDate) {
+      conditions.push(lte(facilityCensusPeriods.periodEnd, endDate));
+    }
+
+    // Fetch census periods
     const censusPeriods = await db.query.facilityCensusPeriods.findMany({
-      where: eq(facilityCensusPeriods.facilityId, facilityId),
+      where: and(...conditions),
       orderBy: [desc(facilityCensusPeriods.periodEnd)],
+      limit,
     });
+
+    // Calculate totals and averages
+    const totalDays = censusPeriods.reduce((sum, p) => {
+      const medicare = Number(p.medicarePartADays || 0) + Number(p.medicareAdvantageDays || 0);
+      const medicaid = Number(p.medicaidDays || 0) + Number(p.managedMedicaidDays || 0);
+      const managedCare = Number(p.managedCareDays || 0);
+      const privateAndOther = Number(p.privateDays || 0) + Number(p.vaContractDays || 0) +
+                             Number(p.hospiceDays || 0) + Number(p.otherDays || 0);
+      return sum + medicare + medicaid + managedCare + privateAndOther;
+    }, 0);
+
+    const avgOccupancy = censusPeriods.length > 0
+      ? censusPeriods.reduce((sum, p) => sum + Number(p.occupancyRate || 0), 0) / censusPeriods.length
+      : 0;
 
     return NextResponse.json({
       success: true,
       data: {
-        facilityId,
-        facilityName: facility.name,
-        totalBeds: facility.licensedBeds,
-        censusPeriods,
+        facility: {
+          id: facility.id,
+          name: facility.name,
+          totalBeds: facility.licensedBeds,
+        },
+        periods: censusPeriods,
+        summary: {
+          totalPatientDays: totalDays,
+          averageOccupancy: Math.round(avgOccupancy * 100) / 100,
+          periodCount: censusPeriods.length,
+        },
       },
     });
   } catch (error) {
-    console.error('Error fetching census periods:', error);
+    console.error('Error fetching census data:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch census periods' },
+      { success: false, error: 'Failed to fetch census data' },
       { status: 500 }
     );
   }
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+/**
+ * POST - Create or update census period
+ */
+export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { id: facilityId } = await params;
     const body = await request.json();
@@ -65,100 +107,122 @@ export async function POST(
       );
     }
 
-    // Handle batch insert/update
-    const periods = Array.isArray(body) ? body : [body];
-    const results = [];
+    const {
+      periodStart,
+      periodEnd,
+      medicarePartADays,
+      medicareAdvantageDays,
+      managedCareDays,
+      medicaidDays,
+      managedMedicaidDays,
+      privateDays,
+      vaContractDays,
+      hospiceDays,
+      otherDays,
+      totalBeds,
+      source = 'manual',
+      notes,
+    } = body;
 
-    for (const period of periods) {
-      const [inserted] = await db
-        .insert(facilityCensusPeriods)
-        .values({
-          facilityId,
-          periodStart: period.periodStart,
-          periodEnd: period.periodEnd,
-          medicarePartADays: period.medicarePartADays || 0,
-          medicareAdvantageDays: period.medicareAdvantageDays || 0,
-          managedCareDays: period.managedCareDays || 0,
-          medicaidDays: period.medicaidDays || 0,
-          managedMedicaidDays: period.managedMedicaidDays || 0,
-          privateDays: period.privateDays || 0,
-          vaContractDays: period.vaContractDays || 0,
-          hospiceDays: period.hospiceDays || 0,
-          otherDays: period.otherDays || 0,
-          totalBeds: period.totalBeds || facility.licensedBeds,
-          occupancyRate: period.occupancyRate,
-          source: period.source || 'manual',
-          notes: period.notes,
-        })
-        .returning();
+    // Calculate total days and occupancy
+    const allDays = [
+      medicarePartADays, medicareAdvantageDays, managedCareDays,
+      medicaidDays, managedMedicaidDays, privateDays,
+      vaContractDays, hospiceDays, otherDays
+    ].map(d => Number(d) || 0);
 
-      results.push(inserted);
-    }
+    const totalPatientDays = allDays.reduce((a, b) => a + b, 0);
+
+    // Calculate days in period for occupancy
+    const start = new Date(periodStart);
+    const end = new Date(periodEnd);
+    const daysInPeriod = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const beds = totalBeds || facility.licensedBeds || 0;
+    const maxPatientDays = beds * daysInPeriod;
+    const occupancyRate = maxPatientDays > 0 ? totalPatientDays / maxPatientDays : 0;
+
+    // Insert census period
+    const [newPeriod] = await db
+      .insert(facilityCensusPeriods)
+      .values({
+        facilityId,
+        periodStart,
+        periodEnd,
+        medicarePartADays: medicarePartADays || 0,
+        medicareAdvantageDays: medicareAdvantageDays || 0,
+        managedCareDays: managedCareDays || 0,
+        medicaidDays: medicaidDays || 0,
+        managedMedicaidDays: managedMedicaidDays || 0,
+        privateDays: privateDays || 0,
+        vaContractDays: vaContractDays || 0,
+        hospiceDays: hospiceDays || 0,
+        otherDays: otherDays || 0,
+        totalBeds: beds,
+        occupancyRate: occupancyRate.toFixed(4),
+        source,
+        notes,
+      })
+      .returning();
 
     return NextResponse.json({
       success: true,
-      data: results,
+      data: newPeriod,
     });
   } catch (error) {
-    console.error('Error creating census periods:', error);
+    console.error('Error creating census period:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to create census periods' },
+      { success: false, error: 'Failed to create census period' },
       { status: 500 }
     );
   }
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+/**
+ * PATCH - Update existing census period
+ */
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const { id: facilityId } = await params;
     const body = await request.json();
+    const { periodId, ...updateData } = body;
 
-    // Handle batch update
-    const periods = Array.isArray(body) ? body : [body];
-    const results = [];
+    if (!periodId) {
+      return NextResponse.json(
+        { success: false, error: 'Period ID is required' },
+        { status: 400 }
+      );
+    }
 
-    for (const period of periods) {
-      if (!period.id) {
-        // Create new period
-        const [inserted] = await db
-          .insert(facilityCensusPeriods)
-          .values({
-            facilityId,
-            ...period,
-            source: period.source || 'manual',
-          })
-          .returning();
-        results.push(inserted);
-      } else {
-        // Update existing period
-        const [updated] = await db
-          .update(facilityCensusPeriods)
-          .set({
-            ...period,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(facilityCensusPeriods.id, period.id),
-              eq(facilityCensusPeriods.facilityId, facilityId)
-            )
-          )
-          .returning();
-        if (updated) results.push(updated);
-      }
+    // Update census period
+    const [updatedPeriod] = await db
+      .update(facilityCensusPeriods)
+      .set({
+        ...updateData,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(facilityCensusPeriods.id, periodId),
+          eq(facilityCensusPeriods.facilityId, facilityId)
+        )
+      )
+      .returning();
+
+    if (!updatedPeriod) {
+      return NextResponse.json(
+        { success: false, error: 'Census period not found' },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json({
       success: true,
-      data: results,
+      data: updatedPeriod,
     });
   } catch (error) {
-    console.error('Error updating census periods:', error);
+    console.error('Error updating census period:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to update census periods' },
+      { success: false, error: 'Failed to update census period' },
       { status: 500 }
     );
   }

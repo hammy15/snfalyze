@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, deals, facilities, valuations, financialPeriods, assumptions, capexItems, partnerMatches, riskFactors, documents } from '@/db';
 import { eq } from 'drizzle-orm';
 
+interface RouteParams {
+  params: Promise<{ id: string }>;
+}
+
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: RouteParams
 ) {
   try {
-    const dealId = params.id;
+    const { id: dealId } = await params;
 
     // Fetch deal with related data
     const deal = await db.query.deals.findFirst({
@@ -46,10 +50,10 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: RouteParams
 ) {
   try {
-    const dealId = params.id;
+    const { id: dealId } = await params;
     const body = await request.json();
 
     // Update deal
@@ -84,10 +88,10 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: RouteParams
 ) {
   try {
-    const dealId = params.id;
+    const { id: dealId } = await params;
 
     // Delete deal (cascades to related tables)
     const [deletedDeal] = await db

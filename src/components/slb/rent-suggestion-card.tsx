@@ -11,6 +11,120 @@ interface RentSuggestionCardProps {
   isLoading?: boolean;
 }
 
+// Single facility rent suggestion component
+interface FacilityRentSuggestionProps {
+  facilityName: string;
+  beds: number;
+  ttmEbitdar: number;
+  ttmNoi: number;
+  assumptions?: Partial<SLBAssumptions>;
+  className?: string;
+}
+
+export function FacilityRentSuggestion({
+  facilityName,
+  beds,
+  ttmEbitdar,
+  ttmNoi,
+  assumptions = DEFAULT_ASSUMPTIONS,
+  className,
+}: FacilityRentSuggestionProps) {
+  const config = { ...DEFAULT_ASSUMPTIONS, ...assumptions };
+
+  // Calculate purchase price: NOI / Cap Rate
+  const noi = ttmNoi > 0 ? ttmNoi : ttmEbitdar * 0.95;
+  const suggestedPurchasePrice = noi / config.capRate;
+
+  // Calculate annual rent: Purchase Price × Yield
+  const suggestedAnnualRent = suggestedPurchasePrice * config.yield;
+  const suggestedMonthlyRent = suggestedAnnualRent / 12;
+
+  // Calculate coverage ratio: EBITDAR / Annual Rent
+  const coverageRatio = suggestedAnnualRent > 0 ? ttmEbitdar / suggestedAnnualRent : 0;
+
+  // Determine coverage status
+  const coverageStatus: 'healthy' | 'warning' | 'critical' =
+    coverageRatio >= config.minCoverage ? 'healthy' :
+    coverageRatio >= 1.25 ? 'warning' : 'critical';
+
+  // Max rent calculations
+  const maxRentAt140Coverage = ttmEbitdar / 1.40;
+  const maxRentAt125Coverage = ttmEbitdar / 1.25;
+
+  // Per-bed metrics
+  const pricePerBed = beds > 0 ? suggestedPurchasePrice / beds : 0;
+  const rentPerBed = beds > 0 ? suggestedAnnualRent / beds : 0;
+
+  return (
+    <div className={`rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 ${className || ''}`}>
+      <div className="flex items-center gap-2 mb-4">
+        <TrendingUp className="h-5 w-5 text-teal-500" />
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+          Rent Suggestion
+        </h3>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <div>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Purchase Price</p>
+          <p className="text-lg font-bold text-gray-900 dark:text-white">
+            {formatCurrency(suggestedPurchasePrice)}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {formatCurrency(pricePerBed)}/bed
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Annual Rent</p>
+          <p className="text-lg font-bold text-gray-900 dark:text-white">
+            {formatCurrency(suggestedAnnualRent)}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {formatCurrency(suggestedMonthlyRent)}/month
+          </p>
+        </div>
+      </div>
+
+      <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg mb-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-gray-600 dark:text-gray-400">Coverage Ratio</span>
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-gray-900 dark:text-white">
+              {formatCoverage(coverageRatio)}
+            </span>
+            {coverageStatus === 'healthy' && (
+              <CheckCircle className="h-4 w-4 text-green-500" />
+            )}
+            {coverageStatus === 'warning' && (
+              <AlertTriangle className="h-4 w-4 text-yellow-500" />
+            )}
+            {coverageStatus === 'critical' && (
+              <AlertTriangle className="h-4 w-4 text-red-500" />
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+        <div className="flex justify-between">
+          <span>Max Rent @ 1.40x Coverage</span>
+          <span>{formatCurrency(maxRentAt140Coverage)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Max Rent @ 1.25x Coverage</span>
+          <span>{formatCurrency(maxRentAt125Coverage)}</span>
+        </div>
+      </div>
+
+      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          Cap Rate {formatPercent(config.capRate, 1)} | Yield {formatPercent(config.yield, 1)}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function RentSuggestionCard({
   portfolioData,
   onAssumptionsChange,

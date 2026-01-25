@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -14,11 +14,18 @@ import {
   ExternalLink,
   DollarSign,
   TrendingUp,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProviderCard } from '@/components/cms/provider-card';
 import { ValuationPanel } from '@/components/valuation/valuation-panel';
 import { ScenarioTabs, type ProformaScenario, type ScenarioType } from '@/components/proforma/scenario-tabs';
+import { ProformaEditor } from '@/components/financials/proforma-editor';
+import { FacilityFinancialDashboard } from '@/components/financials/facility-financial-dashboard';
+import { FacilityPageSkeleton } from '@/components/facility/facility-page-skeleton';
+import { FacilityRentSuggestion } from '@/components/slb/rent-suggestion-card';
+import type { ProformaAssumption, ProformaOverride, YearlyProforma, CensusPeriod, PayerRates, PLLineItem } from '@/components/financials/types';
 import type { FacilityData } from '@/components/deals/facility-list';
 import type { ComparableSale } from '@/lib/valuation/types';
 
@@ -162,8 +169,124 @@ export default function FacilityDetailPage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [scenarios, setScenarios] = useState<ProformaScenario[]>(mockScenarios);
   const [activeScenarioId, setActiveScenarioId] = useState(mockScenarios[0].id);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [facility, setFacility] = useState<typeof mockFacility | null>(null);
 
-  const facility = mockFacility; // In production, fetch by facilityId
+  // Financial data state
+  const [censusPeriods, setCensusPeriods] = useState<CensusPeriod[]>([]);
+  const [payerRates, setPayerRates] = useState<PayerRates | null>(null);
+  const [plLineItems, setPlLineItems] = useState<PLLineItem[]>([]);
+
+  // Fetch facility data from API
+  useEffect(() => {
+    const fetchFacility = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const response = await fetch(`/api/facilities/${facilityId}`);
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || 'Failed to fetch facility');
+        }
+
+        // Transform API data to match component expectations
+        const facilityData = {
+          ...result.data,
+          assetType: result.data.assetType || 'SNF',
+          financials: result.data.financials || mockFacility.financials,
+          marketData: result.data.marketData || mockFacility.marketData,
+        };
+
+        setFacility(facilityData);
+      } catch (err) {
+        console.error('Error fetching facility:', err);
+        // Fall back to mock data if API fails
+        console.warn('Falling back to mock facility data');
+        setFacility(mockFacility);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchFacility();
+  }, [facilityId]);
+
+  // Fetch financial data (census and payer rates)
+  useEffect(() => {
+    const fetchFinancialData = async () => {
+      if (!facilityId) return;
+
+      try {
+        // Fetch census data
+        const censusResponse = await fetch(`/api/facilities/${facilityId}/census`);
+        if (censusResponse.ok) {
+          const censusResult = await censusResponse.json();
+          if (censusResult.success && censusResult.data) {
+            setCensusPeriods(censusResult.data.periods || []);
+          }
+        }
+
+        // Fetch payer rates
+        const ratesResponse = await fetch(`/api/facilities/${facilityId}/payer-rates`);
+        if (ratesResponse.ok) {
+          const ratesResult = await ratesResponse.json();
+          if (ratesResult.success && ratesResult.data?.rates?.length > 0) {
+            const latestRate = ratesResult.data.rates[0];
+            setPayerRates({
+              id: latestRate.id || `rate-${facilityId}`,
+              facilityId: facilityId,
+              effectiveDate: latestRate.effectiveDate,
+              medicarePartAPpd: Number(latestRate.medicarePartAPpd) || 0,
+              medicareAdvantagePpd: Number(latestRate.medicareAdvantagePpd) || 0,
+              managedCarePpd: Number(latestRate.managedCarePpd) || 0,
+              medicaidPpd: Number(latestRate.medicaidPpd) || 0,
+              managedMedicaidPpd: Number(latestRate.managedMedicaidPpd) || 0,
+              privatePpd: Number(latestRate.privatePpd) || 0,
+              vaContractPpd: Number(latestRate.vaContractPpd) || 0,
+              hospicePpd: Number(latestRate.hospicePpd) || 0,
+              ancillaryRevenuePpd: Number(latestRate.ancillaryRevenuePpd) || 0,
+              therapyRevenuePpd: Number(latestRate.therapyRevenuePpd) || 0,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching financial data:', err);
+      }
+    };
+
+    fetchFinancialData();
+  }, [facilityId]);
+
+  // Show loading state
+  if (isLoading) {
+    return <FacilityPageSkeleton />;
+  }
+
+  // Show error state
+  if (error || !facility) {
+    return (
+      <div className="min-h-screen bg-[var(--color-bg-subtle)] dark:bg-surface-900 flex items-center justify-center">
+        <div className="neu-card p-8 text-center max-w-md">
+          <AlertTriangle className="w-12 h-12 mx-auto text-red-500 mb-4" />
+          <h2 className="text-xl font-semibold text-[var(--color-text-primary)] mb-2">
+            {error || 'Facility not found'}
+          </h2>
+          <p className="text-[var(--color-text-secondary)] mb-4">
+            We couldn't load the facility data. Please try again.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="neu-button-primary inline-flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const handleCreateScenario = (type: ScenarioType) => {
     const newScenario: ProformaScenario = {
@@ -194,6 +317,117 @@ export default function FacilityDetailPage() {
     setScenarios((prev) => prev.filter((s) => s.id !== id));
     if (activeScenarioId === id) {
       setActiveScenarioId(scenarios[0]?.id);
+    }
+  };
+
+  // Convert scenario data to ProformaAssumption format
+  const getAssumptionsForScenario = (scenario?: ProformaScenario): ProformaAssumption[] => {
+    const defaults: ProformaAssumption[] = [
+      { key: 'medicare_rate_increase', label: 'Medicare Rate Increase', value: 0.03, category: 'revenue' },
+      { key: 'medicaid_rate_increase', label: 'Medicaid Rate Increase', value: 0.015, category: 'revenue' },
+      { key: 'private_rate_increase', label: 'Private Pay Rate Increase', value: 0.04, category: 'revenue' },
+      { key: 'wage_increase', label: 'Wage Increase', value: 0.035, category: 'expense' },
+      { key: 'benefits_inflation', label: 'Benefits Inflation', value: 0.05, category: 'expense' },
+      { key: 'general_inflation', label: 'General Inflation', value: 0.025, category: 'expense' },
+      { key: 'occupancy_target_y1', label: 'Occupancy Target Y1', value: 0.86, category: 'census' },
+      { key: 'occupancy_target_y3', label: 'Occupancy Target Y3', value: 0.90, category: 'census' },
+      { key: 'occupancy_target_y5', label: 'Occupancy Target Y5', value: 0.92, category: 'census' },
+      { key: 'rent_escalation', label: 'Rent Escalation', value: 0.02, category: 'growth' },
+    ];
+
+    if (!scenario) return defaults;
+
+    // Adjust based on scenario type
+    const typeMultipliers: Record<string, number> = {
+      upside: 1.5,
+      downside: 0.5,
+      baseline: 1.0,
+    };
+    const multiplier = typeMultipliers[scenario.scenarioType] || 1.0;
+
+    return defaults.map((a) => {
+      if (a.category === 'revenue') {
+        return { ...a, value: a.value * multiplier };
+      }
+      if (a.category === 'expense' && scenario.scenarioType === 'downside') {
+        return { ...a, value: a.value * 1.4 }; // Higher expense growth in downside
+      }
+      if (a.key === 'occupancy_target_y5') {
+        const occupancyAdjust = scenario.scenarioType === 'upside' ? 0.95 :
+                                scenario.scenarioType === 'downside' ? 0.82 : 0.90;
+        return { ...a, value: occupancyAdjust };
+      }
+      return a;
+    });
+  };
+
+  // Handle saving census data
+  const handleSaveCensus = async (periods: CensusPeriod[]): Promise<void> => {
+    try {
+      for (const period of periods) {
+        const response = await fetch(`/api/facilities/${facilityId}/census`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(period),
+        });
+        if (!response.ok) {
+          throw new Error('Failed to save census data');
+        }
+      }
+      setCensusPeriods(periods);
+    } catch (error) {
+      console.error('Error saving census:', error);
+      throw error;
+    }
+  };
+
+  // Handle saving payer rates
+  const handleSaveRates = async (rates: PayerRates): Promise<void> => {
+    try {
+      const response = await fetch(`/api/facilities/${facilityId}/payer-rates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(rates),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to save payer rates');
+      }
+      setPayerRates(rates);
+    } catch (error) {
+      console.error('Error saving rates:', error);
+      throw error;
+    }
+  };
+
+  // Handle saving proforma assumptions and overrides
+  const handleSaveProforma = async (
+    assumptions: ProformaAssumption[],
+    overrides: ProformaOverride[]
+  ): Promise<void> => {
+    try {
+      const response = await fetch(`/api/deals/${dealId}/scenarios`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: scenarios.find((s) => s.id === activeScenarioId)?.name || 'Updated Scenario',
+          type: scenarios.find((s) => s.id === activeScenarioId)?.scenarioType || 'custom',
+          facilityId,
+          assumptions: assumptions.reduce((acc, a) => {
+            acc[a.key] = a.value;
+            return acc;
+          }, {} as Record<string, number>),
+          overrides,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save proforma');
+      }
+
+      console.log('Proforma saved successfully');
+    } catch (error) {
+      console.error('Error saving proforma:', error);
+      throw error;
     }
   };
 
@@ -292,6 +526,7 @@ export default function FacilityDetailPage() {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-6">
             <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="financials">Financials</TabsTrigger>
             <TabsTrigger value="cms">CMS Data</TabsTrigger>
             <TabsTrigger value="valuation">Valuation</TabsTrigger>
             <TabsTrigger value="proforma">Proforma</TabsTrigger>
@@ -326,6 +561,16 @@ export default function FacilityDetailPage() {
                 />
               )}
             </div>
+
+            {/* Rent Suggestion - Show when financial data is available */}
+            {facility.financials && (facility.financials.ebitdar || facility.financials.noi) && (
+              <FacilityRentSuggestion
+                facilityName={facility.name}
+                beds={facility.licensedBeds || facility.certifiedBeds || 100}
+                ttmEbitdar={facility.financials.ebitdar || facility.financials.noi || 0}
+                ttmNoi={facility.financials.noi || 0}
+              />
+            )}
 
             {/* Warnings */}
             {(facility.isSff || facility.isSffWatch || facility.hasImmediateJeopardy) && (
@@ -383,6 +628,54 @@ export default function FacilityDetailPage() {
             </div>
           </TabsContent>
 
+          {/* Financials Tab - Census, PPD, P&L, Proforma */}
+          <TabsContent value="financials" className="space-y-6">
+            <FacilityFinancialDashboard
+              facilityId={facilityId}
+              facilityName={facility.name}
+              totalBeds={facility.licensedBeds || facility.certifiedBeds || 100}
+              scenarioId={activeScenarioId}
+              scenarioName={scenarios.find((s) => s.id === activeScenarioId)?.name}
+              censusPeriods={censusPeriods}
+              onSaveCensus={handleSaveCensus}
+              currentRates={payerRates || {
+                id: `default-rate-${facilityId}`,
+                facilityId: facilityId,
+                effectiveDate: new Date().toISOString().split('T')[0],
+                medicarePartAPpd: 625,
+                medicareAdvantagePpd: 480,
+                managedCarePpd: 420,
+                medicaidPpd: 185,
+                managedMedicaidPpd: 195,
+                privatePpd: 285,
+                vaContractPpd: 350,
+                hospicePpd: 200,
+                ancillaryRevenuePpd: 20,
+                therapyRevenuePpd: 15,
+              }}
+              onSaveRates={handleSaveRates}
+              plLineItems={plLineItems.length > 0 ? plLineItems : [
+                { coaCode: '4100', label: 'Room & Board Revenue', category: 'revenue' as const, actual: facility.financials?.revenue || 6800000, ppd: 188.89 },
+                { coaCode: '4200', label: 'Ancillary Revenue', category: 'revenue' as const, actual: 720000, ppd: 20.00 },
+                { coaCode: '4300', label: 'Therapy Revenue', category: 'revenue' as const, actual: 180000, ppd: 5.00 },
+                { coaCode: '5100', label: 'Salaries & Wages', category: 'expense' as const, actual: 3500000, ppd: 97.22 },
+                { coaCode: '5200', label: 'Employee Benefits', category: 'expense' as const, actual: 700000, ppd: 19.44 },
+                { coaCode: '5300', label: 'Contract Labor', category: 'expense' as const, actual: 150000, ppd: 4.17 },
+                { coaCode: '5400', label: 'Dietary', category: 'expense' as const, actual: 380000, ppd: 10.56 },
+                { coaCode: '5500', label: 'Pharmacy', category: 'expense' as const, actual: 220000, ppd: 6.11 },
+                { coaCode: '5600', label: 'Supplies', category: 'expense' as const, actual: 180000, ppd: 5.00 },
+                { coaCode: '5700', label: 'Utilities', category: 'expense' as const, actual: 120000, ppd: 3.33 },
+                { coaCode: '5800', label: 'Insurance', category: 'expense' as const, actual: 150000, ppd: 4.17 },
+                { coaCode: '5900', label: 'Property Tax', category: 'expense' as const, actual: 180000, ppd: 5.00 },
+                { coaCode: '6000', label: 'Management Fee', category: 'expense' as const, actual: 385000, ppd: 10.69 },
+                { coaCode: '6100', label: 'Rent', category: 'expense' as const, actual: 600000, ppd: 16.67 },
+              ]}
+              proformaAssumptions={getAssumptionsForScenario(
+                scenarios.find((s) => s.id === activeScenarioId)
+              )}
+            />
+          </TabsContent>
+
           {/* CMS Data Tab */}
           <TabsContent value="cms" className="space-y-6">
             {facility.ccn ? (
@@ -426,15 +719,34 @@ export default function FacilityDetailPage() {
               onDeleteScenario={handleDeleteScenario}
             />
 
-            <div className="card p-6">
-              <p className="text-[var(--color-text-tertiary)]">
-                Proforma spreadsheet for scenario:{' '}
-                <span className="font-medium text-[var(--color-text-primary)]">
-                  {scenarios.find((s) => s.id === activeScenarioId)?.name || 'None selected'}
-                </span>
-              </p>
-              {/* The proforma-spreadsheet component would be integrated here */}
-            </div>
+            <ProformaEditor
+              facilityId={facilityId}
+              facilityName={facility.name}
+              scenarioId={activeScenarioId}
+              scenarioName={scenarios.find((s) => s.id === activeScenarioId)?.name || 'Base Case'}
+              baseYear={new Date().getFullYear()}
+              projectionYears={5}
+              initialAssumptions={getAssumptionsForScenario(
+                scenarios.find((s) => s.id === activeScenarioId)
+              )}
+              initialOverrides={[]}
+              baselineData={{
+                year: new Date().getFullYear(),
+                totalDays: facility.licensedBeds ? facility.licensedBeds * 365 * 0.85 : 30000,
+                occupancy: 0.85,
+                revenue: facility.financials?.revenue || 8500000,
+                expenses: facility.financials?.expenses || 6700000,
+                ebitdar: facility.financials?.ebitdar || 1800000,
+                rent: (facility.financials?.revenue || 8500000) * 0.08,
+                ebitda: (facility.financials?.ebitdar || 1800000) - (facility.financials?.revenue || 8500000) * 0.08,
+                ebitdaMargin: 0.12,
+              }}
+              onSave={handleSaveProforma}
+              onExport={() => {
+                // Export functionality
+                console.log('Export proforma');
+              }}
+            />
           </TabsContent>
         </Tabs>
       </div>

@@ -4,7 +4,13 @@ import { useMemo, useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, TrendingDown, Building2, Users, DollarSign, Percent, Download } from 'lucide-react';
+import { TrendingUp, TrendingDown, Building2, Users, DollarSign, Percent, Download, FileText } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { exportPortfolioToExcel } from '@/lib/export/portfolio-excel';
 import { ScenarioComparison } from './scenario-comparison';
 import {
@@ -226,20 +232,37 @@ export function PortfolioFinancialView({
             {formatPercent(portfolioMetrics.weightedOccupancy)} Occupancy
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => exportPortfolioToExcel({
-            dealName,
-            facilities,
-            portfolioMetrics,
-            includeProforma: true,
-          })}
-          className="gap-2"
-        >
-          <Download className="h-4 w-4" />
-          Export to Excel
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-2">
+              <Download className="h-4 w-4" />
+              Export
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={() => exportPortfolioToExcel({
+                dealName,
+                facilities,
+                portfolioMetrics,
+                includeProforma: true,
+              })}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export to Excel
+            </DropdownMenuItem>
+            {dealId && (
+              <DropdownMenuItem
+                onClick={() => {
+                  window.open(`/api/deals/${dealId}/export/pdf`, '_blank');
+                }}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Export to PDF
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Key Metrics Cards */}

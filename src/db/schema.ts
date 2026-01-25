@@ -91,6 +91,7 @@ export const documentTypeEnum = pgEnum('document_type', [
 export const documentStatusEnum = pgEnum('document_status', [
   'uploaded',
   'parsing',
+  'extracting',
   'normalizing',
   'analyzing',
   'complete',
@@ -321,10 +322,13 @@ export const financialPeriods = pgTable(
     hppd: decimal('hppd', { precision: 5, scale: 2 }),
     agencyPercentage: decimal('agency_percentage', { precision: 5, scale: 4 }),
     confidenceScore: integer('confidence_score'),
+    source: varchar('source', { length: 50 }), // 'extracted', 'manual', 'imported'
+    sourceDocumentId: uuid('source_document_id').references(() => documents.id),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   },
   (table) => ({
     dealIdIdx: index('idx_financial_periods_deal_id').on(table.dealId),
+    facilityIdIdx: index('idx_financial_periods_facility_id').on(table.facilityId),
   })
 );
 

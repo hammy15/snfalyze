@@ -19,7 +19,14 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
+  FileText,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface Facility {
   id: string;
@@ -291,6 +298,32 @@ export function SaleLeasebackDashboard({ dealId }: SaleLeasebackDashboardProps) 
     }
   };
 
+  // Export to PDF
+  const exportToPdf = async () => {
+    try {
+      setExporting(true);
+      const response = await fetch(`/api/deals/${dealId}/export/pdf`);
+
+      if (!response.ok) {
+        throw new Error('PDF export failed');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${deal?.name || 'deal'}_sale_leaseback_report.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'PDF export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -337,18 +370,31 @@ export function SaleLeasebackDashboard({ dealId }: SaleLeasebackDashboardProps) 
             )}
             Calculate
           </Button>
-          <Button
-            onClick={exportToExcel}
-            disabled={exporting || !calculationResults}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white"
-          >
-            {exporting ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4 mr-2" />
-            )}
-            Export Excel
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                disabled={exporting || !calculationResults}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                {exporting ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 mr-2" />
+                )}
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={exportToExcel}>
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                Export to Excel
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportToPdf}>
+                <FileText className="h-4 w-4 mr-2" />
+                Export to PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

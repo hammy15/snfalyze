@@ -99,7 +99,7 @@ export default function DealsPage() {
               // Get beds from deal or sum from facilities
               const beds = typeof deal.beds === 'number'
                 ? deal.beds
-                : facilities.reduce((sum: number, f: { licensedBeds?: number }) => sum + (f.licensedBeds || 0), 0);
+                : (facilities as Array<{ licensedBeds?: number }>).reduce((sum, f) => sum + (f.licensedBeds || 0), 0);
 
               // Parse asking price
               const askingPrice = deal.askingPrice

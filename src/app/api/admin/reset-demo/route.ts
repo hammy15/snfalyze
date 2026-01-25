@@ -129,7 +129,7 @@ const demoPartners = [
   {
     name: 'Regional Healthcare Finance',
     type: 'lender' as const,
-    assetTypes: ['SNF', 'ALF'] ,
+    assetTypes: ['SNF', 'ALF'] as ('SNF' | 'ALF' | 'ILF')[],
     geographies: ['TX', 'FL', 'OH', 'CA', 'PA', 'NY'],
     minDealSize: '5000000',
     maxDealSize: '75000000',
@@ -149,7 +149,7 @@ const demoPartners = [
   {
     name: 'Senior Housing Trust',
     type: 'reit' as const,
-    assetTypes: ['SNF', 'ALF', 'ILF'] ,
+    assetTypes: ['SNF', 'ALF', 'ILF'] as ('SNF' | 'ALF' | 'ILF')[],
     geographies: ['CA', 'FL', 'TX', 'AZ', 'WA', 'OR'],
     minDealSize: '20000000',
     maxDealSize: '150000000',
@@ -169,7 +169,7 @@ const demoPartners = [
   {
     name: 'Carebridge Capital',
     type: 'equity' as const,
-    assetTypes: ['SNF', 'ALF'] ,
+    assetTypes: ['SNF', 'ALF'] as ('SNF' | 'ALF' | 'ILF')[],
     geographies: ['TX', 'FL', 'OH', 'PA', 'IL', 'GA'],
     minDealSize: '10000000',
     maxDealSize: '100000000',
@@ -187,7 +187,7 @@ const demoPartners = [
   {
     name: 'MedCredit Partners',
     type: 'lender' as const,
-    assetTypes: ['SNF'] ,
+    assetTypes: ['SNF'] as ('SNF' | 'ALF' | 'ILF')[],
     geographies: ['OH', 'PA', 'MI', 'IN', 'WI', 'IL'],
     minDealSize: '3000000',
     maxDealSize: '40000000',

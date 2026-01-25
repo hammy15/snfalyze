@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { FilterBar, facilityFilters, ActiveFilter } from '@/components/ui/filter-bar';
-import { PreviewPanel, FacilityPreviewContent } from '@/components/ui/preview-panel';
+import { PreviewPanel } from '@/components/ui/preview-panel';
 import { RiskBadge, QualityRating } from '@/components/ui/status-badge';
 import { StatCard } from '@/components/ui/stat-card';
 import {
@@ -126,7 +126,7 @@ export default function FacilitiesPage() {
           f.name.toLowerCase().includes(query) ||
           f.city.toLowerCase().includes(query) ||
           f.state.toLowerCase().includes(query) ||
-          f.owner.toLowerCase().includes(query)
+          (f.owner && f.owner.toLowerCase().includes(query))
       );
     }
 
@@ -136,32 +136,38 @@ export default function FacilitiesPage() {
         result = result.filter((f) => (filter.value as string[]).includes(f.state));
       }
       if (filter.id === 'type' && Array.isArray(filter.value)) {
-        result = result.filter((f) => (filter.value as string[]).includes(f.type));
+        result = result.filter((f) => f.type && (filter.value as string[]).includes(f.type));
       }
       if (filter.id === 'risk' && Array.isArray(filter.value)) {
-        result = result.filter((f) => (filter.value as string[]).includes(f.riskLevel));
+        result = result.filter((f) => f.riskLevel && (filter.value as string[]).includes(f.riskLevel));
       }
       if (filter.id === 'beds' && typeof filter.value === 'object' && !Array.isArray(filter.value)) {
         const range = filter.value as { min?: number; max?: number };
         if (range.min !== undefined) {
-          result = result.filter((f) => f.beds >= range.min!);
+          result = result.filter((f) => (f.licensedBeds || 0) >= range.min!);
         }
         if (range.max !== undefined) {
-          result = result.filter((f) => f.beds <= range.max!);
+          result = result.filter((f) => (f.licensedBeds || 0) <= range.max!);
         }
       }
     });
 
     // Apply sorting
     result.sort((a, b) => {
-      let aVal = a[sortColumn as keyof Facility];
-      let bVal = b[sortColumn as keyof Facility];
+      const aVal = a[sortColumn as keyof Facility];
+      const bVal = b[sortColumn as keyof Facility];
 
-      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
-      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+      // Handle undefined values
+      if (aVal === undefined && bVal === undefined) return 0;
+      if (aVal === undefined) return 1;
+      if (bVal === undefined) return -1;
 
-      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      // Convert to comparable values
+      const aCompare = typeof aVal === 'string' ? aVal.toLowerCase() : aVal;
+      const bCompare = typeof bVal === 'string' ? bVal.toLowerCase() : bVal;
+
+      if (aCompare < bCompare) return sortDirection === 'asc' ? -1 : 1;
+      if (aCompare > bCompare) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
 
@@ -360,7 +366,6 @@ export default function FacilitiesPage() {
         <StatCard
           label="Avg CMS Rating"
           value={Number(stats.avgRating)}
-          suffix="/5"
           icon={<TrendingUp className="w-5 h-5" />}
           size="sm"
         />
@@ -496,7 +501,49 @@ export default function FacilitiesPage() {
           )
         }
       >
-        {selectedFacility && <FacilityPreviewContent facility={selectedFacility} />}
+        {selectedFacility && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="text-center p-3 bg-[var(--gray-50)] rounded-lg">
+                <div className="text-2xl font-semibold text-[var(--color-text-primary)] tabular-nums">
+                  {selectedFacility.licensedBeds}
+                </div>
+                <div className="text-xs text-[var(--color-text-tertiary)]">Beds</div>
+              </div>
+              <div className="text-center p-3 bg-[var(--gray-50)] rounded-lg">
+                <div className="text-2xl font-semibold text-[var(--color-text-primary)] tabular-nums">
+                  {selectedFacility.cmsRating || '—'}
+                </div>
+                <div className="text-xs text-[var(--color-text-tertiary)]">CMS Rating</div>
+              </div>
+              <div className="text-center p-3 bg-[var(--gray-50)] rounded-lg">
+                <div className="text-sm font-medium">
+                  {selectedFacility.riskLevel && (
+                    <RiskBadge level={selectedFacility.riskLevel} score={selectedFacility.riskScore} showScore size="sm" />
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-[var(--color-text-tertiary)]">Address</span>
+                <span className="text-[var(--color-text-primary)]">{selectedFacility.address}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[var(--color-text-tertiary)]">Type</span>
+                <span className="text-[var(--color-text-primary)]">{selectedFacility.assetType}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[var(--color-text-tertiary)]">Certified Beds</span>
+                <span className="text-[var(--color-text-primary)]">{selectedFacility.certifiedBeds || '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[var(--color-text-tertiary)]">Year Built</span>
+                <span className="text-[var(--color-text-primary)]">{selectedFacility.yearBuilt || '—'}</span>
+              </div>
+            </div>
+          </div>
+        )}
       </PreviewPanel>
     </div>
   );

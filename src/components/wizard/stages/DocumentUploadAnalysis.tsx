@@ -215,7 +215,7 @@ export function DocumentUploadAnalysis({
     setUploading(false);
   }, [sessionId]);
 
-  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
       'application/pdf': ['.pdf'],
@@ -223,8 +223,6 @@ export function DocumentUploadAnalysis({
       'application/vnd.ms-excel': ['.xls'],
       'text/csv': ['.csv'],
     },
-    noClick: true, // We'll handle click manually for better reliability
-    noKeyboard: false,
   });
 
   // Remove a file
@@ -394,20 +392,7 @@ export function DocumentUploadAnalysis({
     <div className="space-y-6">
       {/* Upload area */}
       <div
-        {...getRootProps({
-          onClick: (e) => {
-            e.stopPropagation();
-            open();
-          },
-        })}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            open();
-          }
-        }}
+        {...getRootProps()}
         className={cn(
           'border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer',
           isDragActive

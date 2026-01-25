@@ -190,8 +190,8 @@ export default function PortfolioPage() {
                 <Building2 className="w-6 h-6 text-accent" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-cascadia-900">{portfolioSummary.totalFacilities}</p>
-                <p className="text-sm text-cascadia-500">Facilities</p>
+                <p className="text-2xl font-bold text-surface-900">{portfolioSummary.totalFacilities}</p>
+                <p className="text-sm text-surface-500">Facilities</p>
               </div>
             </div>
           </CardContent>
@@ -200,12 +200,12 @@ export default function PortfolioPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-lg bg-cascadia-100">
-                <Users className="w-6 h-6 text-cascadia-600" />
+              <div className="p-3 rounded-lg bg-surface-100">
+                <Users className="w-6 h-6 text-surface-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-cascadia-900">{portfolioSummary.totalBeds.toLocaleString()}</p>
-                <p className="text-sm text-cascadia-500">Total Beds</p>
+                <p className="text-2xl font-bold text-surface-900">{portfolioSummary.totalBeds.toLocaleString()}</p>
+                <p className="text-sm text-surface-500">Total Beds</p>
               </div>
             </div>
           </CardContent>
@@ -218,8 +218,8 @@ export default function PortfolioPage() {
                 <MapPin className="w-6 h-6 text-blue-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-cascadia-900">{portfolioSummary.stateConcentration.length}</p>
-                <p className="text-sm text-cascadia-500">States</p>
+                <p className="text-2xl font-bold text-surface-900">{portfolioSummary.stateConcentration.length}</p>
+                <p className="text-sm text-surface-500">States</p>
               </div>
             </div>
           </CardContent>
@@ -232,8 +232,8 @@ export default function PortfolioPage() {
                 <PieChart className="w-6 h-6 text-purple-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-cascadia-900">{portfolioSummary.assetTypeBreakdown.length}</p>
-                <p className="text-sm text-cascadia-500">Asset Types</p>
+                <p className="text-2xl font-bold text-surface-900">{portfolioSummary.assetTypeBreakdown.length}</p>
+                <p className="text-sm text-surface-500">Asset Types</p>
               </div>
             </div>
           </CardContent>
@@ -252,12 +252,12 @@ export default function PortfolioPage() {
               {portfolioSummary.stateConcentration.map((item) => (
                 <div key={item.state} className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium text-cascadia-900">{item.state}</span>
-                    <span className="text-cascadia-600">
+                    <span className="font-medium text-surface-900">{item.state}</span>
+                    <span className="text-surface-600">
                       {item.facilities} facilities • {item.beds} beds
                     </span>
                   </div>
-                  <div className="h-3 rounded-full bg-cascadia-200 overflow-hidden">
+                  <div className="h-3 rounded-full bg-surface-200 overflow-hidden">
                     <div
                       className={`h-full rounded-full ${
                         item.percent > 0.5 ? 'bg-status-warning' : 'bg-accent'
@@ -265,7 +265,7 @@ export default function PortfolioPage() {
                       style={{ width: `${item.percent * 100}%` }}
                     />
                   </div>
-                  <p className="text-xs text-cascadia-500 text-right">
+                  <p className="text-xs text-surface-500 text-right">
                     {formatPercent(item.percent, 0)} of portfolio
                     {item.percent > 0.5 && (
                       <span className="text-status-warning ml-2">High concentration</span>
@@ -287,14 +287,14 @@ export default function PortfolioPage() {
               {portfolioSummary.assetTypeBreakdown.map((item) => (
                 <div key={item.type} className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium text-cascadia-900">
+                    <span className="font-medium text-surface-900">
                       {item.type === 'SNF' ? 'Skilled Nursing' : item.type === 'ALF' ? 'Assisted Living' : 'Independent Living'}
                     </span>
-                    <span className="text-cascadia-600">
+                    <span className="text-surface-600">
                       {item.facilities} facilities • {item.beds} beds
                     </span>
                   </div>
-                  <div className="h-3 rounded-full bg-cascadia-200 overflow-hidden">
+                  <div className="h-3 rounded-full bg-surface-200 overflow-hidden">
                     <div
                       className={`h-full rounded-full ${
                         item.type === 'SNF' ? 'bg-blue-500' :
@@ -303,7 +303,7 @@ export default function PortfolioPage() {
                       style={{ width: `${item.percent * 100}%` }}
                     />
                   </div>
-                  <p className="text-xs text-cascadia-500 text-right">
+                  <p className="text-xs text-surface-500 text-right">
                     {formatPercent(item.percent, 0)} of portfolio
                   </p>
                 </div>
@@ -334,7 +334,7 @@ export default function PortfolioPage() {
               {facilities.map((facility) => (
                 <TableRow key={facility.id}>
                   <TableCell>
-                    <span className="font-medium text-cascadia-900">
+                    <span className="font-medium text-surface-900">
                       {facility.name}
                     </span>
                   </TableCell>
@@ -347,7 +347,7 @@ export default function PortfolioPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <span className="flex items-center gap-1 text-cascadia-600">
+                    <span className="flex items-center gap-1 text-surface-600">
                       <MapPin className="w-3 h-3" />
                       {facility.city}, {facility.state}
                     </span>

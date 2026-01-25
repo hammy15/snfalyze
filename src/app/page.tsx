@@ -119,8 +119,8 @@ export default function Dashboard() {
                 <FolderKanban className="w-6 h-6 text-accent" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-cascadia-900">{stats.activeDeals}</p>
-                <p className="text-sm text-cascadia-500">Active Deals</p>
+                <p className="text-2xl font-bold text-surface-900">{stats.activeDeals}</p>
+                <p className="text-sm text-surface-500">Active Deals</p>
               </div>
             </div>
           </CardContent>
@@ -133,8 +133,8 @@ export default function Dashboard() {
                 <CheckCircle className="w-6 h-6 text-status-success" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-cascadia-900">{stats.underLOI}</p>
-                <p className="text-sm text-cascadia-500">Under LOI</p>
+                <p className="text-2xl font-bold text-surface-900">{stats.underLOI}</p>
+                <p className="text-sm text-surface-500">Under LOI</p>
               </div>
             </div>
           </CardContent>
@@ -147,8 +147,8 @@ export default function Dashboard() {
                 <Clock className="w-6 h-6 text-status-warning" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-cascadia-900">{stats.awaitingReview}</p>
-                <p className="text-sm text-cascadia-500">Awaiting Review</p>
+                <p className="text-2xl font-bold text-surface-900">{stats.awaitingReview}</p>
+                <p className="text-sm text-surface-500">Awaiting Review</p>
               </div>
             </div>
           </CardContent>
@@ -161,10 +161,10 @@ export default function Dashboard() {
                 <TrendingUp className="w-6 h-6 text-blue-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-cascadia-900">
+                <p className="text-2xl font-bold text-surface-900">
                   {stats.pipelineValue > 0 ? `$${(stats.pipelineValue / 1000000).toFixed(0)}M` : '$0'}
                 </p>
-                <p className="text-sm text-cascadia-500">Pipeline Value</p>
+                <p className="text-sm text-surface-500">Pipeline Value</p>
               </div>
             </div>
           </CardContent>
@@ -180,10 +180,10 @@ export default function Dashboard() {
                 <Upload className="w-8 h-8 text-accent" />
               </div>
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-cascadia-900 mb-2">
+                <h3 className="text-lg font-semibold text-surface-900 mb-2">
                   Upload Deal Information
                 </h3>
-                <p className="text-sm text-cascadia-600 mb-4">
+                <p className="text-sm text-surface-600 mb-4">
                   Drop PDFs, Excel files, or images. SNFalyze will automatically extract,
                   normalize, and analyze all financial data.
                 </p>
@@ -201,14 +201,14 @@ export default function Dashboard() {
         <Card className="hover:border-accent/50 transition-colors">
           <CardContent className="pt-6">
             <div className="flex items-start gap-4">
-              <div className="p-4 rounded-xl bg-cascadia-100">
-                <Building2 className="w-8 h-8 text-cascadia-600" />
+              <div className="p-4 rounded-xl bg-surface-100">
+                <Building2 className="w-8 h-8 text-surface-600" />
               </div>
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-cascadia-900 mb-2">
+                <h3 className="text-lg font-semibold text-surface-900 mb-2">
                   View Portfolio
                 </h3>
-                <p className="text-sm text-cascadia-600 mb-4">
+                <p className="text-sm text-surface-600 mb-4">
                   Review current holdings, assess capital concentration, and evaluate
                   new deals in portfolio context.
                 </p>
@@ -243,15 +243,15 @@ export default function Dashboard() {
         <CardContent>
           {loading ? (
             <div className="py-12 text-center">
-              <div className="animate-pulse text-cascadia-500">Loading...</div>
+              <div className="animate-pulse text-surface-500">Loading...</div>
             </div>
           ) : deals.length === 0 ? (
             <div className="py-12 text-center">
-              <div className="mx-auto w-16 h-16 rounded-full bg-cascadia-100 flex items-center justify-center mb-4">
-                <FileText className="w-8 h-8 text-cascadia-400" />
+              <div className="mx-auto w-16 h-16 rounded-full bg-surface-100 flex items-center justify-center mb-4">
+                <FileText className="w-8 h-8 text-surface-400" />
               </div>
-              <h3 className="text-lg font-medium text-cascadia-900 mb-2">No deals yet</h3>
-              <p className="text-sm text-cascadia-500 mb-4">
+              <h3 className="text-lg font-medium text-surface-900 mb-2">No deals yet</h3>
+              <p className="text-sm text-surface-500 mb-4">
                 Upload your first deal to start the analysis process
               </p>
               <Link href="/upload">
@@ -269,15 +269,15 @@ export default function Dashboard() {
                   <Link
                     key={deal.id}
                     href={`/deals/${deal.id}`}
-                    className="block p-4 rounded-lg border border-cascadia-200 hover:border-accent/50 hover:bg-cascadia-50/50 transition-all"
+                    className="block p-4 rounded-lg border border-surface-200 hover:border-accent/50 hover:bg-surface-50/50 transition-all"
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                          <h4 className="font-medium text-cascadia-900">{deal.name}</h4>
+                          <h4 className="font-medium text-surface-900">{deal.name}</h4>
                           <Badge variant={status.variant}>{status.label}</Badge>
                         </div>
-                        <div className="flex items-center gap-4 text-sm text-cascadia-500">
+                        <div className="flex items-center gap-4 text-sm text-surface-500">
                           <span>{deal.assetType}</span>
                           {deal.beds > 0 && <span>{deal.beds} beds</span>}
                           {deal.state && <span>{deal.state}</span>}
@@ -286,8 +286,8 @@ export default function Dashboard() {
                       {deal.valueBase > 0 && (
                         <div className="flex items-center gap-6">
                           <div className="text-right">
-                            <p className="text-sm text-cascadia-500">Base Value</p>
-                            <p className="font-semibold text-cascadia-900 tabular-nums">
+                            <p className="text-sm text-surface-500">Base Value</p>
+                            <p className="font-semibold text-surface-900 tabular-nums">
                               {formatCurrency(deal.valueBase, true)}
                             </p>
                           </div>
@@ -318,8 +318,8 @@ export default function Dashboard() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
-              <h4 className="font-medium text-cascadia-900">Document Processing</h4>
-              <ul className="text-sm text-cascadia-600 space-y-1">
+              <h4 className="font-medium text-surface-900">Document Processing</h4>
+              <ul className="text-sm text-surface-600 space-y-1">
                 <li>OCR for scanned documents</li>
                 <li>Multi-tab Excel extraction</li>
                 <li>Automatic T12 reconstruction</li>
@@ -327,8 +327,8 @@ export default function Dashboard() {
               </ul>
             </div>
             <div className="space-y-2">
-              <h4 className="font-medium text-cascadia-900">Dual Valuation</h4>
-              <ul className="text-sm text-cascadia-600 space-y-1">
+              <h4 className="font-medium text-surface-900">Dual Valuation</h4>
+              <ul className="text-sm text-surface-600 space-y-1">
                 <li>External / lender view</li>
                 <li>Cascadia execution view</li>
                 <li>Value ranges, not point estimates</li>
@@ -336,8 +336,8 @@ export default function Dashboard() {
               </ul>
             </div>
             <div className="space-y-2">
-              <h4 className="font-medium text-cascadia-900">Deal Intelligence</h4>
-              <ul className="text-sm text-cascadia-600 space-y-1">
+              <h4 className="font-medium text-surface-900">Deal Intelligence</h4>
+              <ul className="text-sm text-surface-600 space-y-1">
                 <li>Capital partner simulation</li>
                 <li>Risk pricing, not avoidance</li>
                 <li>Analog deal references</li>

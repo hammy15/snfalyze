@@ -146,20 +146,20 @@ export default function PartnersPage() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
               <div className="space-y-2">
-                <h4 className="font-medium text-cascadia-900">Profile Matching</h4>
-                <p className="text-cascadia-600">
+                <h4 className="font-medium text-surface-900">Profile Matching</h4>
+                <p className="text-surface-600">
                   Each deal is tested against partner profiles based on geography, asset type, deal size, and risk tolerance.
                 </p>
               </div>
               <div className="space-y-2">
-                <h4 className="font-medium text-cascadia-900">Yield Analysis</h4>
-                <p className="text-cascadia-600">
+                <h4 className="font-medium text-surface-900">Yield Analysis</h4>
+                <p className="text-surface-600">
                   Expected yields are calculated based on partner requirements and deal characteristics to identify best economics.
                 </p>
               </div>
               <div className="space-y-2">
-                <h4 className="font-medium text-cascadia-900">Close Probability</h4>
-                <p className="text-cascadia-600">
+                <h4 className="font-medium text-surface-900">Close Probability</h4>
+                <p className="text-surface-600">
                   Historical deal data and partner behavior inform probability of close estimates for each match.
                 </p>
               </div>
@@ -192,8 +192,8 @@ export default function PartnersPage() {
                 <Building className="w-6 h-6 text-accent" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-cascadia-900">{stats.total}</p>
-                <p className="text-sm text-cascadia-500">Total Partners</p>
+                <p className="text-2xl font-bold text-surface-900">{stats.total}</p>
+                <p className="text-sm text-surface-500">Total Partners</p>
               </div>
             </div>
           </CardContent>
@@ -206,8 +206,8 @@ export default function PartnersPage() {
                 <CheckCircle className="w-6 h-6 text-status-success" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-cascadia-900">{stats.active}</p>
-                <p className="text-sm text-cascadia-500">Active Partners</p>
+                <p className="text-2xl font-bold text-surface-900">{stats.active}</p>
+                <p className="text-sm text-surface-500">Active Partners</p>
               </div>
             </div>
           </CardContent>
@@ -220,10 +220,10 @@ export default function PartnersPage() {
                 <Target className="w-6 h-6 text-purple-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-cascadia-900">
+                <p className="text-2xl font-bold text-surface-900">
                   {stats.avgYield > 0 ? formatPercent(stats.avgYield, 1) : '—'}
                 </p>
-                <p className="text-sm text-cascadia-500">Avg Target Yield</p>
+                <p className="text-sm text-surface-500">Avg Target Yield</p>
               </div>
             </div>
           </CardContent>
@@ -236,8 +236,8 @@ export default function PartnersPage() {
                 <Handshake className="w-6 h-6 text-blue-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-cascadia-900">—</p>
-                <p className="text-sm text-cascadia-500">Deals Closed</p>
+                <p className="text-2xl font-bold text-surface-900">—</p>
+                <p className="text-sm text-surface-500">Deals Closed</p>
               </div>
             </div>
           </CardContent>
@@ -250,13 +250,13 @@ export default function PartnersPage() {
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cascadia-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
                 <input
                   type="text"
                   placeholder="Search partners..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 text-sm border border-cascadia-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 text-sm border border-surface-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
                 />
               </div>
             </div>
@@ -269,7 +269,7 @@ export default function PartnersPage() {
                   className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                     selectedType === type
                       ? 'bg-accent text-white'
-                      : 'bg-cascadia-100 text-cascadia-600 hover:bg-cascadia-200'
+                      : 'bg-surface-100 text-surface-600 hover:bg-surface-200'
                   }`}
                 >
                   {type}
@@ -294,13 +294,13 @@ export default function PartnersPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-cascadia-900">{partner.name}</h3>
+                        <h3 className="font-semibold text-surface-900">{partner.name}</h3>
                         <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${type.color}`}>
                           {type.label}
                         </span>
                       </div>
                       {partner.geographies && partner.geographies.length > 0 && (
-                        <div className="flex items-center gap-2 text-sm text-cascadia-500">
+                        <div className="flex items-center gap-2 text-sm text-surface-500">
                           <MapPin className="w-3 h-3" />
                           {partner.geographies.join(', ')}
                         </div>
@@ -309,38 +309,38 @@ export default function PartnersPage() {
                     <div className="flex items-center gap-1">
                       <span
                         className={`w-2 h-2 rounded-full ${
-                          partner.status === 'active' ? 'bg-status-success' : 'bg-cascadia-300'
+                          partner.status === 'active' ? 'bg-status-success' : 'bg-surface-300'
                         }`}
                       />
-                      <span className="text-xs text-cascadia-500 capitalize">{partner.status}</span>
+                      <span className="text-xs text-surface-500 capitalize">{partner.status}</span>
                     </div>
                   </div>
 
                   {/* Details */}
-                  <div className="grid grid-cols-2 gap-4 py-4 border-y border-cascadia-100">
+                  <div className="grid grid-cols-2 gap-4 py-4 border-y border-surface-100">
                     <div>
-                      <p className="text-xs text-cascadia-500">Deal Size Range</p>
-                      <p className="text-sm font-medium text-cascadia-900">
+                      <p className="text-xs text-surface-500">Deal Size Range</p>
+                      <p className="text-sm font-medium text-surface-900">
                         {partner.minDealSize && partner.maxDealSize
                           ? `${formatCurrency(partner.minDealSize, true)} - ${formatCurrency(partner.maxDealSize, true)}`
                           : '—'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-cascadia-500">Target Yield</p>
-                      <p className="text-sm font-medium text-cascadia-900">
+                      <p className="text-xs text-surface-500">Target Yield</p>
+                      <p className="text-sm font-medium text-surface-900">
                         {partner.targetYield ? formatPercent(partner.targetYield, 1) : '—'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-cascadia-500">Max LTV</p>
-                      <p className="text-sm font-medium text-cascadia-900">
+                      <p className="text-xs text-surface-500">Max LTV</p>
+                      <p className="text-sm font-medium text-surface-900">
                         {partner.maxLtv ? formatPercent(partner.maxLtv, 0) : 'N/A'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-cascadia-500">Preferred Structure</p>
-                      <p className="text-sm font-medium text-cascadia-900">
+                      <p className="text-xs text-surface-500">Preferred Structure</p>
+                      <p className="text-sm font-medium text-surface-900">
                         {partner.preferredStructure || '—'}
                       </p>
                     </div>
@@ -349,12 +349,12 @@ export default function PartnersPage() {
                   {/* Asset Types & Risk */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-cascadia-500">Asset Types:</span>
+                      <span className="text-xs text-surface-500">Asset Types:</span>
                       <div className="flex gap-1">
                         {partner.assetTypes && partner.assetTypes.map((assetType) => (
                           <span
                             key={assetType}
-                            className="px-2 py-0.5 text-xs bg-cascadia-100 text-cascadia-600 rounded"
+                            className="px-2 py-0.5 text-xs bg-surface-100 text-surface-600 rounded"
                           >
                             {assetType}
                           </span>
@@ -365,7 +365,7 @@ export default function PartnersPage() {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center justify-end pt-2 border-t border-cascadia-100">
+                  <div className="flex items-center justify-end pt-2 border-t border-surface-100">
                     <div className="flex gap-1">
                       <Button variant="ghost" size="sm">
                         <Edit2 className="w-4 h-4" />
@@ -382,9 +382,9 @@ export default function PartnersPage() {
       {filteredPartners.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center">
-            <Building className="w-12 h-12 mx-auto text-cascadia-300 mb-4" />
-            <p className="text-cascadia-600">No partners match your filters</p>
-            <p className="text-sm text-cascadia-500 mt-1">
+            <Building className="w-12 h-12 mx-auto text-surface-300 mb-4" />
+            <p className="text-surface-600">No partners match your filters</p>
+            <p className="text-sm text-surface-500 mt-1">
               Try adjusting your search or filter criteria
             </p>
           </CardContent>
@@ -399,20 +399,20 @@ export default function PartnersPage() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
             <div className="space-y-2">
-              <h4 className="font-medium text-cascadia-900">Profile Matching</h4>
-              <p className="text-cascadia-600">
+              <h4 className="font-medium text-surface-900">Profile Matching</h4>
+              <p className="text-surface-600">
                 Each deal is tested against partner profiles based on geography, asset type, deal size, and risk tolerance.
               </p>
             </div>
             <div className="space-y-2">
-              <h4 className="font-medium text-cascadia-900">Yield Analysis</h4>
-              <p className="text-cascadia-600">
+              <h4 className="font-medium text-surface-900">Yield Analysis</h4>
+              <p className="text-surface-600">
                 Expected yields are calculated based on partner requirements and deal characteristics to identify best economics.
               </p>
             </div>
             <div className="space-y-2">
-              <h4 className="font-medium text-cascadia-900">Close Probability</h4>
-              <p className="text-cascadia-600">
+              <h4 className="font-medium text-surface-900">Close Probability</h4>
+              <p className="text-surface-600">
                 Historical deal data and partner behavior inform probability of close estimates for each match.
               </p>
             </div>

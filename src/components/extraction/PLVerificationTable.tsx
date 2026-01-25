@@ -200,7 +200,7 @@ function EditableCell({ value, onChange, format = 'currency', className }: Edita
         setIsEditing(true);
       }}
       className={cn(
-        'cursor-text px-2 py-1 rounded hover:bg-cascadia-100 dark:hover:bg-cascadia-800 transition-colors text-right w-full',
+        'cursor-text px-2 py-1 rounded hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors text-right w-full',
         className
       )}
     >
@@ -249,20 +249,20 @@ function LineItemRow({ item, periods, totalRevenue, totalDays, onValueChange, on
 
   return (
     <tr className={cn(
-      'group hover:bg-cascadia-50 dark:hover:bg-cascadia-900/50 transition-colors',
+      'group hover:bg-surface-50 dark:hover:bg-surface-900/50 transition-colors',
       hasChanges && 'bg-amber-50 dark:bg-amber-900/20',
-      item.category === 'metric' && 'font-semibold border-t-2 border-cascadia-200 dark:border-cascadia-700'
+      item.category === 'metric' && 'font-semibold border-t-2 border-surface-200 dark:border-surface-700'
     )}>
       {/* Expand / Category indicator */}
       <td className="px-2 py-2 w-8">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="p-1 rounded hover:bg-cascadia-100 dark:hover:bg-cascadia-800"
+          className="p-1 rounded hover:bg-surface-100 dark:hover:bg-surface-800"
         >
           {isExpanded ? (
-            <ChevronDown className="w-4 h-4 text-cascadia-400" />
+            <ChevronDown className="w-4 h-4 text-surface-400" />
           ) : (
-            <ChevronRight className="w-4 h-4 text-cascadia-400" />
+            <ChevronRight className="w-4 h-4 text-surface-400" />
           )}
         </button>
       </td>
@@ -277,7 +277,7 @@ function LineItemRow({ item, periods, totalRevenue, totalDays, onValueChange, on
             <Badge variant="outline" className="text-xs">edited</Badge>
           )}
         </div>
-        <span className="text-xs text-cascadia-500">
+        <span className="text-xs text-surface-500">
           {getSubcategoryLabel(item.subcategory)}
         </span>
       </td>
@@ -303,7 +303,7 @@ function LineItemRow({ item, periods, totalRevenue, totalDays, onValueChange, on
       })}
 
       {/* Annual */}
-      <td className="px-3 py-2 text-right bg-cascadia-50 dark:bg-cascadia-900/50">
+      <td className="px-3 py-2 text-right bg-surface-50 dark:bg-surface-900/50">
         <span className={cn(
           'text-sm font-medium',
           item.category === 'revenue' && 'text-emerald-600 dark:text-emerald-400',
@@ -315,14 +315,14 @@ function LineItemRow({ item, periods, totalRevenue, totalDays, onValueChange, on
 
       {/* PPD */}
       <td className="px-3 py-2 text-right">
-        <span className="text-sm text-cascadia-600 dark:text-cascadia-300">
+        <span className="text-sm text-surface-600 dark:text-surface-300">
           {formatPPD(ppd)}
         </span>
       </td>
 
       {/* % Rev */}
       <td className="px-3 py-2 text-right">
-        <span className="text-sm text-cascadia-600 dark:text-cascadia-300">
+        <span className="text-sm text-surface-600 dark:text-surface-300">
           {item.category === 'revenue' ? '-' : formatPercent(percentRev)}
         </span>
       </td>
@@ -448,7 +448,7 @@ export function PLVerificationTable({
 
   if (facilities.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-cascadia-500">
+      <div className="flex flex-col items-center justify-center py-12 text-surface-500">
         <AlertCircle className="w-12 h-12 mb-4" />
         <p className="text-lg">No facilities to verify</p>
         <p className="text-sm">Upload documents to extract financial data</p>
@@ -459,7 +459,7 @@ export function PLVerificationTable({
   return (
     <div className={cn('space-y-4', className)}>
       {/* Facility Tabs */}
-      <div className="flex items-center gap-2 border-b border-cascadia-200 dark:border-cascadia-700">
+      <div className="flex items-center gap-2 border-b border-surface-200 dark:border-surface-700">
         {facilities.map(facility => (
           <button
             key={facility.id}
@@ -468,7 +468,7 @@ export function PLVerificationTable({
               'flex items-center gap-2 px-4 py-2 border-b-2 transition-colors',
               activeFacilityId === facility.id
                 ? 'border-accent text-accent'
-                : 'border-transparent text-cascadia-500 hover:text-cascadia-700'
+                : 'border-transparent text-surface-500 hover:text-surface-700'
             )}
           >
             <Building2 className="w-4 h-4" />
@@ -482,11 +482,11 @@ export function PLVerificationTable({
 
       {/* Facility Header */}
       {activeFacility && (
-        <div className="flex items-center justify-between bg-cascadia-50 dark:bg-cascadia-900 rounded-lg p-4">
+        <div className="flex items-center justify-between bg-surface-50 dark:bg-surface-900 rounded-lg p-4">
           <div className="flex items-center gap-6">
             <div>
               <h3 className="font-semibold text-lg">{activeFacility.name}</h3>
-              <p className="text-sm text-cascadia-500">
+              <p className="text-sm text-surface-500">
                 {activeFacility.city && `${activeFacility.city}, `}
                 {activeFacility.state}
                 {activeFacility.ccn && ` | CCN: ${activeFacility.ccn}`}
@@ -533,7 +533,7 @@ export function PLVerificationTable({
 
       {/* Filter Tabs */}
       <div className="flex items-center gap-2">
-        <span className="text-sm text-cascadia-500">Show:</span>
+        <span className="text-sm text-surface-500">Show:</span>
         {(['all', 'revenue', 'expense', 'metric'] as const).map(cat => (
           <button
             key={cat}
@@ -542,7 +542,7 @@ export function PLVerificationTable({
               'px-3 py-1 text-sm rounded-full transition-colors',
               filterCategory === cat
                 ? 'bg-accent text-white'
-                : 'bg-cascadia-100 dark:bg-cascadia-800 hover:bg-cascadia-200 dark:hover:bg-cascadia-700'
+                : 'bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700'
             )}
           >
             {cat.charAt(0).toUpperCase() + cat.slice(1)}
@@ -551,34 +551,34 @@ export function PLVerificationTable({
       </div>
 
       {/* Main Table */}
-      <div className="border border-cascadia-200 dark:border-cascadia-700 rounded-lg overflow-hidden">
+      <div className="border border-surface-200 dark:border-surface-700 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-cascadia-100 dark:bg-cascadia-800">
+            <thead className="bg-surface-100 dark:bg-surface-800">
               <tr>
                 <th className="w-8"></th>
-                <th className="px-3 py-3 text-left text-sm font-medium text-cascadia-700 dark:text-cascadia-200">
+                <th className="px-3 py-3 text-left text-sm font-medium text-surface-700 dark:text-surface-200">
                   Line Item
                 </th>
                 {activeFacility?.periods.map(period => (
-                  <th key={period} className="px-2 py-3 text-right text-sm font-medium text-cascadia-700 dark:text-cascadia-200 min-w-[100px]">
+                  <th key={period} className="px-2 py-3 text-right text-sm font-medium text-surface-700 dark:text-surface-200 min-w-[100px]">
                     {period}
                   </th>
                 ))}
-                <th className="px-3 py-3 text-right text-sm font-medium text-cascadia-700 dark:text-cascadia-200 bg-cascadia-150 dark:bg-cascadia-750 min-w-[100px]">
+                <th className="px-3 py-3 text-right text-sm font-medium text-surface-700 dark:text-surface-200 bg-surface-150 dark:bg-surface-750 min-w-[100px]">
                   Annual
                 </th>
-                <th className="px-3 py-3 text-right text-sm font-medium text-cascadia-700 dark:text-cascadia-200 min-w-[80px]">
+                <th className="px-3 py-3 text-right text-sm font-medium text-surface-700 dark:text-surface-200 min-w-[80px]">
                   PPD
                 </th>
-                <th className="px-3 py-3 text-right text-sm font-medium text-cascadia-700 dark:text-cascadia-200 min-w-[80px]">
+                <th className="px-3 py-3 text-right text-sm font-medium text-surface-700 dark:text-surface-200 min-w-[80px]">
                   % Rev
                 </th>
                 <th className="w-8"></th>
                 <th className="w-20"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-cascadia-100 dark:divide-cascadia-800">
+            <tbody className="divide-y divide-surface-100 dark:divide-surface-800">
               {filteredItems.map(item => (
                 <LineItemRow
                   key={item.id}
@@ -598,7 +598,7 @@ export function PLVerificationTable({
 
       {/* Summary Footer */}
       {activeFacility && (
-        <div className="flex items-center justify-between text-sm text-cascadia-500">
+        <div className="flex items-center justify-between text-sm text-surface-500">
           <div>
             Showing {filteredItems.length} of {activeFacility.lineItems.length} line items
             {showOnlyLowConfidence && ` | Filtering low confidence items`}

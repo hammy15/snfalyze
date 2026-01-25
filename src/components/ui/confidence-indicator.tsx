@@ -35,13 +35,13 @@ export function ConfidenceIndicator({
             {score}
           </span>
           {showLabel && (
-            <span className={cn('text-cascadia-500', sizes[size].text)}>{label}</span>
+            <span className={cn('text-surface-500', sizes[size].text)}>{label}</span>
           )}
         </div>
-        <span className={cn('text-cascadia-400', sizes[size].text)}>/100</span>
+        <span className={cn('text-surface-400', sizes[size].text)}>/100</span>
       </div>
 
-      <div className={cn('w-full rounded-full bg-cascadia-200 overflow-hidden', sizes[size].bar)}>
+      <div className={cn('w-full rounded-full bg-surface-200 overflow-hidden', sizes[size].bar)}>
         <div
           className={cn('h-full rounded-full transition-all duration-700 ease-out', colorClass)}
           style={{ width: `${score}%` }}
@@ -49,7 +49,7 @@ export function ConfidenceIndicator({
       </div>
 
       {narrative && (
-        <p className={cn('mt-2 text-cascadia-600', sizes[size].text)}>{narrative}</p>
+        <p className={cn('mt-2 text-surface-600', sizes[size].text)}>{narrative}</p>
       )}
     </div>
   );
@@ -75,7 +75,7 @@ export function ConfidenceBreakdown({
   const finalScore = Math.max(baseScore - totalDecay, 10);
 
   const categoryColors: Record<string, string> = {
-    minor: 'bg-cascadia-300',
+    minor: 'bg-surface-300',
     census: 'bg-status-warning',
     labor: 'bg-status-warning',
     regulatory: 'bg-status-error',
@@ -84,28 +84,28 @@ export function ConfidenceBreakdown({
   return (
     <div className={cn('space-y-4', className)}>
       <div className="flex items-center justify-between text-sm">
-        <span className="text-cascadia-600">Base Confidence</span>
+        <span className="text-surface-600">Base Confidence</span>
         <span className="font-medium">{baseScore}</span>
       </div>
 
       {assumptions.length > 0 && (
         <div className="space-y-2">
-          <span className="text-xs font-medium text-cascadia-500 uppercase tracking-wide">
+          <span className="text-xs font-medium text-surface-500 uppercase tracking-wide">
             Assumptions Applied
           </span>
           {assumptions.map((assumption, idx) => (
             <div
               key={idx}
-              className="flex items-center justify-between py-2 border-b border-cascadia-100 last:border-0"
+              className="flex items-center justify-between py-2 border-b border-surface-100 last:border-0"
             >
               <div className="flex items-center gap-2">
                 <span
                   className={cn(
                     'w-2 h-2 rounded-full',
-                    categoryColors[assumption.category] || 'bg-cascadia-300'
+                    categoryColors[assumption.category] || 'bg-surface-300'
                   )}
                 />
-                <span className="text-sm text-cascadia-700">{assumption.field}</span>
+                <span className="text-sm text-surface-700">{assumption.field}</span>
               </div>
               <span className="text-sm font-medium text-status-error">
                 −{assumption.impact}
@@ -115,8 +115,8 @@ export function ConfidenceBreakdown({
         </div>
       )}
 
-      <div className="flex items-center justify-between pt-2 border-t border-cascadia-200">
-        <span className="font-medium text-cascadia-700">Final Confidence</span>
+      <div className="flex items-center justify-between pt-2 border-t border-surface-200">
+        <span className="font-medium text-surface-700">Final Confidence</span>
         <span className="text-lg font-semibold">{finalScore}</span>
       </div>
     </div>

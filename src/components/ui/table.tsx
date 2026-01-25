@@ -41,7 +41,7 @@ export const TableFooter = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <tfoot
     ref={ref}
-    className={cn('border-t bg-cascadia-50 font-medium', className)}
+    className={cn('border-t bg-surface-50 font-medium', className)}
     {...props}
   />
 ));
@@ -55,7 +55,7 @@ export const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      'border-b border-cascadia-100 transition-colors hover:bg-cascadia-50/50',
+      'border-b border-surface-100 transition-colors hover:bg-surface-50/50',
       className
     )}
     {...props}
@@ -71,8 +71,8 @@ export const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      'h-12 px-4 text-left align-middle font-semibold text-cascadia-600',
-      'bg-cascadia-50 text-xs uppercase tracking-wider',
+      'h-12 px-4 text-left align-middle font-semibold text-surface-600',
+      'bg-surface-50 text-xs uppercase tracking-wider',
       '[&:has([role=checkbox])]:pr-0',
       className
     )}
@@ -89,7 +89,7 @@ export const TableCell = React.forwardRef<
   <td
     ref={ref}
     className={cn(
-      'px-4 py-4 align-middle text-cascadia-700',
+      'px-4 py-4 align-middle text-surface-700',
       '[&:has([role=checkbox])]:pr-0',
       className
     )}
@@ -105,7 +105,7 @@ export const TableCaption = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <caption
     ref={ref}
-    className={cn('mt-4 text-sm text-cascadia-500', className)}
+    className={cn('mt-4 text-sm text-surface-500', className)}
     {...props}
   />
 ));

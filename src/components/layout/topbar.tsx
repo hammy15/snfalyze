@@ -31,8 +31,8 @@ const NAV_ITEMS = [
   { href: '/app', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/app/deals', label: 'Deals', icon: FolderKanban },
   { href: '/app/facilities', label: 'Facilities', icon: Building2 },
-  { href: '/partners', label: 'Partners', icon: Users },
-  { href: '/map', label: 'Map', icon: Map },
+  { href: '/app/partners', label: 'Partners', icon: Users },
+  { href: '/app/map', label: 'Map', icon: Map },
   { href: '/app/tools', label: 'Tools', icon: Wrench },
 ];
 

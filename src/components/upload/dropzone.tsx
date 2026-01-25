@@ -120,7 +120,7 @@ export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, classNa
           'relative block border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-all',
           isDragActive
             ? 'border-accent bg-accent/5'
-            : 'border-cascadia-300 hover:border-accent/50 hover:bg-cascadia-50'
+            : 'border-surface-300 hover:border-accent/50 hover:bg-surface-50'
         )}
       >
         <input
@@ -136,31 +136,31 @@ export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, classNa
           <div
             className={cn(
               'p-4 rounded-full transition-colors',
-              isDragActive ? 'bg-accent/10' : 'bg-cascadia-100'
+              isDragActive ? 'bg-accent/10' : 'bg-surface-100'
             )}
           >
             <Upload
               className={cn(
                 'w-8 h-8 transition-colors',
-                isDragActive ? 'text-accent' : 'text-cascadia-500'
+                isDragActive ? 'text-accent' : 'text-surface-500'
               )}
             />
           </div>
 
           <div>
-            <p className="text-lg font-medium text-cascadia-900">
+            <p className="text-lg font-medium text-surface-900">
               {isDragActive ? 'Drop files here' : 'Drop deal documents here'}
             </p>
-            <p className="mt-1 text-sm text-cascadia-500">
+            <p className="mt-1 text-sm text-surface-500">
               or click to browse
             </p>
           </div>
 
           <div className="flex flex-wrap justify-center gap-2 mt-2 pointer-events-none">
-            <span className="px-2 py-1 text-xs bg-cascadia-100 text-cascadia-600 rounded">PDF</span>
-            <span className="px-2 py-1 text-xs bg-cascadia-100 text-cascadia-600 rounded">Excel</span>
-            <span className="px-2 py-1 text-xs bg-cascadia-100 text-cascadia-600 rounded">CSV</span>
-            <span className="px-2 py-1 text-xs bg-cascadia-100 text-cascadia-600 rounded">Images</span>
+            <span className="px-2 py-1 text-xs bg-surface-100 text-surface-600 rounded">PDF</span>
+            <span className="px-2 py-1 text-xs bg-surface-100 text-surface-600 rounded">Excel</span>
+            <span className="px-2 py-1 text-xs bg-surface-100 text-surface-600 rounded">CSV</span>
+            <span className="px-2 py-1 text-xs bg-surface-100 text-surface-600 rounded">Images</span>
           </div>
         </div>
       </label>
@@ -168,7 +168,7 @@ export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, classNa
       {/* Uploaded Files List */}
       {uploadedFiles.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-sm font-medium text-cascadia-700">
+          <h3 className="text-sm font-medium text-surface-700">
             Uploaded Documents ({uploadedFiles.length})
           </h3>
           <div className="space-y-2">
@@ -181,19 +181,19 @@ export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, classNa
               return (
                 <div
                   key={uploadedFile.id}
-                  className="flex items-center gap-4 p-4 rounded-lg border border-cascadia-200 bg-white"
+                  className="flex items-center gap-4 p-4 rounded-lg border border-surface-200 bg-white"
                 >
-                  <div className="p-2 rounded-lg bg-cascadia-50">
-                    <Icon className="w-5 h-5 text-cascadia-600" />
+                  <div className="p-2 rounded-lg bg-surface-50">
+                    <Icon className="w-5 h-5 text-surface-600" />
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-cascadia-900 truncate">
+                      <p className="text-sm font-medium text-surface-900 truncate">
                         {uploadedFile.file.name}
                       </p>
                       {uploadedFile.type && (
-                        <span className="px-2 py-0.5 text-xs bg-cascadia-100 text-cascadia-600 rounded">
+                        <span className="px-2 py-0.5 text-xs bg-surface-100 text-surface-600 rounded">
                           {uploadedFile.type}
                         </span>
                       )}
@@ -203,7 +203,7 @@ export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, classNa
                       {isProcessing ? (
                         <>
                           <Loader2 className="w-3 h-3 text-accent animate-spin" />
-                          <span className="text-xs text-cascadia-500">
+                          <span className="text-xs text-surface-500">
                             {getStatusText(uploadedFile.status)}
                           </span>
                         </>
@@ -236,7 +236,7 @@ export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, classNa
                       e.stopPropagation();
                       onRemoveFile(uploadedFile.id);
                     }}
-                    className="text-cascadia-400 hover:text-cascadia-600"
+                    className="text-surface-400 hover:text-surface-600"
                   >
                     <X className="w-4 h-4" />
                   </Button>

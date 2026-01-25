@@ -142,7 +142,7 @@ export function FacilityMap({
 
         const icon = isCascadia
           ? L.divIcon({
-              className: 'custom-marker cascadia-marker',
+              className: 'custom-marker primary-marker',
               html: `
                 <div style="
                   background-color: ${color};
@@ -335,7 +335,7 @@ export function FacilityMap({
           background: transparent !important;
           border: none !important;
         }
-        .cascadia-marker {
+        .primary-marker {
           z-index: 100 !important;
         }
         .deal-marker {
@@ -361,7 +361,7 @@ export function FacilityMap({
       {!isLoaded && (
         <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
           <div className="text-center">
-            <div className="w-8 h-8 border-4 border-cascadia-green border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-gray-500">Loading map...</p>
           </div>
         </div>

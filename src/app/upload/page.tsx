@@ -285,13 +285,13 @@ export default function UploadPage() {
                 ].map((step, idx) => (
                   <div
                     key={step.label}
-                    className="p-4 rounded-lg bg-cascadia-50 text-center"
+                    className="p-4 rounded-lg bg-surface-50 text-center"
                   >
-                    <div className="w-8 h-8 mx-auto mb-2 rounded-full bg-cascadia-200 flex items-center justify-center text-sm font-medium text-cascadia-700">
+                    <div className="w-8 h-8 mx-auto mb-2 rounded-full bg-surface-200 flex items-center justify-center text-sm font-medium text-surface-700">
                       {idx + 1}
                     </div>
-                    <p className="text-sm font-medium text-cascadia-900">{step.label}</p>
-                    <p className="text-xs text-cascadia-500 mt-1">{step.description}</p>
+                    <p className="text-sm font-medium text-surface-900">{step.label}</p>
+                    <p className="text-xs text-surface-500 mt-1">{step.description}</p>
                   </div>
                 ))}
               </div>
@@ -317,8 +317,8 @@ export default function UploadPage() {
               />
 
               <div>
-                <label className="block text-sm font-medium text-cascadia-700 mb-1.5">
-                  Asset Types <span className="text-cascadia-400 font-normal">(select all that apply)</span>
+                <label className="block text-sm font-medium text-surface-700 mb-1.5">
+                  Asset Types <span className="text-surface-400 font-normal">(select all that apply)</span>
                 </label>
                 <div className="flex gap-2">
                   {(['SNF', 'ALF', 'ILF'] as const).map((type) => {
@@ -331,7 +331,7 @@ export default function UploadPage() {
                         className={`flex-1 px-3 py-2 text-sm font-medium rounded-md border transition-colors flex items-center justify-center gap-1.5 ${
                           isSelected
                             ? 'border-accent bg-accent/10 text-accent'
-                            : 'border-cascadia-300 text-cascadia-600 hover:border-cascadia-400'
+                            : 'border-surface-300 text-surface-600 hover:border-surface-400'
                         }`}
                       >
                         {isSelected && <CheckCircle2 className="w-3.5 h-3.5" />}
@@ -358,8 +358,8 @@ export default function UploadPage() {
                 />
               </div>
 
-              <div className="pt-4 border-t border-cascadia-200">
-                <p className="text-xs font-medium text-cascadia-500 uppercase tracking-wide mb-3">
+              <div className="pt-4 border-t border-surface-200">
+                <p className="text-xs font-medium text-surface-500 uppercase tracking-wide mb-3">
                   Broker Information
                 </p>
                 <div className="space-y-3">
@@ -390,9 +390,9 @@ export default function UploadPage() {
                     {uploadedFiles.length > 0 ? (
                       <CheckCircle2 className="w-4 h-4 text-status-success" />
                     ) : (
-                      <AlertCircle className="w-4 h-4 text-cascadia-400" />
+                      <AlertCircle className="w-4 h-4 text-surface-400" />
                     )}
-                    <span className="text-sm text-cascadia-600">
+                    <span className="text-sm text-surface-600">
                       {uploadedFiles.length} document{uploadedFiles.length !== 1 ? 's' : ''} uploaded
                     </span>
                   </div>
@@ -400,9 +400,9 @@ export default function UploadPage() {
                     {allFilesComplete ? (
                       <CheckCircle2 className="w-4 h-4 text-status-success" />
                     ) : (
-                      <AlertCircle className="w-4 h-4 text-cascadia-400" />
+                      <AlertCircle className="w-4 h-4 text-surface-400" />
                     )}
-                    <span className="text-sm text-cascadia-600">
+                    <span className="text-sm text-surface-600">
                       {allFilesComplete ? 'All files processed' : 'Processing files...'}
                     </span>
                   </div>
@@ -410,9 +410,9 @@ export default function UploadPage() {
                     {hasMinimumInfo ? (
                       <CheckCircle2 className="w-4 h-4 text-status-success" />
                     ) : (
-                      <AlertCircle className="w-4 h-4 text-cascadia-400" />
+                      <AlertCircle className="w-4 h-4 text-surface-400" />
                     )}
-                    <span className="text-sm text-cascadia-600">
+                    <span className="text-sm text-surface-600">
                       {hasMinimumInfo
                         ? `Deal info provided (${dealInfo.assetTypes.join(', ')})`
                         : 'Add deal name & select asset type(s)'}
@@ -432,14 +432,14 @@ export default function UploadPage() {
                 </Button>
 
                 {isAnalyzing && analysisStatus && (
-                  <div className="flex items-center justify-center gap-2 text-sm text-cascadia-600 bg-cascadia-50 rounded-lg p-3">
+                  <div className="flex items-center justify-center gap-2 text-sm text-surface-600 bg-surface-50 rounded-lg p-3">
                     <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
                     <span>{analysisStatus}</span>
                   </div>
                 )}
 
                 {!isAnalyzing && (
-                  <p className="text-xs text-cascadia-500 text-center">
+                  <p className="text-xs text-surface-500 text-center">
                     Analysis will extract data, run AI analysis, and generate insights
                   </p>
                 )}

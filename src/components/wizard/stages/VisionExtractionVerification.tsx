@@ -418,7 +418,7 @@ export function VisionExtractionVerification({
   return (
     <div className={cn('space-y-6', className)}>
       {/* Stage Progress Indicator */}
-      <div className="flex items-center justify-center gap-2 p-4 bg-cascadia-50 dark:bg-cascadia-900 rounded-lg">
+      <div className="flex items-center justify-center gap-2 p-4 bg-surface-50 dark:bg-surface-900 rounded-lg">
         {STAGES.map((stage, idx) => {
           const Icon = stage.icon;
           const isActive = currentStage === stage.id;
@@ -429,14 +429,14 @@ export function VisionExtractionVerification({
               {idx > 0 && (
                 <ChevronRight className={cn(
                   'w-4 h-4',
-                  isPast ? 'text-accent' : 'text-cascadia-300'
+                  isPast ? 'text-accent' : 'text-surface-300'
                 )} />
               )}
               <div className={cn(
                 'flex items-center gap-2 px-3 py-2 rounded-lg transition-colors',
                 isActive && 'bg-accent text-white',
                 isPast && 'bg-accent/20 text-accent',
-                !isActive && !isPast && 'text-cascadia-400'
+                !isActive && !isPast && 'text-surface-400'
               )}>
                 <Icon className="w-4 h-4" />
                 <span className="text-sm font-medium">{stage.label}</span>
@@ -456,19 +456,19 @@ export function VisionExtractionVerification({
               'border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer',
               isDragActive
                 ? 'border-accent bg-accent/5'
-                : 'border-cascadia-300 hover:border-accent/50 hover:bg-cascadia-50'
+                : 'border-surface-300 hover:border-accent/50 hover:bg-surface-50'
             )}
           >
             <input {...getInputProps()} />
-            <FileSpreadsheet className="w-12 h-12 mx-auto text-cascadia-400 mb-4" />
+            <FileSpreadsheet className="w-12 h-12 mx-auto text-surface-400 mb-4" />
             {isDragActive ? (
               <p className="text-accent font-medium text-lg">Drop files here</p>
             ) : (
               <>
-                <p className="text-lg font-medium text-cascadia-700 dark:text-cascadia-200">
+                <p className="text-lg font-medium text-surface-700 dark:text-surface-200">
                   Drop deal documents for AI extraction
                 </p>
-                <p className="text-sm text-cascadia-500 mt-2">
+                <p className="text-sm text-surface-500 mt-2">
                   Excel files (.xlsx, .xls) work best for P&L extraction. PDFs supported for rate letters.
                 </p>
               </>
@@ -501,7 +501,7 @@ export function VisionExtractionVerification({
           {/* File list */}
           {files.length > 0 && (
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-cascadia-700 dark:text-cascadia-300">
+              <h4 className="text-sm font-medium text-surface-700 dark:text-surface-300">
                 Uploaded Documents ({files.length})
               </h4>
               <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -512,10 +512,10 @@ export function VisionExtractionVerification({
                       'flex items-center gap-3 p-3 rounded-lg border',
                       file.status === 'error'
                         ? 'border-rose-200 bg-rose-50 dark:border-rose-900 dark:bg-rose-900/20'
-                        : 'border-cascadia-200 dark:border-cascadia-700 bg-white dark:bg-cascadia-800'
+                        : 'border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800'
                     )}
                   >
-                    <FileText className="w-5 h-5 text-cascadia-400 flex-shrink-0" />
+                    <FileText className="w-5 h-5 text-surface-400 flex-shrink-0" />
                     <span className="flex-1 truncate text-sm">{file.name}</span>
                     {file.status === 'uploading' && (
                       <Loader2 className="w-4 h-4 animate-spin text-accent" />
@@ -531,9 +531,9 @@ export function VisionExtractionVerification({
                     )}
                     <button
                       onClick={() => removeFile(file.id)}
-                      className="p-1 hover:bg-cascadia-100 dark:hover:bg-cascadia-700 rounded"
+                      className="p-1 hover:bg-surface-100 dark:hover:bg-surface-700 rounded"
                     >
-                      <X className="w-4 h-4 text-cascadia-400" />
+                      <X className="w-4 h-4 text-surface-400" />
                     </button>
                   </div>
                 ))}
@@ -576,7 +576,7 @@ export function VisionExtractionVerification({
               </div>
               <div className="flex-1">
                 <h3 className="font-semibold text-lg">AI Vision Extraction</h3>
-                <p className="text-sm text-cascadia-500">{extractionProgress.message}</p>
+                <p className="text-sm text-surface-500">{extractionProgress.message}</p>
               </div>
               <Badge variant="outline" className="text-lg px-4 py-1">
                 {extractionProgress.progress}%
@@ -600,7 +600,7 @@ export function VisionExtractionVerification({
                       'p-3 rounded-lg transition-all',
                       isComplete && 'bg-accent/20 text-accent',
                       isCurrent && 'bg-accent text-white animate-pulse',
-                      !isComplete && !isCurrent && 'bg-cascadia-100 text-cascadia-400'
+                      !isComplete && !isCurrent && 'bg-surface-100 text-surface-400'
                     )}
                   >
                     {isComplete ? (
@@ -637,23 +637,23 @@ export function VisionExtractionVerification({
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-4 gap-4">
-                <div className="text-center p-3 bg-cascadia-50 dark:bg-cascadia-800 rounded-lg">
+                <div className="text-center p-3 bg-surface-50 dark:bg-surface-800 rounded-lg">
                   <p className="text-2xl font-bold text-accent">{extractionResult.summary.totalFacilities}</p>
-                  <p className="text-xs text-cascadia-500">Facilities</p>
+                  <p className="text-xs text-surface-500">Facilities</p>
                 </div>
-                <div className="text-center p-3 bg-cascadia-50 dark:bg-cascadia-800 rounded-lg">
+                <div className="text-center p-3 bg-surface-50 dark:bg-surface-800 rounded-lg">
                   <p className="text-2xl font-bold text-accent">{extractionResult.summary.totalLineItems}</p>
-                  <p className="text-xs text-cascadia-500">Line Items</p>
+                  <p className="text-xs text-surface-500">Line Items</p>
                 </div>
-                <div className="text-center p-3 bg-cascadia-50 dark:bg-cascadia-800 rounded-lg">
+                <div className="text-center p-3 bg-surface-50 dark:bg-surface-800 rounded-lg">
                   <p className="text-2xl font-bold text-accent">{extractionResult.summary.totalSheets}</p>
-                  <p className="text-xs text-cascadia-500">Sheets</p>
+                  <p className="text-xs text-surface-500">Sheets</p>
                 </div>
-                <div className="text-center p-3 bg-cascadia-50 dark:bg-cascadia-800 rounded-lg">
+                <div className="text-center p-3 bg-surface-50 dark:bg-surface-800 rounded-lg">
                   <p className="text-2xl font-bold text-accent">
                     {(extractionResult.summary.processingTimeMs / 1000).toFixed(1)}s
                   </p>
-                  <p className="text-xs text-cascadia-500">Processing</p>
+                  <p className="text-xs text-surface-500">Processing</p>
                 </div>
               </div>
 
@@ -679,7 +679,7 @@ export function VisionExtractionVerification({
                   Verify Extracted Data
                 </CardTitle>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-cascadia-500">
+                  <span className="text-sm text-surface-500">
                     {approvedCount} of {totalLineItems} items reviewed
                   </span>
                   <Button

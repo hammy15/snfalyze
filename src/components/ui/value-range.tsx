@@ -23,14 +23,14 @@ export function ValueRange({
   return (
     <div className={cn('w-full', className)}>
       {label && (
-        <h4 className="text-sm font-medium text-cascadia-600 mb-3">{label}</h4>
+        <h4 className="text-sm font-medium text-surface-600 mb-3">{label}</h4>
       )}
       <div className="grid grid-cols-3 gap-4">
-        <div className="p-4 rounded-lg bg-cascadia-100 text-center">
-          <span className="block text-xs font-medium text-cascadia-500 uppercase tracking-wide mb-1">
+        <div className="p-4 rounded-lg bg-surface-100 text-center">
+          <span className="block text-xs font-medium text-surface-500 uppercase tracking-wide mb-1">
             Low
           </span>
-          <span className="block text-lg font-semibold text-cascadia-700 tabular-nums">
+          <span className="block text-lg font-semibold text-surface-700 tabular-nums">
             {formatCurrency(low, compact)}
           </span>
         </div>
@@ -70,12 +70,12 @@ export function OfferGuidance({
 }: OfferGuidanceProps) {
   return (
     <div className={cn('space-y-4', className)}>
-      <div className="flex items-center justify-between py-3 border-b border-cascadia-200">
+      <div className="flex items-center justify-between py-3 border-b border-surface-200">
         <div>
-          <span className="block text-sm font-medium text-cascadia-700">
+          <span className="block text-sm font-medium text-surface-700">
             Suggested Starting Offer
           </span>
-          <span className="block text-xs text-cascadia-500">
+          <span className="block text-xs text-surface-500">
             Conservative entry point
           </span>
         </div>
@@ -84,12 +84,12 @@ export function OfferGuidance({
         </span>
       </div>
 
-      <div className="flex items-center justify-between py-3 border-b border-cascadia-200">
+      <div className="flex items-center justify-between py-3 border-b border-surface-200">
         <div>
-          <span className="block text-sm font-medium text-cascadia-700">
+          <span className="block text-sm font-medium text-surface-700">
             Walk-Away Threshold
           </span>
-          <span className="block text-xs text-cascadia-500">
+          <span className="block text-xs text-surface-500">
             Maximum defensible price
           </span>
         </div>
@@ -101,10 +101,10 @@ export function OfferGuidance({
       {upside && (
         <div className="flex items-center justify-between py-3">
           <div>
-            <span className="block text-sm font-medium text-cascadia-700">
+            <span className="block text-sm font-medium text-surface-700">
               Upside Capture
             </span>
-            <span className="block text-xs text-cascadia-500">
+            <span className="block text-xs text-surface-500">
               With Cascadia execution
             </span>
           </div>

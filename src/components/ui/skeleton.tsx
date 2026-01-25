@@ -33,7 +33,7 @@ export function Skeleton({
   return (
     <div
       className={cn(
-        "bg-gray-200 dark:bg-gray-800",
+        "bg-surface-200 dark:bg-surface-700",
         variantClasses[variant],
         animationClasses[animation],
         className
@@ -74,7 +74,7 @@ export function SkeletonTable({ rows = 5, columns = 4 }: { rows?: number, column
   return (
     <div className="space-y-3">
       {/* Header */}
-      <div className="flex gap-4 pb-3 border-b border-gray-200 dark:border-white/10">
+      <div className="flex gap-4 pb-3 border-b border-surface-200 dark:border-surface-700">
         {Array.from({ length: columns }).map((_, i) => (
           <Skeleton key={i} width={`${100 / columns}%`} height={16} />
         ))}
@@ -113,10 +113,10 @@ export function SkeletonList({ items = 3 }: { items?: number }) {
   )
 }
 
-export function SkeletonStats() {
+export function SkeletonStats({ count = 4 }: { count?: number }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-      {Array.from({ length: 4 }).map((_, i) => (
+      {Array.from({ length: count }).map((_, i) => (
         <div key={i} className="neu-card">
           <Skeleton width={80} height={12} className="mb-2" />
           <Skeleton width={100} height={28} className="mb-3" />
@@ -126,6 +126,52 @@ export function SkeletonStats() {
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+export function SkeletonChart({ height = 300 }: { height?: number }) {
+  return (
+    <div className="neu-card">
+      <div className="flex items-center justify-between mb-4">
+        <Skeleton width={120} height={20} />
+        <div className="flex gap-2">
+          <Skeleton variant="rounded" width={60} height={28} />
+          <Skeleton variant="rounded" width={60} height={28} />
+        </div>
+      </div>
+      <div className="relative" style={{ height }}>
+        <div className="absolute inset-0 flex items-end gap-2 pb-8">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex-1 bg-surface-200 dark:bg-surface-700 rounded-t skeleton-wave"
+              style={{ height: `${30 + Math.random() * 60}%` }}
+            />
+          ))}
+        </div>
+        <div className="absolute bottom-0 left-0 right-0 flex justify-between">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} width={30} height={12} />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function SkeletonStatCard() {
+  return (
+    <div className="neu-card p-5">
+      <div className="flex items-center justify-between mb-3">
+        <Skeleton width={100} height={14} />
+        <Skeleton variant="circular" width={32} height={32} />
+      </div>
+      <Skeleton width={80} height={32} className="mb-2" />
+      <div className="flex items-center gap-2">
+        <Skeleton width={40} height={16} />
+        <Skeleton width={60} height={12} />
+      </div>
     </div>
   )
 }

@@ -174,7 +174,7 @@ export default function MapPage() {
           description="Geographic view of Cascadia facilities and potential acquisition targets"
         />
         <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-          <div className="w-8 h-8 border-4 border-cascadia-green border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <div className="text-gray-500">Loading facilities...</div>
         </div>
       </div>
@@ -198,7 +198,7 @@ export default function MapPage() {
           <p className="text-sm text-gray-500 mb-4">{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-cascadia-green text-white rounded-lg hover:bg-green-700 transition-colors"
+            className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-green-700 transition-colors"
           >
             Try Again
           </button>
@@ -244,7 +244,7 @@ export default function MapPage() {
             placeholder="Search facilities, cities, or deals..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cascadia-green focus:border-cascadia-green"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           />
         </div>
 
@@ -254,7 +254,7 @@ export default function MapPage() {
             onClick={() => setShowFilters(!showFilters)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
               showFilters
-                ? 'bg-cascadia-green text-white border-cascadia-green'
+                ? 'bg-primary-500 text-white border-primary-500'
                 : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
             }`}
           >
@@ -432,7 +432,7 @@ export default function MapPage() {
             {selectedFacility.dealName && (
               <a
                 href={`/deals/${selectedFacility.dealId}`}
-                className="block w-full text-center py-2 bg-cascadia-green text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                className="block w-full text-center py-2 bg-primary-500 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
               >
                 View Deal: {selectedFacility.dealName}
               </a>

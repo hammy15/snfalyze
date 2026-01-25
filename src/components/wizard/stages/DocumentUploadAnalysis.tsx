@@ -422,7 +422,7 @@ export function DocumentUploadAnalysis({
 
       {/* Explicit file input button */}
       <div className="flex justify-center">
-        <label className="cursor-pointer">
+        <label className="inline-flex items-center gap-2 px-6 py-3 rounded-lg border-2 border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 font-medium cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors">
           <input
             type="file"
             multiple
@@ -436,12 +436,8 @@ export function DocumentUploadAnalysis({
             }}
             className="hidden"
           />
-          <Button type="button" variant="outline" size="lg" asChild>
-            <span>
-              <Upload className="w-5 h-5 mr-2" />
-              Click to Select Files
-            </span>
-          </Button>
+          <Upload className="w-5 h-5" />
+          Click to Select Files
         </label>
       </div>
 

@@ -35,7 +35,33 @@ interface UploadedFile {
   size: number;
   type: string;
   status: 'uploading' | 'uploaded' | 'analyzing' | 'done' | 'error';
+  progress?: number;
 }
+
+type ProcessingStage =
+  | 'idle'
+  | 'uploading'
+  | 'extracting'
+  | 'parsing_sheets'
+  | 'detecting_facilities'
+  | 'extracting_financials'
+  | 'matching_cms'
+  | 'cross_validating'
+  | 'generating_summary'
+  | 'complete';
+
+const STAGE_LABELS: Record<ProcessingStage, string> = {
+  idle: 'Ready',
+  uploading: 'Uploading files...',
+  extracting: 'Reading document structure...',
+  parsing_sheets: 'Parsing spreadsheet tabs...',
+  detecting_facilities: 'Detecting facilities...',
+  extracting_financials: 'Extracting financial data...',
+  matching_cms: 'Matching to CMS database...',
+  cross_validating: 'Cross-validating data...',
+  generating_summary: 'Generating AI analysis...',
+  complete: 'Analysis complete!',
+};
 
 interface ExtractionSummary {
   totalRevenue: number;
@@ -146,6 +172,8 @@ export function DocumentUploadAnalysis({
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [processingStage, setProcessingStage] = useState<ProcessingStage>('idle');
+  const [processingProgress, setProcessingProgress] = useState(0);
 
   // Editable fields from AI analysis
   const [dealName, setDealName] = useState('');
@@ -230,7 +258,7 @@ export function DocumentUploadAnalysis({
     setFiles((prev) => prev.filter((f) => f.id !== fileId));
   };
 
-  // Run AI analysis on uploaded files
+  // Run AI analysis on uploaded files with visual progress
   const runAnalysis = async () => {
     const uploadedFiles = files.filter((f) => f.status === 'uploaded' || f.status === 'done');
     if (uploadedFiles.length === 0) {
@@ -240,6 +268,7 @@ export function DocumentUploadAnalysis({
 
     setAnalyzing(true);
     setError(null);
+    setProcessingProgress(0);
 
     // Update file statuses to analyzing
     setFiles((prev) =>
@@ -247,6 +276,26 @@ export function DocumentUploadAnalysis({
         f.status === 'uploaded' ? { ...f, status: 'analyzing' } : f
       )
     );
+
+    // Simulate progress stages while waiting for API
+    const stages: ProcessingStage[] = [
+      'extracting',
+      'parsing_sheets',
+      'detecting_facilities',
+      'extracting_financials',
+      'matching_cms',
+      'cross_validating',
+      'generating_summary',
+    ];
+
+    let stageIndex = 0;
+    const progressInterval = setInterval(() => {
+      if (stageIndex < stages.length) {
+        setProcessingStage(stages[stageIndex]);
+        setProcessingProgress(Math.min(90, ((stageIndex + 1) / stages.length) * 90));
+        stageIndex++;
+      }
+    }, 2000); // Advance every 2 seconds
 
     try {
       const response = await fetch('/api/wizard/analyze', {
@@ -258,9 +307,14 @@ export function DocumentUploadAnalysis({
         }),
       });
 
+      clearInterval(progressInterval);
+
       const data = await response.json();
 
       if (data.success) {
+        setProcessingStage('complete');
+        setProcessingProgress(100);
+
         const result = data.data as AIAnalysis;
         setAnalysis(result);
         setDealName(result.suggestedDealName);
@@ -274,7 +328,15 @@ export function DocumentUploadAnalysis({
             f.status === 'analyzing' ? { ...f, status: 'done' } : f
           )
         );
+
+        // Reset processing state after short delay
+        setTimeout(() => {
+          setProcessingStage('idle');
+          setProcessingProgress(0);
+        }, 1500);
       } else {
+        setProcessingStage('idle');
+        setProcessingProgress(0);
         setError(data.error || 'Analysis failed');
         setFiles((prev) =>
           prev.map((f) =>
@@ -283,6 +345,9 @@ export function DocumentUploadAnalysis({
         );
       }
     } catch (err) {
+      clearInterval(progressInterval);
+      setProcessingStage('idle');
+      setProcessingProgress(0);
       setError('Failed to analyze documents');
       setFiles((prev) =>
         prev.map((f) =>
@@ -497,6 +562,23 @@ export function DocumentUploadAnalysis({
         </div>
       )}
 
+      {/* Ready to analyze indicator */}
+      {!hasAnalysis && !analyzing && uploadedCount > 0 && !uploading && (
+        <div className="p-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            <div>
+              <p className="font-medium text-emerald-800 dark:text-emerald-200">
+                {uploadedCount} document{uploadedCount > 1 ? 's' : ''} ready for analysis
+              </p>
+              <p className="text-sm text-emerald-600 dark:text-emerald-400">
+                Click the button below to start AI-powered extraction
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Error message */}
       {error && (
         <div className="p-4 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800">
@@ -507,25 +589,90 @@ export function DocumentUploadAnalysis({
         </div>
       )}
 
+      {/* Processing Status */}
+      {analyzing && (
+        <Card className="border-2 border-primary-300 dark:border-primary-700 bg-gradient-to-r from-primary-50 to-primary-100 dark:from-primary-900/30 dark:to-primary-800/30">
+          <CardContent className="pt-6">
+            <div className="space-y-4">
+              {/* Header */}
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-full bg-primary-500 animate-pulse">
+                  <Sparkles className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-primary-900 dark:text-primary-100">
+                    Processing Your Documents
+                  </h3>
+                  <p className="text-sm text-primary-600 dark:text-primary-400">
+                    {STAGE_LABELS[processingStage]}
+                  </p>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div className="space-y-2">
+                <div className="h-3 bg-primary-200 dark:bg-primary-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary-500 rounded-full transition-all duration-500 ease-out"
+                    style={{ width: `${processingProgress}%` }}
+                  />
+                </div>
+                <p className="text-xs text-primary-600 dark:text-primary-400 text-right">
+                  {processingProgress}% complete
+                </p>
+              </div>
+
+              {/* Stage indicators */}
+              <div className="grid grid-cols-4 gap-2 text-xs">
+                {(['extracting', 'detecting_facilities', 'matching_cms', 'generating_summary'] as ProcessingStage[]).map((stage) => {
+                  const stageOrder = ['extracting', 'parsing_sheets', 'detecting_facilities', 'extracting_financials', 'matching_cms', 'cross_validating', 'generating_summary'];
+                  const currentIndex = stageOrder.indexOf(processingStage);
+                  const stageIndex = stageOrder.indexOf(stage);
+                  const isComplete = stageIndex < currentIndex || processingStage === 'complete';
+                  const isCurrent = stage === processingStage || (stage === 'extracting' && processingStage === 'parsing_sheets') || (stage === 'detecting_facilities' && processingStage === 'extracting_financials') || (stage === 'matching_cms' && processingStage === 'cross_validating');
+
+                  return (
+                    <div
+                      key={stage}
+                      className={cn(
+                        'flex items-center gap-1 p-2 rounded-lg transition-all',
+                        isComplete ? 'bg-primary-200 dark:bg-primary-700 text-primary-800 dark:text-primary-200' :
+                        isCurrent ? 'bg-primary-300 dark:bg-primary-600 text-primary-900 dark:text-primary-100 animate-pulse' :
+                        'bg-surface-100 dark:bg-surface-800 text-surface-500'
+                      )}
+                    >
+                      {isComplete ? (
+                        <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
+                      ) : isCurrent ? (
+                        <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
+                      ) : (
+                        <div className="w-3 h-3 rounded-full border border-current flex-shrink-0" />
+                      )}
+                      <span className="truncate">
+                        {stage === 'extracting' ? 'Extract' :
+                         stage === 'detecting_facilities' ? 'Detect' :
+                         stage === 'matching_cms' ? 'CMS Match' :
+                         'AI Analysis'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Analyze button */}
-      {!hasAnalysis && uploadedCount > 0 && (
+      {!hasAnalysis && uploadedCount > 0 && !analyzing && (
         <Button
           onClick={runAnalysis}
           disabled={analyzing || uploadedCount === 0}
           className="w-full"
           size="lg"
         >
-          {analyzing ? (
-            <>
-              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-              Analyzing {uploadedCount} document{uploadedCount > 1 ? 's' : ''}...
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-5 h-5 mr-2" />
-              Analyze Documents with AI
-            </>
-          )}
+          <Sparkles className="w-5 h-5 mr-2" />
+          Analyze Documents with AI
         </Button>
       )}
 

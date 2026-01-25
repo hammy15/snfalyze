@@ -4,12 +4,10 @@ import { cn } from '@/lib/utils';
 import { Check, CircleDot } from 'lucide-react';
 
 const WIZARD_STAGES = [
-  { id: 'document_upload', label: 'Upload', description: 'Upload deal documents for AI analysis' },
-  { id: 'review_analysis', label: 'Review', description: 'Review and confirm AI suggestions' },
-  { id: 'facility_verification', label: 'Verify', description: 'Verify facilities against CMS data' },
-  { id: 'document_extraction', label: 'Extract', description: 'Extract and validate financial data' },
-  { id: 'coa_mapping_review', label: 'Map', description: 'Map to chart of accounts' },
-  { id: 'financial_consolidation', label: 'Financials', description: 'Review and generate proforma' },
+  { id: 'document_upload', label: 'Upload & Extract', description: 'Upload documents and extract financials with AI Vision' },
+  { id: 'verify_pl', label: 'Verify P&L', description: 'Review and edit extracted P&L data' },
+  { id: 'facility_verification', label: 'Verify Facilities', description: 'Verify facilities against CMS data' },
+  { id: 'financial_consolidation', label: 'Proforma', description: 'Generate and review 5-year proforma' },
 ];
 
 interface WizardProgressProps {

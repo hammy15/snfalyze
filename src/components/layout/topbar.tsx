@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth/context';
 import { cn } from '@/lib/utils';
 import {
@@ -13,14 +15,30 @@ import {
   Bookmark,
   Moon,
   Sun,
+  LayoutDashboard,
+  FolderKanban,
+  Building2,
+  Users,
+  Map,
+  Wrench,
 } from 'lucide-react';
 
 interface TopBarProps {
   sidebarCollapsed: boolean;
 }
 
+const NAV_ITEMS = [
+  { href: '/app', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/app/deals', label: 'Deals', icon: FolderKanban },
+  { href: '/app/facilities', label: 'Facilities', icon: Building2 },
+  { href: '/partners', label: 'Partners', icon: Users },
+  { href: '/map', label: 'Map', icon: Map },
+  { href: '/app/tools', label: 'Tools', icon: Wrench },
+];
+
 export function TopBar({ sidebarCollapsed }: TopBarProps) {
   const { user, logout } = useAuth();
+  const pathname = usePathname();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showSavedViews, setShowSavedViews] = useState(false);
   const [densityMode, setDensityMode] = useState<'comfort' | 'compact'>('comfort');
@@ -31,21 +49,55 @@ export function TopBar({ sidebarCollapsed }: TopBarProps) {
     document.body.classList.toggle('density-compact', newMode === 'compact');
   };
 
+  const isActive = (href: string) => {
+    if (href === '/app') return pathname === '/app';
+    return pathname.startsWith(href);
+  };
+
   return (
     <header
       className={cn(
-        'fixed top-0 right-0 h-14 z-40',
+        'fixed top-0 left-0 right-0 h-14 z-40',
         'flex items-center px-4',
         'bg-white/95 dark:bg-surface-900/95 backdrop-blur-sm',
-        'border-b border-surface-200 dark:border-surface-800',
-        'transition-[left] duration-200'
+        'border-b border-surface-200 dark:border-surface-800'
       )}
-      style={{
-        left: sidebarCollapsed ? '4rem' : '15rem',
-      }}
     >
+      {/* Logo */}
+      <Link href="/app" className="flex items-center gap-2 mr-6">
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center">
+          <span className="text-white font-bold text-sm">SF</span>
+        </div>
+        <span className="font-semibold text-surface-900 dark:text-surface-100 hidden sm:block">
+          SNFalyze
+        </span>
+      </Link>
+
+      {/* Navigation Links */}
+      <nav className="hidden md:flex items-center gap-1 mr-4">
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
+          const active = isActive(item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                'flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                active
+                  ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
+                  : 'text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800'
+              )}
+            >
+              <Icon className="w-4 h-4" />
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
       {/* Global Search */}
-      <div className="flex-1 max-w-xl">
+      <div className="flex-1 max-w-md">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
           <input

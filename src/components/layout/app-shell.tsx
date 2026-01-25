@@ -9,10 +9,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   // Public pages that don't need navigation
-  const publicPages = ['/login', '/design-demo'];
+  const publicPages = ['/login', '/design-demo', '/'];
   const isPublicPage = publicPages.includes(pathname);
 
-  if (isPublicPage || !isAuthenticated) {
+  // /app/* routes use AppShellNew - don't double-wrap
+  const isNewAppRoute = pathname.startsWith('/app');
+
+  if (isPublicPage || !isAuthenticated || isNewAppRoute) {
     return <>{children}</>;
   }
 

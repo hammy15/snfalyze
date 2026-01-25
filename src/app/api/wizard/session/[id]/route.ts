@@ -2,14 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, wizardSessions } from '@/db';
 import { eq } from 'drizzle-orm';
 
-// Wizard stages in order
+// Wizard stages in order (new 4-stage flow)
+// Must match wizardStageTypeEnum in schema.ts
 const WIZARD_STAGES = [
-  'document_upload',
-  'review_analysis',
-  'facility_verification',
-  'document_extraction',
-  'coa_mapping_review',
-  'financial_consolidation',
+  'document_upload',        // Stage 1: Upload & Extract
+  'review_analysis',        // Stage 2: Review Analysis (verify P&L)
+  'facility_verification',  // Stage 3: Verify Facilities
+  'financial_consolidation', // Stage 4: Proforma
 ] as const;
 
 type WizardStage = typeof WIZARD_STAGES[number];

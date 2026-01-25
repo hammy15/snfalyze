@@ -91,40 +91,119 @@ export async function POST(
       }
     }
 
-    const stageData = session.stageData as WizardStageData;
+    const stageData = session.stageData as WizardStageData & {
+      visionExtraction?: {
+        facilities?: Array<{
+          name: string;
+          ccn?: string;
+          state?: string;
+          city?: string;
+          beds?: number;
+          periods?: unknown[];
+          lineItems?: unknown[];
+        }>;
+        verified?: boolean;
+      };
+      facilityVerification?: {
+        facilities?: Array<{
+          id: string;
+          name: string;
+          ccn?: string;
+          state?: string;
+          city?: string;
+          beds?: number;
+          verified?: boolean;
+          cmsData?: Record<string, unknown>;
+        }>;
+      };
+    };
 
-    // Validate required data
-    if (!stageData.dealStructure?.dealName) {
-      return NextResponse.json(
-        { success: false, error: 'Deal name is required' },
-        { status: 400 }
-      );
+    // Try to get facilities from various sources in the wizard data
+    let facilityData: Array<{
+      slot: number;
+      ccn?: string;
+      name?: string;
+      address?: string;
+      city?: string;
+      state?: string;
+      zipCode?: string;
+      licensedBeds?: number;
+      certifiedBeds?: number;
+      cmsRating?: number;
+      healthRating?: number;
+      staffingRating?: number;
+      qualityRating?: number;
+      isSff?: boolean;
+      isSffWatch?: boolean;
+      isVerified: boolean;
+      cmsData?: Record<string, unknown>;
+      assetType?: 'SNF' | 'ALF' | 'ILF';
+      yearBuilt?: number;
+    }> = [];
+
+    // Priority 1: Old wizard format (facilityIdentification)
+    if (stageData.facilityIdentification?.facilities?.length) {
+      facilityData = stageData.facilityIdentification.facilities;
+    }
+    // Priority 2: New wizard format (facilityVerification from stage 3)
+    else if (stageData.facilityVerification?.facilities?.length) {
+      facilityData = stageData.facilityVerification.facilities.map((f, idx) => ({
+        slot: idx + 1,
+        name: f.name,
+        ccn: f.ccn,
+        city: f.city,
+        state: f.state,
+        licensedBeds: f.beds,
+        isVerified: f.verified ?? true, // Default to verified from stage 3
+        cmsData: f.cmsData,
+      }));
+    }
+    // Priority 3: Vision extraction facilities (from stage 1)
+    else if (stageData.visionExtraction?.facilities?.length) {
+      facilityData = stageData.visionExtraction.facilities.map((f, idx) => ({
+        slot: idx + 1,
+        name: f.name,
+        ccn: f.ccn,
+        city: f.city,
+        state: f.state,
+        licensedBeds: f.beds,
+        isVerified: true, // Auto-verify from extraction
+      }));
     }
 
-    if (!stageData.facilityIdentification?.facilities?.length) {
+    // Validate we have at least one facility
+    if (!facilityData.length) {
       return NextResponse.json(
         { success: false, error: 'At least one facility is required' },
         { status: 400 }
       );
     }
 
-    // Check all facilities are verified
-    const unverifiedFacilities = stageData.facilityIdentification.facilities.filter(
-      f => !f.isVerified
-    );
-    if (unverifiedFacilities.length > 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `${unverifiedFacilities.length} facilities not verified`,
-          unverifiedFacilities: unverifiedFacilities.map(f => f.name || f.ccn),
-        },
-        { status: 400 }
-      );
+    // Auto-generate deal name if not provided
+    let dealName = stageData.dealStructure?.dealName;
+    if (!dealName) {
+      // Generate from facility names
+      if (facilityData.length === 1) {
+        dealName = facilityData[0].name || 'New Deal';
+      } else {
+        const firstFacility = facilityData[0];
+        const state = firstFacility.state || '';
+        const city = firstFacility.city || '';
+        const location = city && state ? `${city}, ${state}` : state || city || '';
+        dealName = location
+          ? `${facilityData.length}-Facility ${location} Portfolio`
+          : `${facilityData.length}-Facility Portfolio`;
+      }
+      // Add timestamp to make unique
+      dealName += ` - ${new Date().toLocaleDateString()}`;
     }
 
-    const dealStructure = stageData.dealStructure;
-    const facilityData = stageData.facilityIdentification.facilities;
+    // Build deal structure with defaults
+    const dealStructure = {
+      ...stageData.dealStructure,
+      dealName,
+      dealStructure: stageData.dealStructure?.dealStructure || 'purchase',
+    };
 
     // Calculate total beds
     const totalBeds = facilityData.reduce(

@@ -7,10 +7,12 @@ import { Button } from '@/components/ui/button';
 import { WizardProgress, WIZARD_STAGES } from './WizardProgress';
 import { StageConfirmation } from './StageConfirmation';
 import { DocumentUploadAnalysis } from './stages/DocumentUploadAnalysis';
+import { VisionExtractionVerification } from './stages/VisionExtractionVerification';
 import { FacilityIdentification } from './stages/FacilityIdentification';
 import { DocumentExtraction } from './stages/DocumentExtraction';
 import { COAMappingReview } from './stages/COAMappingReview';
 import { FinancialConsolidation } from './stages/FinancialConsolidation';
+import type { PLFacility } from '@/components/extraction/PLVerificationTable';
 import { ChevronLeft, ChevronRight, Save, AlertCircle, CheckCircle2, Building2, FileText, Edit2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -123,6 +125,12 @@ export interface WizardStageData {
     facilityPnlGenerated?: boolean;
     portfolioRollupGenerated?: boolean;
     proformaGenerated?: boolean;
+  };
+  // Vision extraction verified facilities
+  visionExtraction?: {
+    facilities?: PLFacility[];
+    verified?: boolean;
+    extractedAt?: string;
   };
   // Extraction data from initial analysis - used for COA mapping
   extraction?: {
@@ -348,6 +356,149 @@ function ReviewAnalysisSummary({
   );
 }
 
+// Verify P&L Summary Component - shows summary of extracted P&L data
+function VerifyPLSummary({
+  stageData,
+  onUpdate,
+}: {
+  stageData: WizardStageData;
+  onUpdate: (data: Partial<WizardStageData>) => void;
+}) {
+  const visionExtraction = stageData.visionExtraction;
+  const facilities = visionExtraction?.facilities || [];
+
+  // Calculate totals
+  const totalRevenue = facilities.reduce((sum, f) => {
+    const revenueItems = f.lineItems.filter(i => i.category === 'revenue');
+    const facilityRevenue = revenueItems.reduce((s, item) => {
+      const itemTotal = item.values.reduce((t, v) => t + (v.value || 0), 0);
+      return s + itemTotal;
+    }, 0);
+    return sum + facilityRevenue;
+  }, 0);
+
+  const totalExpenses = facilities.reduce((sum, f) => {
+    const expenseItems = f.lineItems.filter(i => i.category === 'expense');
+    const facilityExpenses = expenseItems.reduce((s, item) => {
+      const itemTotal = item.values.reduce((t, v) => t + (v.value || 0), 0);
+      return s + itemTotal;
+    }, 0);
+    return sum + facilityExpenses;
+  }, 0);
+
+  const totalLineItems = facilities.reduce((sum, f) => sum + f.lineItems.length, 0);
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0,
+    }).format(value);
+
+  if (facilities.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <FileText className="w-12 h-12 mx-auto text-surface-300 mb-4" />
+        <p className="text-surface-500">No P&L data extracted yet.</p>
+        <p className="text-sm text-surface-400 mt-2">Go back to upload and extract documents.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card variant="flat">
+          <CardContent className="py-4 text-center">
+            <Building2 className="w-6 h-6 mx-auto text-primary-500 mb-2" />
+            <p className="text-3xl font-bold">{facilities.length}</p>
+            <p className="text-sm text-surface-500">Facilities</p>
+          </CardContent>
+        </Card>
+        <Card variant="flat">
+          <CardContent className="py-4 text-center">
+            <FileText className="w-6 h-6 mx-auto text-primary-500 mb-2" />
+            <p className="text-3xl font-bold">{totalLineItems}</p>
+            <p className="text-sm text-surface-500">Line Items</p>
+          </CardContent>
+        </Card>
+        <Card variant="flat">
+          <CardContent className="py-4 text-center">
+            <p className="text-2xl font-bold text-emerald-600">{formatCurrency(totalRevenue)}</p>
+            <p className="text-sm text-surface-500">Total Revenue</p>
+          </CardContent>
+        </Card>
+        <Card variant="flat">
+          <CardContent className="py-4 text-center">
+            <p className="text-2xl font-bold text-primary-600">{formatCurrency(totalRevenue - totalExpenses)}</p>
+            <p className="text-sm text-surface-500">Est. NOI</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Facility List */}
+      <Card>
+        <CardContent className="py-4">
+          <h4 className="font-medium mb-4 flex items-center gap-2">
+            <Building2 className="w-5 h-5 text-primary-500" />
+            Extracted Facilities
+          </h4>
+          <div className="space-y-3">
+            {facilities.map((facility, idx) => {
+              const revenueItems = facility.lineItems.filter(i => i.category === 'revenue');
+              const expenseItems = facility.lineItems.filter(i => i.category === 'expense');
+              const facilityRevenue = revenueItems.reduce((s, item) =>
+                s + item.values.reduce((t, v) => t + (v.value || 0), 0), 0);
+              const facilityExpenses = expenseItems.reduce((s, item) =>
+                s + item.values.reduce((t, v) => t + (v.value || 0), 0), 0);
+
+              return (
+                <div
+                  key={idx}
+                  className="flex items-center justify-between p-4 rounded-lg bg-surface-50 dark:bg-surface-800"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center font-medium text-primary-600">
+                      {idx + 1}
+                    </div>
+                    <div>
+                      <p className="font-medium">{facility.name}</p>
+                      <p className="text-sm text-surface-500">
+                        {facility.city && `${facility.city}, `}{facility.state}
+                        {facility.beds && ` • ${facility.beds} beds`}
+                        {` • ${facility.lineItems.length} line items`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-medium text-emerald-600">{formatCurrency(facilityRevenue)}</p>
+                    <p className="text-sm text-surface-500">
+                      NOI: {formatCurrency(facilityRevenue - facilityExpenses)}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Confidence & Verification */}
+      <Card variant="glass">
+        <CardContent className="py-4">
+          <div className="flex items-center gap-3 text-primary-600 dark:text-primary-400">
+            <CheckCircle2 className="w-5 h-5" />
+            <p className="font-medium">
+              P&L data verified. Click Continue to verify facilities against CMS database.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 interface EnhancedDealWizardProps {
   sessionId?: string;
   dealId?: string;
@@ -482,6 +633,10 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
         extraction: (data as any).extraction
           ? (data as any).extraction
           : prev.extraction,
+        // Vision extraction data
+        visionExtraction: data.visionExtraction
+          ? { ...prev.visionExtraction, ...data.visionExtraction }
+          : prev.visionExtraction,
       };
       // Trigger debounced save with new data
       debouncedSave(newData);
@@ -598,26 +753,46 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
   const currentStageConfig = WIZARD_STAGES[currentStageIndex];
   const isLastStage = currentStageIndex === WIZARD_STAGES.length - 1;
 
+  // Check if current stage has self-managed navigation (e.g., VisionExtractionVerification)
+  // These stages handle their own Continue action via onComplete callback
+  const stageHasSelfNavigation = session?.currentStage === 'document_upload';
+
+  // Check if extraction has been completed (for document_upload stage)
+  const hasCompletedExtraction = localStageData.visionExtraction?.verified === true;
+
   // Get confirmation message for current stage
   const getConfirmationMessage = () => {
     const stageData = localStageData;
     switch (session?.currentStage) {
       case 'document_upload':
-        return 'Documents uploaded and analyzed. Proceed to review?';
-      case 'review_analysis':
-        return `Creating ${stageData.dealStructure?.dealStructure?.replace('_', '-') || 'purchase'} deal "${stageData.dealStructure?.dealName}" with ${stageData.dealStructure?.facilityCount || 0} facilities. Proceed to verification?`;
+        const extractedFacilities = stageData.visionExtraction?.facilities?.length || 0;
+        const isVerified = stageData.visionExtraction?.verified === true;
+        if (isVerified && extractedFacilities > 0) {
+          return `${extractedFacilities} facilities extracted and verified. Proceed to facility verification?`;
+        }
+        return extractedFacilities > 0
+          ? `${extractedFacilities} facilities extracted. Complete verification to proceed.`
+          : 'Upload documents and run AI extraction to continue.';
+      case 'verify_pl':
+        const totalLineItems = stageData.visionExtraction?.facilities?.reduce(
+          (sum, f) => sum + f.lineItems.length, 0
+        ) || 0;
+        return `${totalLineItems} line items verified. Proceed to facility verification?`;
       case 'facility_verification':
         const facilities = stageData.facilityIdentification?.facilities || [];
         const verified = facilities.filter(f => f.isVerified).length;
-        return `${verified} of ${facilities.length} facilities verified. Proceed to extraction?`;
+        return `${verified} of ${facilities.length} facilities verified. Proceed to proforma?`;
+      case 'financial_consolidation':
+        return 'Ready to complete deal setup?';
+      // Legacy stages
+      case 'review_analysis':
+        return `Creating ${stageData.dealStructure?.dealStructure?.replace('_', '-') || 'purchase'} deal "${stageData.dealStructure?.dealName}" with ${stageData.dealStructure?.facilityCount || 0} facilities. Proceed to verification?`;
       case 'document_extraction':
         return 'All extractions validated. Proceed to COA mapping?';
       case 'coa_mapping_review':
         const mapped = stageData.coaMappingReview?.mappedItems || 0;
         const total = stageData.coaMappingReview?.totalItems || 0;
         return `${mapped}/${total} items mapped. Generate financials?`;
-      case 'financial_consolidation':
-        return 'Ready to complete deal setup?';
       default:
         return 'Proceed to next step?';
     }
@@ -672,6 +847,36 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
     }
   }, [session, localStageData]);
 
+  // Handle vision extraction complete
+  const handleVisionExtractionComplete = useCallback((data: {
+    facilities: PLFacility[];
+    verified: boolean;
+  }) => {
+    // Save the extracted and verified facilities
+    updateStageData({
+      visionExtraction: {
+        facilities: data.facilities,
+        verified: data.verified,
+        extractedAt: new Date().toISOString(),
+      },
+      // Also populate facilityIdentification from extracted data
+      facilityIdentification: {
+        facilities: data.facilities.map((f, idx) => ({
+          slot: idx + 1,
+          name: f.name,
+          ccn: f.ccn,
+          state: f.state,
+          city: f.city,
+          licensedBeds: f.beds,
+          isVerified: false,
+        })),
+      },
+    });
+
+    // Auto-advance to next stage
+    navigateStage('next');
+  }, [updateStageData, navigateStage]);
+
   // Render current stage component
   const renderStage = () => {
     if (!session) return null;
@@ -684,31 +889,40 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
 
     switch (session.currentStage) {
       case 'document_upload':
+        // Use VisionExtractionVerification for upload + extraction + verification
         return (
-          <DocumentUploadAnalysis
-            {...commonProps}
+          <VisionExtractionVerification
             sessionId={session.id}
-            onAnalysisComplete={handleAnalysisComplete}
+            dealId={session.dealId || undefined}
+            onComplete={handleVisionExtractionComplete}
           />
         );
-      case 'review_analysis':
-        // Show summary of AI analysis for final review
+      case 'verify_pl':
+        // Show summary of verified P&L for review before proceeding
         return (
-          <ReviewAnalysisSummary
+          <VerifyPLSummary
             stageData={localStageData}
             onUpdate={updateStageData}
           />
         );
       case 'facility_verification':
         return <FacilityIdentification {...commonProps} />;
+      case 'financial_consolidation':
+        return <FinancialConsolidation {...commonProps} />;
+      // Legacy stages - keep for backwards compatibility
+      case 'review_analysis':
+        return (
+          <ReviewAnalysisSummary
+            stageData={localStageData}
+            onUpdate={updateStageData}
+          />
+        );
       case 'document_extraction':
         return <DocumentExtraction {...commonProps} />;
       case 'coa_mapping_review':
         return <COAMappingReview {...commonProps} />;
-      case 'financial_consolidation':
-        return <FinancialConsolidation {...commonProps} />;
       default:
-        return <div>Unknown stage</div>;
+        return <div>Unknown stage: {session.currentStage}</div>;
     }
   };
 
@@ -777,6 +991,11 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
         {isLastStage ? (
           <Button onClick={completeWizard} disabled={saving} loading={saving}>
             Complete Setup
+          </Button>
+        ) : stageHasSelfNavigation && !hasCompletedExtraction ? (
+          // Stage handles its own navigation - hide Continue until extraction is verified
+          <Button disabled variant="outline" className="opacity-50">
+            Complete extraction below to continue
           </Button>
         ) : (
           <Button onClick={() => handleStageComplete('next')} disabled={saving}>

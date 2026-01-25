@@ -5,6 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
 import {
   CheckCircle2,
   Users,
@@ -15,6 +18,8 @@ import {
   TrendingUp,
   Calculator,
   Loader2,
+  Settings2,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { WizardStageData } from '../EnhancedDealWizard';
@@ -55,6 +60,40 @@ interface PortfolioRollup {
   averageOccupancy: number;
 }
 
+interface ProformaAssumptions {
+  revenueGrowthRate: number;
+  expenseGrowthRate: number;
+  targetOccupancy: number | null;
+}
+
+interface ProformaProjection {
+  year: number;
+  isBaseYear: boolean;
+  facilities: Array<{
+    facilityId: string;
+    facilityName: string;
+    revenue: number;
+    expenses: number;
+    noi: number;
+    margin: number;
+  }>;
+  portfolio: {
+    revenue: number;
+    expenses: number;
+    noi: number;
+    margin: number;
+  };
+}
+
+interface ProformaData {
+  assumptions: ProformaAssumptions;
+  projections: ProformaProjection[];
+  summary: {
+    baseYear: number;
+    projectionYears: number;
+  };
+}
+
 interface FinancialConsolidationProps {
   stageData: WizardStageData;
   onUpdate: (data: Partial<WizardStageData>) => void;
@@ -70,6 +109,13 @@ export function FinancialConsolidation({ stageData, onUpdate, dealId }: Financia
   const [rollup, setRollup] = useState<PortfolioRollup | null>(null);
   const [generatingProforma, setGeneratingProforma] = useState(false);
   const [proformaGenerated, setProformaGenerated] = useState(false);
+  const [proformaData, setProformaData] = useState<ProformaData | null>(null);
+  const [showAssumptions, setShowAssumptions] = useState(false);
+  const [assumptions, setAssumptions] = useState<ProformaAssumptions>({
+    revenueGrowthRate: 2.5,
+    expenseGrowthRate: 3.0,
+    targetOccupancy: 90,
+  });
 
   // Load financial data from extraction or API
   useEffect(() => {
@@ -276,24 +322,80 @@ export function FinancialConsolidation({ stageData, onUpdate, dealId }: Financia
     }
   }, [censusData, ppdData, facilityPnl, rollup, proformaGenerated]);
 
-  // Generate proforma
+  // Generate proforma - works with or without dealId
   const generateProforma = async () => {
-    if (!dealId) return;
-
     setGeneratingProforma(true);
     try {
-      const response = await fetch(`/api/deals/${dealId}/financial/proforma`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          scenarioName: 'Baseline',
-          scenarioType: 'baseline',
-          projectionYears: 5,
-        }),
-      });
+      // If we have a dealId, use the API
+      if (dealId) {
+        const response = await fetch(`/api/deals/${dealId}/financial/proforma`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            scenarioName: 'Baseline',
+            scenarioType: 'baseline',
+            projectionYears: 5,
+            revenueGrowthRate: assumptions.revenueGrowthRate / 100,
+            expenseGrowthRate: assumptions.expenseGrowthRate / 100,
+            targetOccupancy: assumptions.targetOccupancy ? assumptions.targetOccupancy / 100 : null,
+          }),
+        });
 
-      const data = await response.json();
-      if (data.success) {
+        const data = await response.json();
+        if (data.success) {
+          setProformaData({
+            assumptions,
+            projections: data.data.projections,
+            summary: {
+              baseYear: data.data.summary.baseYear,
+              projectionYears: 5,
+            },
+          });
+          setProformaGenerated(true);
+        }
+      } else {
+        // Generate proforma from local extraction data (before deal is created)
+        const baseYear = new Date().getFullYear();
+        const projections: ProformaProjection[] = [];
+
+        for (let year = 0; year <= 5; year++) {
+          const revGrowth = Math.pow(1 + assumptions.revenueGrowthRate / 100, year);
+          const expGrowth = Math.pow(1 + assumptions.expenseGrowthRate / 100, year);
+
+          const yearFacilities = facilityPnl.map(f => ({
+            facilityId: f.facilityId,
+            facilityName: f.facilityName,
+            revenue: f.revenue * revGrowth,
+            expenses: f.expenses * expGrowth,
+            noi: (f.revenue * revGrowth) - (f.expenses * expGrowth),
+            margin: f.revenue > 0 ? (((f.revenue * revGrowth) - (f.expenses * expGrowth)) / (f.revenue * revGrowth)) * 100 : 0,
+          }));
+
+          const portfolioRevenue = yearFacilities.reduce((sum, f) => sum + f.revenue, 0);
+          const portfolioExpenses = yearFacilities.reduce((sum, f) => sum + f.expenses, 0);
+          const portfolioNoi = portfolioRevenue - portfolioExpenses;
+
+          projections.push({
+            year: baseYear + year,
+            isBaseYear: year === 0,
+            facilities: yearFacilities,
+            portfolio: {
+              revenue: portfolioRevenue,
+              expenses: portfolioExpenses,
+              noi: portfolioNoi,
+              margin: portfolioRevenue > 0 ? (portfolioNoi / portfolioRevenue) * 100 : 0,
+            },
+          });
+        }
+
+        setProformaData({
+          assumptions,
+          projections,
+          summary: {
+            baseYear,
+            projectionYears: 5,
+          },
+        });
         setProformaGenerated(true);
       }
     } catch (err) {
@@ -301,6 +403,11 @@ export function FinancialConsolidation({ stageData, onUpdate, dealId }: Financia
     } finally {
       setGeneratingProforma(false);
     }
+  };
+
+  // Regenerate proforma with new assumptions
+  const regenerateProforma = () => {
+    generateProforma();
   };
 
   // Format currency
@@ -511,30 +618,245 @@ export function FinancialConsolidation({ stageData, onUpdate, dealId }: Financia
 
         {/* Proforma Tab */}
         <TabsContent value="proforma" className="space-y-4">
-          {proformaGenerated ? (
-            <Card variant="glass">
-              <CardContent className="py-6">
-                <div className="flex items-center gap-3 text-primary-600 dark:text-primary-400">
-                  <CheckCircle2 className="w-6 h-6" />
-                  <div>
-                    <p className="font-medium text-lg">Proforma Generated</p>
-                    <p className="text-sm text-surface-500">
-                      5-year baseline projection created successfully.
-                    </p>
+          {/* Assumptions Panel */}
+          <Card variant="flat">
+            <CardContent className="py-4">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-medium flex items-center gap-2">
+                  <Settings2 className="w-4 h-4" />
+                  Assumptions
+                </h4>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAssumptions(!showAssumptions)}
+                >
+                  {showAssumptions ? 'Hide' : 'Edit'}
+                </Button>
+              </div>
+
+              {showAssumptions ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t">
+                  <div className="space-y-2">
+                    <Label>Revenue Growth Rate</Label>
+                    <div className="flex items-center gap-3">
+                      <Slider
+                        value={[assumptions.revenueGrowthRate]}
+                        onValueChange={(v) => setAssumptions(prev => ({ ...prev, revenueGrowthRate: v[0] }))}
+                        min={0}
+                        max={10}
+                        step={0.5}
+                        className="flex-1"
+                      />
+                      <span className="text-sm font-medium w-12">{assumptions.revenueGrowthRate}%</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Expense Inflation Rate</Label>
+                    <div className="flex items-center gap-3">
+                      <Slider
+                        value={[assumptions.expenseGrowthRate]}
+                        onValueChange={(v) => setAssumptions(prev => ({ ...prev, expenseGrowthRate: v[0] }))}
+                        min={0}
+                        max={10}
+                        step={0.5}
+                        className="flex-1"
+                      />
+                      <span className="text-sm font-medium w-12">{assumptions.expenseGrowthRate}%</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Target Occupancy (Year 5)</Label>
+                    <div className="flex items-center gap-3">
+                      <Slider
+                        value={[assumptions.targetOccupancy || 85]}
+                        onValueChange={(v) => setAssumptions(prev => ({ ...prev, targetOccupancy: v[0] }))}
+                        min={70}
+                        max={100}
+                        step={1}
+                        className="flex-1"
+                      />
+                      <span className="text-sm font-medium w-12">{assumptions.targetOccupancy || 85}%</span>
+                    </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              ) : (
+                <div className="flex items-center gap-6 text-sm text-surface-600">
+                  <span>Revenue: +{assumptions.revenueGrowthRate}%/yr</span>
+                  <span>Expenses: +{assumptions.expenseGrowthRate}%/yr</span>
+                  <span>Target Occ: {assumptions.targetOccupancy || 85}%</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {proformaGenerated && proformaData ? (
+            <div className="space-y-4">
+              {/* Regenerate button */}
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={regenerateProforma}
+                  disabled={generatingProforma}
+                >
+                  <RefreshCw className={cn("w-4 h-4 mr-2", generatingProforma && "animate-spin")} />
+                  Recalculate
+                </Button>
+              </div>
+
+              {/* Projections Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-surface-50 dark:bg-surface-900">
+                      <th className="text-left py-3 px-3 font-medium">Metric</th>
+                      {proformaData.projections.map((p) => (
+                        <th key={p.year} className={cn(
+                          "text-right py-3 px-3 font-medium",
+                          p.isBaseYear && "bg-primary-50 dark:bg-primary-900/30"
+                        )}>
+                          {p.year}
+                          {p.isBaseYear && <span className="block text-xs text-surface-500">Base</span>}
+                        </th>
+                      ))}
+                      <th className="text-right py-3 px-3 font-medium">CAGR</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* Revenue Row */}
+                    <tr className="border-b hover:bg-surface-50 dark:hover:bg-surface-800">
+                      <td className="py-2 px-3 font-medium text-emerald-600">Revenue</td>
+                      {proformaData.projections.map((p) => (
+                        <td key={p.year} className={cn(
+                          "text-right py-2 px-3 font-mono",
+                          p.isBaseYear && "bg-primary-50 dark:bg-primary-900/30"
+                        )}>
+                          {formatCurrency(p.portfolio.revenue)}
+                        </td>
+                      ))}
+                      <td className="text-right py-2 px-3 font-mono text-emerald-600">
+                        {assumptions.revenueGrowthRate.toFixed(1)}%
+                      </td>
+                    </tr>
+                    {/* Expenses Row */}
+                    <tr className="border-b hover:bg-surface-50 dark:hover:bg-surface-800">
+                      <td className="py-2 px-3 font-medium text-rose-600">Expenses</td>
+                      {proformaData.projections.map((p) => (
+                        <td key={p.year} className={cn(
+                          "text-right py-2 px-3 font-mono",
+                          p.isBaseYear && "bg-primary-50 dark:bg-primary-900/30"
+                        )}>
+                          {formatCurrency(p.portfolio.expenses)}
+                        </td>
+                      ))}
+                      <td className="text-right py-2 px-3 font-mono text-rose-600">
+                        {assumptions.expenseGrowthRate.toFixed(1)}%
+                      </td>
+                    </tr>
+                    {/* NOI Row */}
+                    <tr className="border-b font-semibold bg-surface-100 dark:bg-surface-800">
+                      <td className="py-2 px-3">NOI</td>
+                      {proformaData.projections.map((p) => (
+                        <td key={p.year} className={cn(
+                          "text-right py-2 px-3 font-mono text-primary-600",
+                          p.isBaseYear && "bg-primary-100 dark:bg-primary-900/50"
+                        )}>
+                          {formatCurrency(p.portfolio.noi)}
+                        </td>
+                      ))}
+                      <td className="text-right py-2 px-3 font-mono text-primary-600">
+                        {proformaData.projections.length >= 2
+                          ? ((Math.pow(
+                              proformaData.projections[proformaData.projections.length - 1].portfolio.noi /
+                                Math.max(proformaData.projections[0].portfolio.noi, 1),
+                              1 / 5
+                            ) - 1) * 100).toFixed(1)
+                          : '-'}%
+                      </td>
+                    </tr>
+                    {/* NOI Margin Row */}
+                    <tr className="border-b hover:bg-surface-50 dark:hover:bg-surface-800">
+                      <td className="py-2 px-3 font-medium">NOI Margin</td>
+                      {proformaData.projections.map((p) => (
+                        <td key={p.year} className={cn(
+                          "text-right py-2 px-3",
+                          p.isBaseYear && "bg-primary-50 dark:bg-primary-900/30"
+                        )}>
+                          {p.portfolio.margin.toFixed(1)}%
+                        </td>
+                      ))}
+                      <td className="text-right py-2 px-3">-</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Per-Facility Breakdown */}
+              {proformaData.projections[0].facilities.length > 1 && (
+                <Card variant="flat">
+                  <CardHeader className="py-3">
+                    <CardTitle className="text-sm">Per-Facility Year 5 Projection</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left py-2 font-medium">Facility</th>
+                            <th className="text-right py-2 font-medium">Base Revenue</th>
+                            <th className="text-right py-2 font-medium">Y5 Revenue</th>
+                            <th className="text-right py-2 font-medium">Y5 NOI</th>
+                            <th className="text-right py-2 font-medium">Y5 Margin</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {proformaData.projections[proformaData.projections.length - 1].facilities.map((f, idx) => (
+                            <tr key={f.facilityId} className="border-b">
+                              <td className="py-2">{f.facilityName}</td>
+                              <td className="text-right py-2 font-mono">
+                                {formatCurrency(proformaData.projections[0].facilities[idx]?.revenue || 0)}
+                              </td>
+                              <td className="text-right py-2 font-mono">
+                                {formatCurrency(f.revenue)}
+                              </td>
+                              <td className="text-right py-2 font-mono text-primary-600">
+                                {formatCurrency(f.noi)}
+                              </td>
+                              <td className="text-right py-2">
+                                {f.margin.toFixed(1)}%
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Success message */}
+              <Card variant="glass">
+                <CardContent className="py-4">
+                  <div className="flex items-center gap-3 text-primary-600 dark:text-primary-400">
+                    <CheckCircle2 className="w-5 h-5" />
+                    <p className="font-medium">
+                      5-year proforma generated. Adjust assumptions above and recalculate as needed.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           ) : (
             <Card variant="flat" className="text-center py-8">
               <CardContent>
                 <FileSpreadsheet className="w-12 h-12 mx-auto text-surface-300 mb-4" />
                 <p className="text-surface-600 dark:text-surface-400 mb-4">
-                  Generate a 5-year proforma based on mapped financial data
+                  Generate a 5-year proforma based on current financial data
                 </p>
                 <Button
                   onClick={generateProforma}
-                  disabled={generatingProforma}
+                  disabled={generatingProforma || facilityPnl.length === 0}
                   loading={generatingProforma}
                 >
                   {generatingProforma ? (
@@ -546,6 +868,11 @@ export function FinancialConsolidation({ stageData, onUpdate, dealId }: Financia
                     </>
                   )}
                 </Button>
+                {facilityPnl.length === 0 && (
+                  <p className="text-xs text-surface-500 mt-2">
+                    Upload documents with financial data to enable proforma generation
+                  </p>
+                )}
               </CardContent>
             </Card>
           )}

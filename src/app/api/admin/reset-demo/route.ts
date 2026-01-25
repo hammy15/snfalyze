@@ -1,7 +1,210 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { deals, facilities, capitalPartners } from '@/db/schema';
+import { deals, facilities, capitalPartners, documents, financialPeriods, valuations } from '@/db/schema';
 import { sql } from 'drizzle-orm';
+
+// Demo Deals Data
+const demoDeals = [
+  {
+    name: 'Sunrise Senior Living Portfolio',
+    status: 'due_diligence' as const,
+    assetType: 'SNF' as const,
+    askingPrice: '45000000',
+    beds: 340,
+    primaryState: 'TX',
+    markets: ['Dallas-Fort Worth', 'Houston', 'Austin'],
+    brokerName: 'Michael Chen',
+    brokerFirm: 'Marcus & Millichap Healthcare',
+    sellerName: 'Sunrise Holdings LLC',
+    brokerCredibilityScore: 85,
+    thesis: 'Strong regional portfolio with upside potential through operational improvements and Medicaid rate increases expected in Q2 2025.',
+    confidenceScore: 78,
+    analysisNarrative: 'Portfolio shows consistent 88% occupancy across facilities with room for improvement. Labor costs are 5% above market, presenting optimization opportunity. Recent Texas Medicaid rate increases will boost revenue by approximately $1.2M annually.',
+    dealStructure: 'purchase' as const,
+    isAllOrNothing: true,
+  },
+  {
+    name: 'Valley Healthcare Partners',
+    status: 'under_loi' as const,
+    assetType: 'SNF' as const,
+    askingPrice: '28000000',
+    beds: 220,
+    primaryState: 'FL',
+    markets: ['Tampa Bay', 'Orlando'],
+    brokerName: 'Sarah Johnson',
+    brokerFirm: 'Blueprint Healthcare Real Estate',
+    sellerName: 'Valley Health Systems Inc.',
+    brokerCredibilityScore: 92,
+    thesis: 'Well-maintained facilities in high-growth Florida markets with strong Medicare mix and experienced management team willing to stay post-acquisition.',
+    confidenceScore: 82,
+    analysisNarrative: 'Facilities benefit from Florida\'s favorable reimbursement environment. Medicare revenue represents 35% of total, well above regional average. CMS ratings of 4 and 5 stars indicate quality operations.',
+    dealStructure: 'purchase' as const,
+    isAllOrNothing: false,
+  },
+  {
+    name: 'Midwest Care Centers',
+    status: 'new' as const,
+    assetType: 'SNF' as const,
+    askingPrice: '12000000',
+    beds: 95,
+    primaryState: 'OH',
+    markets: ['Columbus'],
+    brokerName: 'David Williams',
+    brokerFirm: 'Senior Living Investment Brokerage',
+    sellerName: 'Private Owner',
+    brokerCredibilityScore: 78,
+    thesis: 'Single-facility acquisition opportunity in underserved Columbus submarket. Building needs $1.5M in deferred maintenance but location fundamentals are strong.',
+    confidenceScore: 65,
+    analysisNarrative: 'Facility has experienced occupancy decline from 92% to 78% over 18 months due to management transition. New ownership with operational expertise could restore census and improve margins significantly.',
+    dealStructure: 'purchase' as const,
+    isAllOrNothing: true,
+  },
+  {
+    name: 'Coastal Living Group',
+    status: 'closed' as const,
+    assetType: 'ALF' as const,
+    askingPrice: '62000000',
+    beds: 480,
+    primaryState: 'CA',
+    markets: ['San Diego', 'Los Angeles', 'Orange County', 'Santa Barbara'],
+    brokerName: 'Jennifer Martinez',
+    brokerFirm: 'JLL Healthcare Capital Markets',
+    sellerName: 'Coastal Senior Services Corp.',
+    brokerCredibilityScore: 95,
+    thesis: 'Premium ALF portfolio in high-barrier-to-entry California coastal markets. Strong private-pay resident base with average length of stay exceeding 36 months.',
+    confidenceScore: 91,
+    analysisNarrative: 'Closed at $58.5M after 45-day due diligence. Portfolio achieved 94% stabilized occupancy with EBITDAR margins of 28%. Sale-leaseback structure provided 7.25% yield to REIT partner.',
+    dealStructure: 'sale_leaseback' as const,
+    isAllOrNothing: true,
+  },
+];
+
+// Demo Facilities Data (will be linked to deals)
+const demoFacilities = {
+  'Sunrise Senior Living Portfolio': [
+    { name: 'Sunrise at Preston Hollow', address: '8350 Park Lane', city: 'Dallas', state: 'TX', zipCode: '75231', assetType: 'SNF' as const, licensedBeds: 120, certifiedBeds: 118, yearBuilt: 2008, cmsRating: 4, occupancyRate: 89 },
+    { name: 'Sunrise of Katy', address: '1450 S Mason Rd', city: 'Katy', state: 'TX', zipCode: '77450', assetType: 'SNF' as const, licensedBeds: 110, certifiedBeds: 110, yearBuilt: 2012, cmsRating: 4, occupancyRate: 87 },
+    { name: 'Sunrise Health Austin', address: '5600 N Lamar Blvd', city: 'Austin', state: 'TX', zipCode: '78751', assetType: 'SNF' as const, licensedBeds: 110, certifiedBeds: 108, yearBuilt: 2015, cmsRating: 3, occupancyRate: 85 },
+  ],
+  'Valley Healthcare Partners': [
+    { name: 'Valley Tampa Rehabilitation', address: '4200 N Dale Mabry Hwy', city: 'Tampa', state: 'FL', zipCode: '33614', assetType: 'SNF' as const, licensedBeds: 120, certifiedBeds: 120, yearBuilt: 2010, cmsRating: 5, occupancyRate: 91 },
+    { name: 'Valley Orlando Health Center', address: '2850 Sand Lake Rd', city: 'Orlando', state: 'FL', zipCode: '32819', assetType: 'SNF' as const, licensedBeds: 100, certifiedBeds: 98, yearBuilt: 2014, cmsRating: 4, occupancyRate: 88 },
+  ],
+  'Midwest Care Centers': [
+    { name: 'Columbus Care & Rehabilitation', address: '1280 Bethel Rd', city: 'Columbus', state: 'OH', zipCode: '43220', assetType: 'SNF' as const, licensedBeds: 95, certifiedBeds: 90, yearBuilt: 1998, cmsRating: 3, occupancyRate: 78 },
+  ],
+  'Coastal Living Group': [
+    { name: 'Coastal La Jolla', address: '7550 Fay Ave', city: 'La Jolla', state: 'CA', zipCode: '92037', assetType: 'ALF' as const, licensedBeds: 140, certifiedBeds: 140, yearBuilt: 2016, cmsRating: 5, occupancyRate: 95 },
+    { name: 'Coastal Brentwood', address: '11900 San Vicente Blvd', city: 'Los Angeles', state: 'CA', zipCode: '90049', assetType: 'ALF' as const, licensedBeds: 120, certifiedBeds: 118, yearBuilt: 2018, cmsRating: 5, occupancyRate: 93 },
+    { name: 'Coastal Newport Beach', address: '350 Newport Center Dr', city: 'Newport Beach', state: 'CA', zipCode: '92660', assetType: 'ALF' as const, licensedBeds: 110, certifiedBeds: 110, yearBuilt: 2014, cmsRating: 4, occupancyRate: 94 },
+    { name: 'Coastal Santa Barbara', address: '1600 State St', city: 'Santa Barbara', state: 'CA', zipCode: '93101', assetType: 'ALF' as const, licensedBeds: 110, certifiedBeds: 108, yearBuilt: 2012, cmsRating: 4, occupancyRate: 92 },
+  ],
+};
+
+// Demo Documents Data
+const demoDocuments = {
+  'Sunrise Senior Living Portfolio': [
+    { filename: 'Sunrise_Portfolio_PL_2024.pdf', type: 'financial_statement' as const, status: 'complete' as const, periodStart: '2024-01-01', periodEnd: '2024-12-31', extractionConfidence: 92 },
+    { filename: 'Sunrise_Census_Report_Q4_2024.xlsx', type: 'census_report' as const, status: 'complete' as const, periodStart: '2024-10-01', periodEnd: '2024-12-31', extractionConfidence: 88 },
+    { filename: 'Sunrise_Offering_Memorandum.pdf', type: 'om_package' as const, status: 'complete' as const, extractionConfidence: 95 },
+  ],
+  'Valley Healthcare Partners': [
+    { filename: 'Valley_Healthcare_Financials_2024.pdf', type: 'financial_statement' as const, status: 'complete' as const, periodStart: '2024-01-01', periodEnd: '2024-12-31', extractionConfidence: 89 },
+    { filename: 'Valley_OM_Package.pdf', type: 'om_package' as const, status: 'complete' as const, extractionConfidence: 94 },
+  ],
+  'Midwest Care Centers': [
+    { filename: 'Columbus_Care_TTM_PL.pdf', type: 'financial_statement' as const, status: 'complete' as const, periodStart: '2024-02-01', periodEnd: '2025-01-31', extractionConfidence: 78 },
+    { filename: 'Columbus_Census_Monthly.xlsx', type: 'census_report' as const, status: 'complete' as const, periodStart: '2024-01-01', periodEnd: '2024-12-31', extractionConfidence: 82 },
+    { filename: 'Columbus_Offering_Package.pdf', type: 'om_package' as const, status: 'complete' as const, extractionConfidence: 86 },
+  ],
+  'Coastal Living Group': [
+    { filename: 'Coastal_Living_Audited_Financials_2024.pdf', type: 'financial_statement' as const, status: 'complete' as const, periodStart: '2024-01-01', periodEnd: '2024-12-31', extractionConfidence: 96 },
+    { filename: 'Coastal_Portfolio_OM.pdf', type: 'om_package' as const, status: 'complete' as const, extractionConfidence: 97 },
+    { filename: 'Coastal_Appraisal_Report.pdf', type: 'appraisal' as const, status: 'complete' as const, extractionConfidence: 94 },
+  ],
+};
+
+// Demo Capital Partners
+const demoPartners = [
+  {
+    name: 'Regional Healthcare Finance',
+    type: 'lender' as const,
+    assetTypes: ['SNF', 'ALF'] ,
+    geographies: ['TX', 'FL', 'OH', 'CA', 'PA', 'NY'],
+    minDealSize: '5000000',
+    maxDealSize: '75000000',
+    targetYield: '0.085',
+    maxLtv: '0.75',
+    preferredStructure: 'Senior Secured Loan',
+    termPreference: '5-7 years',
+    riskTolerance: 'moderate' as const,
+    contactName: 'Robert Thompson',
+    contactEmail: 'rthompson@regionalhcf.com',
+    notes: 'Strong appetite for stabilized SNF portfolios. Quick close capability with dedicated healthcare underwriting team. Recently increased allocation to senior housing.',
+    status: 'active',
+    minimumCoverageRatio: '1.35',
+    preferredDealStructures: ['purchase', 'acquisition_financing'],
+    leaseTermPreference: 'N/A',
+  },
+  {
+    name: 'Senior Housing Trust',
+    type: 'reit' as const,
+    assetTypes: ['SNF', 'ALF', 'ILF'] ,
+    geographies: ['CA', 'FL', 'TX', 'AZ', 'WA', 'OR'],
+    minDealSize: '20000000',
+    maxDealSize: '150000000',
+    targetYield: '0.0725',
+    preferredStructure: 'Sale-Leaseback',
+    termPreference: '15-20 year triple net',
+    riskTolerance: 'conservative' as const,
+    contactName: 'Amanda Richards',
+    contactEmail: 'arichards@seniorhousingtrust.com',
+    notes: 'Public REIT focused on high-quality senior housing assets. Preference for coastal markets and Class A properties. Requires 1.5x coverage minimum.',
+    status: 'active',
+    minimumCoverageRatio: '1.5',
+    preferredDealStructures: ['sale_leaseback'],
+    leaseTermPreference: '15-20 years',
+    rentEscalation: '0.025',
+  },
+  {
+    name: 'Carebridge Capital',
+    type: 'equity' as const,
+    assetTypes: ['SNF', 'ALF'] ,
+    geographies: ['TX', 'FL', 'OH', 'PA', 'IL', 'GA'],
+    minDealSize: '10000000',
+    maxDealSize: '100000000',
+    targetYield: '0.15',
+    preferredStructure: 'JV Equity Partnership',
+    termPreference: '5-7 year hold',
+    riskTolerance: 'aggressive' as const,
+    contactName: 'Marcus Johnson',
+    contactEmail: 'mjohnson@carebridgecapital.com',
+    notes: 'Value-add focused PE fund targeting operational turnarounds. Brings in-house management platform. Looking for 15%+ levered returns with operational upside.',
+    status: 'active',
+    minimumCoverageRatio: '1.1',
+    preferredDealStructures: ['purchase'],
+  },
+  {
+    name: 'MedCredit Partners',
+    type: 'lender' as const,
+    assetTypes: ['SNF'] ,
+    geographies: ['OH', 'PA', 'MI', 'IN', 'WI', 'IL'],
+    minDealSize: '3000000',
+    maxDealSize: '40000000',
+    targetYield: '0.095',
+    maxLtv: '0.70',
+    preferredStructure: 'Bridge to HUD/Fannie',
+    termPreference: '2-3 years',
+    riskTolerance: 'moderate' as const,
+    contactName: 'Patricia Chen',
+    contactEmail: 'pchen@medcreditpartners.com',
+    notes: 'Specializes in Midwest SNF lending. Bridge loan focus with pathway to permanent financing. Flexible on terms for experienced operators.',
+    status: 'active',
+    minimumCoverageRatio: '1.25',
+    preferredDealStructures: ['acquisition_financing'],
+    leaseTermPreference: 'N/A',
+  },
+];
 
 // Cascadia Healthcare facilities from CHC Master Info
 const cascadiaFacilities = [
@@ -79,30 +282,77 @@ export async function POST() {
     await db.delete(capitalPartners);
     console.log('Cleared capital partners');
 
-    // Insert Cascadia facilities
+    // Clear documents
+    await db.delete(documents);
+    console.log('Cleared documents');
+
+    // Insert Cascadia facilities (standalone)
     for (const facility of cascadiaFacilities) {
       await db.insert(facilities).values(facility);
     }
     console.log(`Inserted ${cascadiaFacilities.length} Cascadia facilities`);
 
+    // Insert demo deals and their associated facilities/documents
+    const dealIdMap: Record<string, string> = {};
+
+    for (const deal of demoDeals) {
+      const [insertedDeal] = await db.insert(deals).values(deal).returning({ id: deals.id });
+      dealIdMap[deal.name] = insertedDeal.id;
+      console.log(`Inserted deal: ${deal.name}`);
+
+      // Insert facilities for this deal
+      const dealFacilities = demoFacilities[deal.name as keyof typeof demoFacilities];
+      if (dealFacilities) {
+        for (const facility of dealFacilities) {
+          await db.insert(facilities).values({
+            ...facility,
+            dealId: insertedDeal.id,
+          });
+        }
+        console.log(`Inserted ${dealFacilities.length} facilities for ${deal.name}`);
+      }
+
+      // Insert documents for this deal
+      const dealDocs = demoDocuments[deal.name as keyof typeof demoDocuments];
+      if (dealDocs) {
+        for (const doc of dealDocs) {
+          await db.insert(documents).values({
+            ...doc,
+            dealId: insertedDeal.id,
+            periodStart: doc.periodStart || null,
+            periodEnd: doc.periodEnd || null,
+          });
+        }
+        console.log(`Inserted ${dealDocs.length} documents for ${deal.name}`);
+      }
+    }
+
+    // Insert capital partners
+    for (const partner of demoPartners) {
+      await db.insert(capitalPartners).values(partner);
+    }
+    console.log(`Inserted ${demoPartners.length} capital partners`);
+
     // Get counts
     const facilityCount = await db.select({ count: sql<number>`count(*)` }).from(facilities);
     const dealCount = await db.select({ count: sql<number>`count(*)` }).from(deals);
     const partnerCount = await db.select({ count: sql<number>`count(*)` }).from(capitalPartners);
+    const documentCount = await db.select({ count: sql<number>`count(*)` }).from(documents);
 
     return NextResponse.json({
       success: true,
-      message: 'Database reset complete',
+      message: 'Database reset complete with demo data',
       data: {
-        facilities: Number(facilityCount[0].count),
         deals: Number(dealCount[0].count),
+        facilities: Number(facilityCount[0].count),
+        documents: Number(documentCount[0].count),
         capitalPartners: Number(partnerCount[0].count),
       },
     });
   } catch (error) {
     console.error('Error resetting database:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to reset database' },
+      { success: false, error: 'Failed to reset database', details: String(error) },
       { status: 500 }
     );
   }
@@ -110,7 +360,22 @@ export async function POST() {
 
 export async function GET() {
   return NextResponse.json({
-    message: 'POST to this endpoint to reset the database for demo. This will clear all deals, facilities (except Cascadia), and capital partners.',
+    message: 'POST to this endpoint to reset the database with demo data.',
+    description: 'This will clear existing data and populate with demo deals, facilities, documents, and capital partners.',
+    demoData: {
+      deals: [
+        'Sunrise Senior Living Portfolio - TX, 3 facilities, $45M, Due Diligence',
+        'Valley Healthcare Partners - FL, 2 facilities, $28M, LOI',
+        'Midwest Care Centers - OH, 1 facility, $12M, Target',
+        'Coastal Living Group - CA, 4 facilities, $62M, Closed',
+      ],
+      partners: [
+        'Regional Healthcare Finance (Lender)',
+        'Senior Housing Trust (REIT)',
+        'Carebridge Capital (Equity)',
+        'MedCredit Partners (Lender)',
+      ],
+    },
     warning: 'This action cannot be undone!',
   });
 }

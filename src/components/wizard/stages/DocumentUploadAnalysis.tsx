@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -153,6 +153,9 @@ export function DocumentUploadAnalysis({
   const [assetType, setAssetType] = useState<'SNF' | 'ALF' | 'ILF'>('SNF');
   const [facilities, setFacilities] = useState<AIAnalysis['facilities']>([]);
   const [isEditing, setIsEditing] = useState(false);
+
+  // Ref for the standalone file input button
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Handle file upload
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
@@ -422,23 +425,31 @@ export function DocumentUploadAnalysis({
 
       {/* Explicit file input button */}
       <div className="flex justify-center">
-        <label className="inline-flex items-center gap-2 px-6 py-3 rounded-lg border-2 border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 font-medium cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors">
-          <input
-            type="file"
-            multiple
-            accept=".pdf,.xlsx,.xls,.csv"
-            onChange={(e) => {
-              const files = e.target.files ? Array.from(e.target.files) : [];
-              if (files.length > 0) {
-                onDrop(files);
-              }
-              e.target.value = '';
-            }}
-            className="hidden"
-          />
-          <Upload className="w-5 h-5" />
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".pdf,.xlsx,.xls,.csv"
+          onChange={(e) => {
+            const selectedFiles = e.target.files ? Array.from(e.target.files) : [];
+            if (selectedFiles.length > 0) {
+              onDrop(selectedFiles);
+            }
+            e.target.value = '';
+          }}
+          className="sr-only"
+          aria-hidden="true"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
+          onClick={() => fileInputRef.current?.click()}
+          className="border-2 border-primary-500 text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-900/20"
+        >
+          <Upload className="w-5 h-5 mr-2" />
           Click to Select Files
-        </label>
+        </Button>
       </div>
 
       {/* File list */}

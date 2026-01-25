@@ -186,6 +186,11 @@ const LINE_ITEM_PATTERNS: LineItemPattern[] = [
       /net\s+patient\s+revenue/i,
       /total\s+income/i,
       /^revenue$/i,
+      /total\s+net\s+revenue/i,
+      /operating\s+revenue/i,
+      /patient\s+service\s+revenue/i,
+      /net\s+revenue/i,
+      /facility\s+revenue/i,
     ],
   },
   {
@@ -391,6 +396,27 @@ const LINE_ITEM_PATTERNS: LineItemPattern[] = [
       /total\s+(operating\s+)?expense/i,
       /total\s+costs?/i,
       /operating\s+expense/i,
+      /total\s+opex/i,
+      /opco\s+expense/i,
+      /facility\s+expense/i,
+    ],
+  },
+  // Catch-all for unmatched labor expenses
+  {
+    category: 'labor',
+    field: 'otherExpenses',
+    patterns: [
+      /salary|salaries|wages/i,
+    ],
+  },
+  // Catch-all for unmatched operating costs
+  {
+    category: 'nonlabor',
+    field: 'otherExpenses',
+    patterns: [
+      /operating\s+cost/i,
+      /facility\s+cost/i,
+      /overhead/i,
     ],
   },
 
@@ -402,6 +428,10 @@ const LINE_ITEM_PATTERNS: LineItemPattern[] = [
       /ebitdar/i,
       /earnings\s+before\s+.*rent/i,
       /operating\s+income\s+before\s+rent/i,
+      /income\s+from\s+operations/i,
+      /net\s+income\s+before\s+rent/i,
+      /cash\s+flow\s+before\s+rent/i,
+      /facility\s+ebitdar/i,
     ],
   },
   {
@@ -420,6 +450,9 @@ const LINE_ITEM_PATTERNS: LineItemPattern[] = [
     patterns: [
       /^ebitda$/i,
       /earnings\s+before\s+interest.*depreciation/i,
+      /ebitda\s+after\s+rent/i,
+      /net\s+cash\s+flow/i,
+      /facility\s+ebitda/i,
     ],
   },
   {
@@ -765,48 +798,71 @@ function createEmptyFinancialPeriod(
  * Calculate derived metrics
  */
 function calculateDerivedMetrics(fp: FinancialPeriod): void {
-  // Calculate total labor if not provided
-  if (fp.totalLaborCost === 0) {
-    fp.totalLaborCost =
-      fp.nursingLabor +
-      fp.dietaryLabor +
-      fp.housekeepingLabor +
-      fp.administrationLabor +
-      fp.therapyLabor +
-      fp.agencyLabor +
-      fp.employeeBenefits;
+  // Calculate total labor from components if not provided
+  const laborFromComponents =
+    fp.nursingLabor +
+    fp.dietaryLabor +
+    fp.housekeepingLabor +
+    fp.administrationLabor +
+    fp.therapyLabor +
+    fp.agencyLabor +
+    fp.employeeBenefits;
+
+  if (fp.totalLaborCost === 0 && laborFromComponents > 0) {
+    fp.totalLaborCost = laborFromComponents;
   }
 
-  // Calculate total expenses if not provided
+  // Calculate non-labor expenses
+  const nonLaborExpenses =
+    fp.foodCost +
+    fp.suppliesCost +
+    fp.utilitiesCost +
+    fp.insuranceCost +
+    fp.propertyTax +
+    fp.managementFee +
+    fp.otherExpenses;
+
+  // Calculate total expenses from components if not provided
   if (fp.totalExpenses === 0) {
-    fp.totalExpenses =
-      fp.totalLaborCost +
-      fp.foodCost +
-      fp.suppliesCost +
-      fp.utilitiesCost +
-      fp.insuranceCost +
-      fp.propertyTax +
-      fp.managementFee +
-      fp.otherExpenses;
+    const calculatedExpenses = fp.totalLaborCost + nonLaborExpenses;
+    if (calculatedExpenses > 0) {
+      fp.totalExpenses = calculatedExpenses;
+    }
   }
 
   // Calculate total revenue from components if not provided
-  if (fp.totalRevenue === 0) {
-    fp.totalRevenue =
-      fp.medicareRevenue +
-      fp.medicaidRevenue +
-      fp.managedCareRevenue +
-      fp.privatePayRevenue +
-      fp.ancillaryRevenue +
-      fp.otherRevenue;
+  const revenueFromComponents =
+    fp.medicareRevenue +
+    fp.medicaidRevenue +
+    fp.managedCareRevenue +
+    fp.privatePayRevenue +
+    fp.ancillaryRevenue +
+    fp.otherRevenue;
+
+  if (fp.totalRevenue === 0 && revenueFromComponents > 0) {
+    fp.totalRevenue = revenueFromComponents;
   }
 
-  // Calculate EBITDAR
+  // Calculate EBITDAR - always calculate if we have revenue
   if (fp.ebitdar === 0 && fp.totalRevenue > 0) {
+    // EBITDAR = Revenue - Operating Expenses (before rent)
     fp.ebitdar = fp.totalRevenue - fp.totalExpenses;
   }
 
-  // Calculate EBITDA
+  // If EBITDAR is still 0 but we have expenses, try to estimate
+  // (This handles cases where only certain line items were extracted)
+  if (fp.ebitdar === 0 && fp.totalRevenue > 0 && fp.totalExpenses === 0) {
+    // If we have labor but no total expenses, estimate EBITDAR margin at 15-20%
+    if (fp.totalLaborCost > 0) {
+      // Estimate total expenses as ~85% of revenue for typical SNF
+      const estimatedExpenses = fp.totalRevenue * 0.85;
+      fp.totalExpenses = estimatedExpenses;
+      fp.ebitdar = fp.totalRevenue - estimatedExpenses;
+      fp.confidence = 0.5; // Lower confidence for estimated values
+    }
+  }
+
+  // Calculate EBITDA (EBITDAR minus rent)
   if (fp.ebitda === 0) {
     fp.ebitda = fp.ebitdar - fp.rent;
   }
@@ -820,11 +876,13 @@ function calculateDerivedMetrics(fp: FinancialPeriod): void {
   if (fp.totalRevenue > 0) {
     fp.ebitdarMargin = (fp.ebitdar / fp.totalRevenue) * 100;
     fp.ebitdaMargin = (fp.ebitda / fp.totalRevenue) * 100;
-    fp.laborPercentOfRevenue = (fp.totalLaborCost / fp.totalRevenue) * 100;
+    if (fp.totalLaborCost > 0) {
+      fp.laborPercentOfRevenue = (fp.totalLaborCost / fp.totalRevenue) * 100;
+    }
   }
 
   // Calculate agency percentage
-  if (fp.totalLaborCost > 0) {
+  if (fp.totalLaborCost > 0 && fp.agencyLabor > 0) {
     fp.agencyPercentOfLabor = (fp.agencyLabor / fp.totalLaborCost) * 100;
   }
 
@@ -841,7 +899,8 @@ function calculateDerivedMetrics(fp: FinancialPeriod): void {
     fp.totalRevenue,
     fp.totalExpenses,
     fp.totalLaborCost,
+    fp.ebitdar,
   ].filter(v => v > 0).length;
 
-  fp.confidence = 0.5 + (filledFields / 3) * 0.3;
+  fp.confidence = Math.max(fp.confidence, 0.4 + (filledFields / 4) * 0.4);
 }

@@ -167,10 +167,14 @@ const PAYER_PATTERNS: PayerPattern[] = [
 
 /**
  * Parse numeric value from cell
+ * For census data, we clamp negative values to 0 (patient days can't be negative)
  */
-function parseNumericValue(cell: string | number | null): number {
+function parseNumericValue(cell: string | number | null, allowNegative = false): number {
   if (cell === null || cell === undefined) return 0;
-  if (typeof cell === 'number') return cell;
+  if (typeof cell === 'number') {
+    // For census data, negative days don't make sense
+    return allowNegative ? cell : Math.max(0, cell);
+  }
 
   const str = String(cell).trim();
   if (str === '' || str === '-' || str === 'N/A' || str === '#N/A') return 0;
@@ -184,7 +188,10 @@ function parseNumericValue(cell: string | number | null): number {
   const num = parseFloat(cleaned);
   if (isNaN(num)) return 0;
 
-  return isNegative ? -num : num;
+  const result = isNegative ? -num : num;
+
+  // Census days should never be negative - clamp to 0
+  return allowNegative ? result : Math.max(0, result);
 }
 
 /**

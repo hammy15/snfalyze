@@ -394,8 +394,12 @@ export function DocumentUploadAnalysis({
     <div className="space-y-6">
       {/* Upload area */}
       <div
-        {...getRootProps()}
-        onClick={open}
+        {...getRootProps({
+          onClick: (e) => {
+            e.stopPropagation();
+            open();
+          },
+        })}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {

@@ -1,0 +1,119 @@
+<svg width="72" height="72" viewBox="0 0 72 72" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Rich gradient background -->
+    <linearGradient id="bg72" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#0F766E"/>
+      <stop offset="50%" style="stop-color:#14B8A6"/>
+      <stop offset="100%" style="stop-color:#2DD4BF"/>
+    </linearGradient>
+
+    <!-- Bright highlight -->
+    <linearGradient id="highlight72" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#5EEAD4"/>
+      <stop offset="100%" style="stop-color:#99F6E4"/>
+    </linearGradient>
+
+    <!-- Gold/amber for emphasis -->
+    <linearGradient id="gold72" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#F59E0B"/>
+      <stop offset="100%" style="stop-color:#FCD34D"/>
+    </linearGradient>
+
+    <!-- Glow effect -->
+    <filter id="glow72" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="1.08" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Drop shadow -->
+    <filter id="drop72" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="0.72" stdDeviation="1.08" flood-color="#000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="72" height="72" rx="15.84" fill="url(#bg72)"/>
+
+  <!-- Subtle shine in top-right -->
+  <ellipse cx="51.839999999999996" cy="20.160000000000004" rx="20.160000000000004" ry="18" fill="url(#highlight72)" opacity="0.2"/>
+
+  <!-- Main content group -->
+  <g transform="translate(10.080000000000002, 10.080000000000002)" filter="url(#drop72)">
+
+    <!-- Stylized "S" made from 3 bars - represents SNF + growth -->
+
+    <!-- Top bar -->
+    <rect
+      x="3.6"
+      y="3.6"
+      width="32.4"
+      height="8.64"
+      rx="2.88"
+      fill="white"
+    />
+
+    <!-- Middle bar (offset) -->
+    <rect
+      x="12.959999999999999"
+      y="20.160000000000004"
+      width="32.4"
+      height="8.64"
+      rx="2.88"
+      fill="white"
+      opacity="0.9"
+    />
+
+    <!-- Bottom bar -->
+    <rect
+      x="3.6"
+      y="36.72"
+      width="32.4"
+      height="8.64"
+      rx="2.88"
+      fill="white"
+      opacity="0.8"
+    />
+
+    <!-- Connecting diagonal lines (growth indicator) -->
+    <line
+      x1="36"
+      y1="7.92"
+      x2="12.959999999999999"
+      y2="24.48"
+      stroke="url(#gold72)"
+      stroke-width="2.16"
+      stroke-linecap="round"
+      filter="url(#glow72)"
+    />
+    <line
+      x1="45.36"
+      y1="24.48"
+      x2="36"
+      y2="41.04"
+      stroke="url(#gold72)"
+      stroke-width="2.16"
+      stroke-linecap="round"
+      filter="url(#glow72)"
+    />
+
+    <!-- Upward arrow (growth/success) -->
+    <g transform="translate(37.44, 1.44)" filter="url(#glow72)">
+      <path
+        d="M6.4799999999999995,14.4
+           L6.4799999999999995,3.6
+           L1.44,8.64
+           M6.4799999999999995,3.6
+           L11.52,8.64"
+        stroke="url(#gold72)"
+        stroke-width="2.5200000000000005"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        fill="none"
+      />
+    </g>
+
+  </g>
+</svg>

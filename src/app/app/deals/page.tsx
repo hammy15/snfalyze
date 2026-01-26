@@ -196,6 +196,11 @@ export default function DealsPage() {
           (filter.value as string[]).some((v) => assigneeMap[v] === d.assignee)
         );
       }
+      if (filter.id === 'assetType' && Array.isArray(filter.value)) {
+        result = result.filter((d) =>
+          d.assetType && (filter.value as string[]).includes(d.assetType)
+        );
+      }
       if (filter.id === 'value' && typeof filter.value === 'object' && !Array.isArray(filter.value)) {
         const range = filter.value as { min?: number; max?: number };
         if (range.min !== undefined) {
@@ -278,6 +283,7 @@ export default function DealsPage() {
       nextActionDate: deal.nextActionDate,
       probability: deal.probability,
       assetType: deal.assetType,
+      primaryState: deal.primaryState,
     }));
   }, [filteredDeals]);
 
@@ -404,70 +410,62 @@ export default function DealsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Page Header */}
-      <div className="page-header">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="page-header-title">Deal Pipeline</h1>
-            <p className="page-header-subtitle">
-              Track and manage your acquisition pipeline.
-            </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-surface-900 dark:text-white">Deal Pipeline</h1>
+          <p className="text-sm text-surface-500">Track and manage your acquisition pipeline</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link href="/app/deals/memory">
+            <button className="neu-button text-sm py-1.5 px-3 flex items-center gap-1.5">
+              <BookOpen className="w-3.5 h-3.5" />
+              Memory
+            </button>
+          </Link>
+          <button className="neu-button text-sm py-1.5 px-3 flex items-center gap-1.5">
+            <Download className="w-3.5 h-3.5" />
+            Export
+          </button>
+          <button
+            className="neu-button-primary text-sm py-1.5 px-3 flex items-center gap-1.5"
+            onClick={() => setIsCreateModalOpen(true)}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            New Deal
+          </button>
+        </div>
+      </div>
+
+      {/* Summary Stats - Compact inline */}
+      <div className="neu-card p-3">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+          <div className="flex items-center gap-2">
+            <Briefcase className="w-4 h-4 text-primary-500" />
+            <span className="text-lg font-bold">{stats.total}</span>
+            <span className="text-xs text-surface-500">Active Deals</span>
           </div>
           <div className="flex items-center gap-2">
-            <Link href="/app/deals/memory">
-              <button className="btn btn-secondary btn-sm">
-                <BookOpen className="w-4 h-4" />
-                Deal Memory
-              </button>
-            </Link>
-            <button className="btn btn-secondary btn-sm">
-              <Download className="w-4 h-4" />
-              Export
-            </button>
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={() => setIsCreateModalOpen(true)}
-            >
-              <Plus className="w-4 h-4" />
-              New Deal
-            </button>
+            <DollarSign className="w-4 h-4 text-primary-500" />
+            <span className="text-lg font-bold">${(stats.totalValue / 1000000).toFixed(1)}M</span>
+            <span className="text-xs text-surface-500">Pipeline</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-primary-500" />
+            <span className="text-lg font-bold">${(stats.weightedValue / 1000000).toFixed(1)}M</span>
+            <span className="text-xs text-surface-500">Weighted</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Target className="w-4 h-4 text-emerald-500" />
+            <span className="text-lg font-bold">{stats.closedThisYear}</span>
+            <span className="text-xs text-surface-500">Closed YTD</span>
           </div>
         </div>
       </div>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard
-          label="Active Deals"
-          value={stats.total}
-          icon={<Briefcase className="w-5 h-5" />}
-          size="sm"
-        />
-        <StatCard
-          label="Total Pipeline"
-          value={stats.totalValue}
-          format="currency"
-          icon={<DollarSign className="w-5 h-5" />}
-          size="sm"
-        />
-        <StatCard
-          label="Weighted Pipeline"
-          value={stats.weightedValue}
-          format="currency"
-          icon={<TrendingUp className="w-5 h-5" />}
-          size="sm"
-        />
-        <StatCard
-          label="Closed This Year"
-          value={stats.closedThisYear}
-          icon={<Target className="w-5 h-5" />}
-          size="sm"
-        />
-      </div>
-
       {/* Filter Bar */}
-      <div className="card p-4">
+      <div className="neu-card p-3">
         <FilterBar
           filters={dealFilters}
           activeFilters={activeFilters}
@@ -508,21 +506,22 @@ export default function DealsPage() {
 
       {/* Content */}
       {loading ? (
-        <div className="card p-12 text-center">
-          <div className="animate-pulse text-[var(--color-text-secondary)]">Loading deals...</div>
+        <div className="neu-card p-8 text-center">
+          <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+          <p className="text-sm text-surface-500">Loading deals...</p>
         </div>
       ) : deals.length === 0 ? (
-        <div className="card p-12 text-center">
-          <div className="mx-auto w-16 h-16 rounded-full bg-[var(--gray-100)] flex items-center justify-center mb-4">
-            <FileText className="w-8 h-8 text-[var(--color-text-tertiary)]" />
+        <div className="neu-card p-8 text-center">
+          <div className="mx-auto w-12 h-12 rounded-full bg-surface-100 dark:bg-surface-800 flex items-center justify-center mb-3">
+            <FileText className="w-6 h-6 text-surface-400" />
           </div>
-          <h3 className="text-lg font-medium text-[var(--color-text-primary)] mb-2">No deals yet</h3>
-          <p className="text-sm text-[var(--color-text-secondary)] mb-4">
-            Upload your first deal to start tracking your pipeline
+          <h3 className="font-medium text-surface-900 dark:text-white mb-1">No deals yet</h3>
+          <p className="text-sm text-surface-500 mb-3">
+            Upload your first deal to start tracking
           </p>
           <Link href="/upload">
-            <button className="btn btn-primary btn-sm">
-              <Plus className="w-4 h-4" />
+            <button className="neu-button-primary text-sm py-1.5 px-3 flex items-center gap-1.5 mx-auto">
+              <Plus className="w-3.5 h-3.5" />
               Upload Deal
             </button>
           </Link>

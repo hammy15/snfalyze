@@ -2,11 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
-import { DataTable, Column } from '@/components/ui/data-table';
-import { FilterBar, facilityFilters, ActiveFilter } from '@/components/ui/filter-bar';
-import { PreviewPanel } from '@/components/ui/preview-panel';
-import { RiskBadge, QualityRating } from '@/components/ui/status-badge';
-import { StatCard } from '@/components/ui/stat-card';
+import { cn } from '@/lib/utils';
 import {
   Building2,
   MapPin,
@@ -18,8 +14,16 @@ import {
   LayoutGrid,
   List,
   Loader2,
+  Search,
+  Star,
+  Users,
+  Bed,
+  ChevronRight,
+  Filter,
+  X,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface Facility {
   id: string;
@@ -40,29 +44,32 @@ interface Facility {
   isSffWatch?: boolean;
   hasImmediateJeopardy?: boolean;
   dealId?: string;
-  // Computed/display fields
-  type?: 'snf' | 'alf' | 'ilf';
-  beds?: number;
-  occupancy?: number;
   riskLevel?: 'high' | 'medium' | 'low';
   riskScore?: number;
-  owner?: string;
-  operator?: string;
-  isTarget?: boolean;
+  occupancy?: number;
 }
+
+const ASSET_TYPE_CONFIG = {
+  SNF: { label: 'SNF', color: 'bg-blue-500', lightBg: 'bg-blue-50 dark:bg-blue-900/30', text: 'text-blue-600 dark:text-blue-400' },
+  ALF: { label: 'ALF', color: 'bg-purple-500', lightBg: 'bg-purple-50 dark:bg-purple-900/30', text: 'text-purple-600 dark:text-purple-400' },
+  ILF: { label: 'ILF', color: 'bg-emerald-500', lightBg: 'bg-emerald-50 dark:bg-emerald-900/30', text: 'text-emerald-600 dark:text-emerald-400' },
+};
+
+const RISK_CONFIG = {
+  high: { label: 'High Risk', color: 'bg-red-500', lightBg: 'bg-red-50 dark:bg-red-900/30', text: 'text-red-600 dark:text-red-400', icon: AlertTriangle },
+  medium: { label: 'Medium', color: 'bg-amber-500', lightBg: 'bg-amber-50 dark:bg-amber-900/30', text: 'text-amber-600 dark:text-amber-400', icon: AlertTriangle },
+  low: { label: 'Low Risk', color: 'bg-emerald-500', lightBg: 'bg-emerald-50 dark:bg-emerald-900/30', text: 'text-emerald-600 dark:text-emerald-400', icon: CheckCircle2 },
+};
 
 export default function FacilitiesPage() {
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortColumn, setSortColumn] = useState<string>('name');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [selectedRows, setSelectedRows] = useState<string[]>([]);
+  const [selectedType, setSelectedType] = useState<string>('all');
+  const [selectedState, setSelectedState] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedFacility, setSelectedFacility] = useState<Facility | null>(null);
-  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
 
-  // Fetch facilities from API
   useEffect(() => {
     async function fetchFacilities() {
       try {
@@ -70,9 +77,7 @@ export default function FacilitiesPage() {
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.data) {
-            // Transform API data to display format
             const transformedFacilities: Facility[] = data.data.map((f: Facility) => {
-              // Calculate risk level based on CMS rating and other factors
               let riskLevel: 'high' | 'medium' | 'low' = 'low';
               let riskScore = 30;
 
@@ -92,14 +97,9 @@ export default function FacilitiesPage() {
 
               return {
                 ...f,
-                type: f.assetType?.toLowerCase() as 'snf' | 'alf' | 'ilf',
-                beds: f.licensedBeds,
-                occupancy: 85 + Math.floor(Math.random() * 10), // Simulated for now
                 riskLevel,
                 riskScore,
-                owner: 'Cascadia Healthcare',
-                operator: 'Cascadia Operations',
-                isTarget: false,
+                occupancy: 80 + Math.floor(Math.random() * 15),
               };
             });
             setFacilities(transformedFacilities);
@@ -114,437 +114,478 @@ export default function FacilitiesPage() {
     fetchFacilities();
   }, []);
 
-  // Filter and sort data
-  const filteredData = useMemo(() => {
-    let result = [...facilities];
+  const states = useMemo(() => {
+    const stateSet = new Set(facilities.map(f => f.state));
+    return Array.from(stateSet).sort();
+  }, [facilities]);
 
-    // Apply search
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(
-        (f) =>
-          f.name.toLowerCase().includes(query) ||
-          f.city.toLowerCase().includes(query) ||
-          f.state.toLowerCase().includes(query) ||
-          (f.owner && f.owner.toLowerCase().includes(query))
-      );
-    }
-
-    // Apply filters
-    activeFilters.forEach((filter) => {
-      if (filter.id === 'state' && Array.isArray(filter.value)) {
-        result = result.filter((f) => (filter.value as string[]).includes(f.state));
-      }
-      if (filter.id === 'type' && Array.isArray(filter.value)) {
-        result = result.filter((f) => f.type && (filter.value as string[]).includes(f.type));
-      }
-      if (filter.id === 'risk' && Array.isArray(filter.value)) {
-        result = result.filter((f) => f.riskLevel && (filter.value as string[]).includes(f.riskLevel));
-      }
-      if (filter.id === 'beds' && typeof filter.value === 'object' && !Array.isArray(filter.value)) {
-        const range = filter.value as { min?: number; max?: number };
-        if (range.min !== undefined) {
-          result = result.filter((f) => (f.licensedBeds || 0) >= range.min!);
-        }
-        if (range.max !== undefined) {
-          result = result.filter((f) => (f.licensedBeds || 0) <= range.max!);
-        }
-      }
+  const filteredFacilities = useMemo(() => {
+    return facilities.filter(f => {
+      const matchesSearch = !searchQuery ||
+        f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        f.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        f.state.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesType = selectedType === 'all' || f.assetType === selectedType;
+      const matchesState = selectedState === 'all' || f.state === selectedState;
+      return matchesSearch && matchesType && matchesState;
     });
+  }, [facilities, searchQuery, selectedType, selectedState]);
 
-    // Apply sorting
-    result.sort((a, b) => {
-      const aVal = a[sortColumn as keyof Facility];
-      const bVal = b[sortColumn as keyof Facility];
-
-      // Handle undefined values
-      if (aVal === undefined && bVal === undefined) return 0;
-      if (aVal === undefined) return 1;
-      if (bVal === undefined) return -1;
-
-      // Convert to comparable values
-      const aCompare = typeof aVal === 'string' ? aVal.toLowerCase() : aVal;
-      const bCompare = typeof bVal === 'string' ? bVal.toLowerCase() : bVal;
-
-      if (aCompare < bCompare) return sortDirection === 'asc' ? -1 : 1;
-      if (aCompare > bCompare) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-    return result;
-  }, [facilities, searchQuery, activeFilters, sortColumn, sortDirection]);
-
-  // Calculate summary stats
-  const stats = useMemo(() => {
-    const highRisk = filteredData.filter((f) => f.riskLevel === 'high').length;
-    const totalBeds = filteredData.reduce((sum, f) => sum + (f.licensedBeds || 0), 0);
-    const avgRating = filteredData.filter(f => f.cmsRating).length > 0
-      ? (filteredData.reduce((sum, f) => sum + (f.cmsRating || 0), 0) / filteredData.filter(f => f.cmsRating).length).toFixed(1)
-      : 0;
-    const stateCount = new Set(filteredData.map(f => f.state)).size;
-    return { total: filteredData.length, highRisk, totalBeds, avgRating, stateCount };
-  }, [filteredData]);
-
-  const columns: Column<Facility>[] = [
-    {
-      id: 'name',
-      header: 'Facility',
-      accessor: 'name',
-      sortable: true,
-      minWidth: 200,
-      cell: (value, row) => (
-        <div>
-          <div className="font-medium text-[var(--color-text-primary)]">{value}</div>
-          <div className="text-xs text-[var(--color-text-tertiary)] flex items-center gap-1 mt-0.5">
-            <MapPin className="w-3 h-3" />
-            {row.city}, {row.state}
-          </div>
-        </div>
-      ),
-    },
-    {
-      id: 'assetType',
-      header: 'Type',
-      accessor: 'assetType',
-      sortable: true,
-      width: 80,
-      cell: (value) => {
-        const colors: Record<string, string> = {
-          SNF: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-          ALF: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-          ILF: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-        };
-        return (
-          <span className={cn('px-2 py-0.5 text-xs font-medium rounded', colors[value] || 'bg-gray-100 text-gray-600')}>
-            {value}
-          </span>
-        );
-      },
-    },
-    {
-      id: 'licensedBeds',
-      header: 'Beds',
-      accessor: 'licensedBeds',
-      sortable: true,
-      align: 'right',
-      width: 80,
-      cell: (value) => <span className="tabular-nums font-medium">{value}</span>,
-    },
-    {
-      id: 'occupancy',
-      header: 'Occupancy',
-      accessor: 'occupancy',
-      sortable: true,
-      align: 'right',
-      width: 100,
-      cell: (value) => (
-        <div className="flex items-center justify-end gap-2">
-          <div className="w-12 h-1.5 bg-[var(--gray-200)] rounded-full overflow-hidden">
-            <div
-              className={cn(
-                'h-full rounded-full',
-                value && value >= 90 ? 'bg-[var(--status-success-icon)]' :
-                value && value >= 75 ? 'bg-[var(--status-warning-icon)]' :
-                'bg-[var(--status-error-icon)]'
-              )}
-              style={{ width: `${value || 0}%` }}
-            />
-          </div>
-          <span className="tabular-nums text-xs">{value || '—'}%</span>
-        </div>
-      ),
-    },
-    {
-      id: 'cmsRating',
-      header: 'CMS Rating',
-      accessor: 'cmsRating',
-      sortable: true,
-      width: 100,
-      cell: (value) => value ? <QualityRating rating={value as 1|2|3|4|5} size="sm" /> : <span className="text-[var(--color-text-tertiary)]">—</span>,
-    },
-    {
-      id: 'riskLevel',
-      header: 'Risk',
-      accessor: 'riskLevel',
-      sortable: true,
-      width: 100,
-      cell: (value, row) => value ? <RiskBadge level={value} score={row.riskScore} showScore size="sm" /> : <span className="text-[var(--color-text-tertiary)]">—</span>,
-    },
-    {
-      id: 'state',
-      header: 'State',
-      accessor: 'state',
-      sortable: true,
-      width: 80,
-      cell: (value) => (
-        <span className="text-sm font-medium text-[var(--color-text-secondary)]">
-          {value}
-        </span>
-      ),
-    },
-  ];
-
-  const handleSort = (column: string, direction: 'asc' | 'desc') => {
-    setSortColumn(column);
-    setSortDirection(direction);
-  };
-
-  const handleRowClick = (row: Facility) => {
-    setSelectedFacility(row);
-  };
-
-  const handleAddToTargets = () => {
-    if (selectedRows.length === 0) return;
-    alert(`Adding ${selectedRows.length} facilities to targets`);
-    setSelectedRows([]);
-  };
-
-  const handleExport = () => {
-    alert('Exporting facility data...');
-  };
+  const stats = useMemo(() => ({
+    total: filteredFacilities.length,
+    totalBeds: filteredFacilities.reduce((sum, f) => sum + (f.licensedBeds || 0), 0),
+    snfCount: filteredFacilities.filter(f => f.assetType === 'SNF').length,
+    alfCount: filteredFacilities.filter(f => f.assetType === 'ALF').length,
+    ilfCount: filteredFacilities.filter(f => f.assetType === 'ILF').length,
+    highRisk: filteredFacilities.filter(f => f.riskLevel === 'high').length,
+    stateCount: new Set(filteredFacilities.map(f => f.state)).size,
+  }), [filteredFacilities]);
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="page-header">
-          <h1 className="page-header-title">Facility Explorer</h1>
-          <p className="page-header-subtitle">Loading facilities...</p>
-        </div>
+      <div className="p-6">
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 animate-spin text-[var(--accent-solid)]" />
+          <div className="text-center">
+            <Loader2 className="w-12 h-12 animate-spin text-primary-500 mx-auto mb-4" />
+            <p className="text-surface-500">Loading facilities...</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="page-header">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="page-header-title">Facility Explorer</h1>
-            <p className="page-header-subtitle">
-              Browse and analyze {stats.total.toLocaleString()} Cascadia portfolio facilities.
-            </p>
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-surface-900 dark:text-white">Facilities</h1>
+          <p className="text-sm text-surface-500">
+            {stats.total.toLocaleString()} facilities across {stats.stateCount} states
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button className="neu-button flex items-center gap-1.5 px-3 py-1.5 text-sm">
+            <Download className="w-3.5 h-3.5" />
+            Export
+          </button>
+          <button className="neu-button-primary flex items-center gap-1.5 px-3 py-1.5 text-sm">
+            <Plus className="w-3.5 h-3.5" />
+            Add
+          </button>
+        </div>
+      </div>
+
+      {/* Compact Stats Bar */}
+      <div className="neu-card p-3">
+        <div className="flex flex-wrap items-center gap-6">
+          <div className="flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-primary-500" />
+            <span className="text-lg font-bold text-surface-900 dark:text-white">{stats.total}</span>
+            <span className="text-xs text-surface-500">Total</span>
           </div>
           <div className="flex items-center gap-2">
-            {selectedRows.length > 0 && (
-              <button onClick={handleAddToTargets} className="btn btn-primary btn-sm">
-                <Target className="w-4 h-4" />
-                Add to Targets ({selectedRows.length})
-              </button>
-            )}
-            <button onClick={handleExport} className="btn btn-secondary btn-sm">
-              <Download className="w-4 h-4" />
-              Export
+            <Bed className="w-4 h-4 text-accent-500" />
+            <span className="text-lg font-bold text-surface-900 dark:text-white">{stats.totalBeds.toLocaleString()}</span>
+            <span className="text-xs text-surface-500">Beds</span>
+          </div>
+          <div className="h-6 w-px bg-surface-200 dark:bg-surface-700" />
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+              <span className="text-sm font-medium text-surface-700 dark:text-surface-300">{stats.snfCount}</span>
+              <span className="text-xs text-surface-500">SNF</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+              <span className="text-sm font-medium text-surface-700 dark:text-surface-300">{stats.alfCount}</span>
+              <span className="text-xs text-surface-500">ALF</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+              <span className="text-sm font-medium text-surface-700 dark:text-surface-300">{stats.ilfCount}</span>
+              <span className="text-xs text-surface-500">ILF</span>
+            </span>
+          </div>
+          <div className="h-6 w-px bg-surface-200 dark:bg-surface-700" />
+          <div className="flex items-center gap-1.5">
+            <AlertTriangle className="w-4 h-4 text-rose-500" />
+            <span className="text-sm font-medium text-rose-600 dark:text-rose-400">{stats.highRisk}</span>
+            <span className="text-xs text-surface-500">High Risk</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="neu-card p-3">
+        <div className="flex flex-col lg:flex-row gap-3">
+          {/* Search */}
+          <div className="flex-1">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
+              <input
+                type="text"
+                placeholder="Search facilities..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-8 py-2 text-sm rounded-lg border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 text-surface-900 dark:text-white placeholder-surface-400 focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-600"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Type Filter */}
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-surface-400" />
+            <div className="flex gap-1">
+              {['all', 'SNF', 'ALF', 'ILF'].map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setSelectedType(type)}
+                  className={cn(
+                    'px-3 py-2 text-sm font-medium rounded-lg transition-all',
+                    selectedType === type
+                      ? 'bg-primary-500 text-white shadow-md'
+                      : 'bg-surface-100 dark:bg-surface-700 text-surface-600 dark:text-surface-300 hover:bg-surface-200 dark:hover:bg-surface-600'
+                  )}
+                >
+                  {type === 'all' ? 'All' : type}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* State Filter */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-surface-500 whitespace-nowrap">State:</span>
+            <select
+              value={selectedState}
+              onChange={(e) => setSelectedState(e.target.value)}
+              className="px-3 py-2 rounded-lg border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 text-surface-900 dark:text-white text-sm"
+            >
+              <option value="all">All States</option>
+              {states.map((state) => (
+                <option key={state} value={state}>{state}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* View Toggle */}
+          <div className="flex items-center gap-1 p-1 bg-surface-100 dark:bg-surface-700 rounded-lg">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={cn(
+                'p-2 rounded-md transition-all',
+                viewMode === 'grid' ? 'bg-white dark:bg-surface-600 shadow-sm' : 'hover:bg-surface-200 dark:hover:bg-surface-600'
+              )}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={cn(
+                'p-2 rounded-md transition-all',
+                viewMode === 'list' ? 'bg-white dark:bg-surface-600 shadow-sm' : 'hover:bg-surface-200 dark:hover:bg-surface-600'
+              )}
+            >
+              <List className="w-4 h-4" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard
-          label="Total Facilities"
-          value={stats.total}
-          icon={<Building2 className="w-5 h-5" />}
-          size="sm"
-        />
-        <StatCard
-          label="Total Beds"
-          value={stats.totalBeds}
-          icon={<Target className="w-5 h-5" />}
-          size="sm"
-        />
-        <StatCard
-          label="States"
-          value={stats.stateCount}
-          icon={<MapPin className="w-5 h-5" />}
-          size="sm"
-        />
-        <StatCard
-          label="Avg CMS Rating"
-          value={Number(stats.avgRating)}
-          icon={<TrendingUp className="w-5 h-5" />}
-          size="sm"
-        />
-      </div>
-
-      {/* Filter Bar */}
-      <div className="card p-4">
-        <FilterBar
-          filters={facilityFilters}
-          activeFilters={activeFilters}
-          onFilterChange={setActiveFilters}
-          onSearch={setSearchQuery}
-          searchPlaceholder="Search facilities by name, city, or owner..."
-        />
-      </div>
-
-      {/* View Toggle & Results Count */}
+      {/* Results Count */}
       <div className="flex items-center justify-between">
-        <div className="text-sm text-[var(--color-text-secondary)]">
-          Showing <span className="font-medium text-[var(--color-text-primary)]">{filteredData.length}</span> facilities
-        </div>
-        <div className="flex items-center gap-1 bg-[var(--gray-100)] rounded-lg p-1">
-          <button
-            onClick={() => setViewMode('table')}
-            className={cn(
-              'p-1.5 rounded transition-colors',
-              viewMode === 'table' ? 'bg-white shadow-sm' : 'hover:bg-[var(--gray-200)]'
-            )}
-          >
-            <List className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setViewMode('grid')}
-            className={cn(
-              'p-1.5 rounded transition-colors',
-              viewMode === 'grid' ? 'bg-white shadow-sm' : 'hover:bg-[var(--gray-200)]'
-            )}
-          >
-            <LayoutGrid className="w-4 h-4" />
-          </button>
-        </div>
+        <p className="text-sm text-surface-500">
+          Showing <span className="font-semibold text-surface-900 dark:text-white">{filteredFacilities.length}</span> facilities
+        </p>
       </div>
 
-      {/* Data Table */}
-      {viewMode === 'table' ? (
-        <DataTable
-          data={filteredData}
-          columns={columns}
-          keyField="id"
-          selectable
-          selectedRows={selectedRows}
-          onSelectionChange={setSelectedRows}
-          sortColumn={sortColumn}
-          sortDirection={sortDirection}
-          onSort={handleSort}
-          onRowClick={handleRowClick}
-          activeRowId={selectedFacility?.id}
-          emptyMessage="No facilities match your filters"
-        />
-      ) : (
+      {/* Facilities Grid/List */}
+      {filteredFacilities.length === 0 ? (
+        <div className="neu-card p-12 text-center">
+          <Building2 className="w-12 h-12 text-surface-300 dark:text-surface-600 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-surface-900 dark:text-white mb-2">No facilities found</h3>
+          <p className="text-surface-500">Try adjusting your search or filter criteria</p>
+        </div>
+      ) : viewMode === 'grid' ? (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredData.map((facility) => {
-            const typeColors: Record<string, string> = {
-              SNF: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-              ALF: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-              ILF: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-            };
+          {filteredFacilities.map((facility) => {
+            const typeConfig = ASSET_TYPE_CONFIG[facility.assetType] || ASSET_TYPE_CONFIG.SNF;
+            const riskConfig = facility.riskLevel ? RISK_CONFIG[facility.riskLevel] : null;
+            const RiskIcon = riskConfig?.icon || CheckCircle2;
+
             return (
               <div
                 key={facility.id}
-                onClick={() => handleRowClick(facility)}
+                onClick={() => setSelectedFacility(facility)}
                 className={cn(
-                  'card p-4 cursor-pointer transition-all hover:shadow-md border-l-4',
-                  selectedFacility?.id === facility.id && 'ring-2 ring-[var(--accent-solid)]',
-                  facility.assetType === 'SNF' && 'border-l-blue-500',
-                  facility.assetType === 'ALF' && 'border-l-purple-500',
-                  facility.assetType === 'ILF' && 'border-l-green-500'
+                  'neu-card p-4 cursor-pointer transition-all hover-lift group',
+                  selectedFacility?.id === facility.id && 'ring-2 ring-primary-500'
                 )}
               >
+                {/* Header */}
                 <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="font-medium text-[var(--color-text-primary)] line-clamp-1">{facility.name}</h3>
-                    <p className="text-xs text-[var(--color-text-tertiary)] flex items-center gap-1 mt-0.5">
-                      <MapPin className="w-3 h-3" />
-                      {facility.city}, {facility.state}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-surface-900 dark:text-white truncate group-hover:text-primary-500 transition-colors">
+                      {facility.name}
+                    </h3>
+                    <p className="text-sm text-surface-500 flex items-center gap-1 mt-0.5">
+                      <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span className="truncate">{facility.city}, {facility.state}</span>
                     </p>
                   </div>
-                  <span className={cn('text-xs font-medium px-2 py-0.5 rounded', typeColors[facility.assetType] || 'bg-gray-100 text-gray-600')}>
+                  <span className={cn('px-2 py-1 text-xs font-semibold rounded-lg', typeConfig.lightBg, typeConfig.text)}>
                     {facility.assetType}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                {/* Stats */}
+                <div className="grid grid-cols-2 gap-3 py-3 border-y border-surface-100 dark:border-surface-700">
                   <div>
-                    <div className="text-[var(--color-text-tertiary)] text-xs">Licensed Beds</div>
-                    <div className="font-semibold tabular-nums">{facility.licensedBeds}</div>
+                    <div className="text-xs text-surface-500 uppercase tracking-wide">Beds</div>
+                    <div className="text-lg font-bold text-surface-900 dark:text-white tabular-nums">
+                      {facility.licensedBeds}
+                    </div>
                   </div>
                   <div>
-                    <div className="text-[var(--color-text-tertiary)] text-xs">CMS Rating</div>
-                    <div className="font-semibold tabular-nums">{facility.cmsRating ? `${facility.cmsRating}/5` : '—'}</div>
+                    <div className="text-xs text-surface-500 uppercase tracking-wide">CMS Rating</div>
+                    <div className="flex items-center gap-1">
+                      {facility.cmsRating ? (
+                        <>
+                          <span className="text-lg font-bold text-surface-900 dark:text-white tabular-nums">
+                            {facility.cmsRating}
+                          </span>
+                          <div className="flex">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <Star
+                                key={star}
+                                className={cn(
+                                  'w-3.5 h-3.5',
+                                  star <= facility.cmsRating!
+                                    ? 'text-amber-400 fill-amber-400'
+                                    : 'text-surface-300 dark:text-surface-600'
+                                )}
+                              />
+                            ))}
+                          </div>
+                        </>
+                      ) : (
+                        <span className="text-surface-400">—</span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  {facility.riskLevel && <RiskBadge level={facility.riskLevel} score={facility.riskScore} showScore size="sm" />}
-                  {facility.cmsRating && <QualityRating rating={facility.cmsRating as 1|2|3|4|5} size="sm" />}
+                {/* Footer */}
+                <div className="flex items-center justify-between mt-3">
+                  {riskConfig && (
+                    <span className={cn('inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg', riskConfig.lightBg, riskConfig.text)}>
+                      <RiskIcon className="w-3.5 h-3.5" />
+                      {riskConfig.label}
+                    </span>
+                  )}
+                  <ChevronRight className="w-4 h-4 text-surface-400 group-hover:text-primary-500 group-hover:translate-x-1 transition-all" />
                 </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="neu-card divide-y divide-surface-100 dark:divide-surface-700">
+          {filteredFacilities.map((facility) => {
+            const typeConfig = ASSET_TYPE_CONFIG[facility.assetType] || ASSET_TYPE_CONFIG.SNF;
+            const riskConfig = facility.riskLevel ? RISK_CONFIG[facility.riskLevel] : null;
+            const RiskIcon = riskConfig?.icon || CheckCircle2;
+
+            return (
+              <div
+                key={facility.id}
+                onClick={() => setSelectedFacility(facility)}
+                className={cn(
+                  'flex items-center gap-4 p-4 cursor-pointer transition-all hover:bg-surface-50 dark:hover:bg-surface-800 group',
+                  selectedFacility?.id === facility.id && 'bg-primary-50 dark:bg-primary-900/20'
+                )}
+              >
+                {/* Type Badge */}
+                <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center', typeConfig.lightBg)}>
+                  <Building2 className={cn('w-6 h-6', typeConfig.text)} />
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-surface-900 dark:text-white group-hover:text-primary-500 transition-colors">
+                    {facility.name}
+                  </h3>
+                  <p className="text-sm text-surface-500 flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5" />
+                    {facility.address}, {facility.city}, {facility.state}
+                  </p>
+                </div>
+
+                {/* Stats */}
+                <div className="hidden md:flex items-center gap-8">
+                  <div className="text-center">
+                    <div className="text-xs text-surface-500">Beds</div>
+                    <div className="font-bold text-surface-900 dark:text-white tabular-nums">{facility.licensedBeds}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xs text-surface-500">CMS</div>
+                    <div className="flex items-center gap-1">
+                      {facility.cmsRating ? (
+                        <>
+                          <span className="font-bold text-surface-900 dark:text-white">{facility.cmsRating}</span>
+                          <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                        </>
+                      ) : (
+                        <span className="text-surface-400">—</span>
+                      )}
+                    </div>
+                  </div>
+                  {riskConfig && (
+                    <span className={cn('inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg', riskConfig.lightBg, riskConfig.text)}>
+                      <RiskIcon className="w-3.5 h-3.5" />
+                      {riskConfig.label}
+                    </span>
+                  )}
+                </div>
+
+                {/* Type Badge (mobile) */}
+                <span className={cn('px-2 py-1 text-xs font-semibold rounded-lg md:hidden', typeConfig.lightBg, typeConfig.text)}>
+                  {facility.assetType}
+                </span>
+
+                <ChevronRight className="w-5 h-5 text-surface-400 group-hover:text-primary-500 group-hover:translate-x-1 transition-all" />
               </div>
             );
           })}
         </div>
       )}
 
-      {/* Preview Panel */}
-      <PreviewPanel
-        isOpen={!!selectedFacility}
-        onClose={() => setSelectedFacility(null)}
-        title={selectedFacility?.name}
-        subtitle={selectedFacility ? `${selectedFacility.city}, ${selectedFacility.state}` : undefined}
-        detailUrl={selectedFacility ? `/app/facilities/${selectedFacility.id}` : undefined}
-        actions={
-          selectedFacility && (
-            <>
-              <button className="btn btn-primary btn-sm flex-1">
-                <Target className="w-4 h-4" />
-                {selectedFacility.isTarget ? 'View Target' : 'Add to Targets'}
-              </button>
-              <button className="btn btn-secondary btn-sm flex-1">
-                <Plus className="w-4 h-4" />
-                Create Deal
-              </button>
-            </>
-          )
-        }
-      >
-        {selectedFacility && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="text-center p-3 bg-[var(--gray-50)] rounded-lg">
-                <div className="text-2xl font-semibold text-[var(--color-text-primary)] tabular-nums">
-                  {selectedFacility.licensedBeds}
+      {/* Detail Slide-over */}
+      {selectedFacility && (
+        <div className="fixed inset-0 z-50 overflow-hidden" onClick={() => setSelectedFacility(null)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="absolute inset-y-0 right-0 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="h-full bg-white dark:bg-surface-900 shadow-2xl flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 border-b border-surface-200 dark:border-surface-700">
+                <div>
+                  <h2 className="text-lg font-bold text-surface-900 dark:text-white">{selectedFacility.name}</h2>
+                  <p className="text-sm text-surface-500 flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5" />
+                    {selectedFacility.city}, {selectedFacility.state}
+                  </p>
                 </div>
-                <div className="text-xs text-[var(--color-text-tertiary)]">Beds</div>
+                <button
+                  onClick={() => setSelectedFacility(null)}
+                  className="p-1.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <div className="text-center p-3 bg-[var(--gray-50)] rounded-lg">
-                <div className="text-2xl font-semibold text-[var(--color-text-primary)] tabular-nums">
-                  {selectedFacility.cmsRating || '—'}
-                </div>
-                <div className="text-xs text-[var(--color-text-tertiary)]">CMS Rating</div>
-              </div>
-              <div className="text-center p-3 bg-[var(--gray-50)] rounded-lg">
-                <div className="text-sm font-medium">
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {/* Type Badge */}
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    'px-3 py-1.5 text-sm font-semibold rounded-lg',
+                    ASSET_TYPE_CONFIG[selectedFacility.assetType].lightBg,
+                    ASSET_TYPE_CONFIG[selectedFacility.assetType].text
+                  )}>
+                    {selectedFacility.assetType}
+                  </span>
                   {selectedFacility.riskLevel && (
-                    <RiskBadge level={selectedFacility.riskLevel} score={selectedFacility.riskScore} showScore size="sm" />
+                    <span className={cn(
+                      'inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg',
+                      RISK_CONFIG[selectedFacility.riskLevel].lightBg,
+                      RISK_CONFIG[selectedFacility.riskLevel].text
+                    )}>
+                      {(() => {
+                        const Icon = RISK_CONFIG[selectedFacility.riskLevel].icon;
+                        return <Icon className="w-4 h-4" />;
+                      })()}
+                      {RISK_CONFIG[selectedFacility.riskLevel].label}
+                    </span>
                   )}
                 </div>
+
+                {/* Stats Grid */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="neu-card p-3 text-center">
+                    <Bed className="w-5 h-5 text-primary-500 mx-auto mb-1" />
+                    <div className="text-xl font-bold text-surface-900 dark:text-white tabular-nums">
+                      {selectedFacility.licensedBeds}
+                    </div>
+                    <div className="text-xs text-surface-500">Beds</div>
+                  </div>
+                  <div className="neu-card p-3 text-center">
+                    <Star className="w-5 h-5 text-amber-500 mx-auto mb-1" />
+                    <div className="text-xl font-bold text-surface-900 dark:text-white tabular-nums">
+                      {selectedFacility.cmsRating || '—'}
+                    </div>
+                    <div className="text-xs text-surface-500">CMS</div>
+                  </div>
+                  <div className="neu-card p-3 text-center">
+                    <Users className="w-5 h-5 text-accent-500 mx-auto mb-1" />
+                    <div className="text-xl font-bold text-surface-900 dark:text-white tabular-nums">
+                      {selectedFacility.occupancy || '—'}%
+                    </div>
+                    <div className="text-xs text-surface-500">Occ.</div>
+                  </div>
+                </div>
+
+                {/* Details */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-surface-900 dark:text-white">Facility Details</h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between py-2 border-b border-surface-100 dark:border-surface-700">
+                      <span className="text-surface-500">Address</span>
+                      <span className="text-surface-900 dark:text-white text-right">{selectedFacility.address}</span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-surface-100 dark:border-surface-700">
+                      <span className="text-surface-500">Certified Beds</span>
+                      <span className="text-surface-900 dark:text-white">{selectedFacility.certifiedBeds || '—'}</span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-surface-100 dark:border-surface-700">
+                      <span className="text-surface-500">Year Built</span>
+                      <span className="text-surface-900 dark:text-white">{selectedFacility.yearBuilt || '—'}</span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-surface-100 dark:border-surface-700">
+                      <span className="text-surface-500">SFF Status</span>
+                      <span className={selectedFacility.isSff ? 'text-red-500 font-medium' : 'text-surface-900 dark:text-white'}>
+                        {selectedFacility.isSff ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-[var(--color-text-tertiary)]">Address</span>
-                <span className="text-[var(--color-text-primary)]">{selectedFacility.address}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[var(--color-text-tertiary)]">Type</span>
-                <span className="text-[var(--color-text-primary)]">{selectedFacility.assetType}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[var(--color-text-tertiary)]">Certified Beds</span>
-                <span className="text-[var(--color-text-primary)]">{selectedFacility.certifiedBeds || '—'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[var(--color-text-tertiary)]">Year Built</span>
-                <span className="text-[var(--color-text-primary)]">{selectedFacility.yearBuilt || '—'}</span>
+
+              {/* Actions */}
+              <div className="p-4 border-t border-surface-200 dark:border-surface-700">
+                <div className="flex gap-2">
+                  <button className="flex-1 neu-button flex items-center justify-center gap-1.5 py-2 text-sm">
+                    <Target className="w-3.5 h-3.5" />
+                    Add to Targets
+                  </button>
+                  <button className="flex-1 neu-button-primary flex items-center justify-center gap-1.5 py-2 text-sm">
+                    <Plus className="w-3.5 h-3.5" />
+                    Create Deal
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        )}
-      </PreviewPanel>
+        </div>
+      )}
     </div>
   );
 }

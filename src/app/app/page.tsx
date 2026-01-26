@@ -1,478 +1,484 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { StatCard } from '@/components/ui/stat-card';
-import { Timeline, TimelineItem } from '@/components/ui/timeline';
-import { StatusPill, RiskBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   Building2,
   Target,
   Briefcase,
-  TrendingUp,
-  AlertTriangle,
-  Bell,
-  ChevronRight,
-  ArrowRight,
+  DollarSign,
+  BedDouble,
   Plus,
   Sparkles,
   FileText,
-  Loader2,
+  Search,
+  FileCheck,
+  Handshake,
+  ClipboardCheck,
+  CheckCircle2,
+  XCircle,
+  MapPin,
+  Clock,
+  ArrowRight,
+  ChevronRight,
+  TrendingUp,
 } from 'lucide-react';
+
+// Kanban stages with Hammy Design System colors
+const KANBAN_STAGES = [
+  { id: 'new', label: 'New', icon: Target, color: 'primary' },
+  { id: 'analyzing', label: 'Analyzing', icon: Search, color: 'accent' },
+  { id: 'reviewed', label: 'Reviewed', icon: FileCheck, color: 'primary' },
+  { id: 'under_loi', label: 'Under LOI', icon: Handshake, color: 'accent' },
+  { id: 'due_diligence', label: 'Due Diligence', icon: ClipboardCheck, color: 'primary' },
+  { id: 'closed', label: 'Closed', icon: CheckCircle2, color: 'emerald' },
+  { id: 'passed', label: 'Passed', icon: XCircle, color: 'surface' },
+];
+
+interface KanbanDeal {
+  id: string;
+  name: string;
+  status: string;
+  assetType?: string;
+  value: number;
+  beds: number;
+  primaryState?: string;
+  confidenceScore?: number;
+  facilitiesCount: number;
+  updatedAt: string;
+}
 
 interface DashboardData {
   stats: {
     facilitiesTracked: number;
     activeTargets: number;
     pipelineValue: number;
-    updatesToday: number;
-    riskAlerts: number;
+    totalBeds: number;
   };
-  recentActivity: TimelineItem[];
-  pipelineDeals: Array<{
-    id: string;
-    name: string;
-    stage: 'target' | 'contacted' | 'loi' | 'diligence' | 'psa' | 'closed';
-    value: number;
-    beds: number;
-    assignee: string;
-  }>;
-  riskAlerts: Array<{
-    id: string;
-    facility: string;
-    level: 'low' | 'medium' | 'high';
-    score: number;
-    reason: string;
-  }>;
+  kanbanDeals: KanbanDeal[];
   pipelineOverview: Array<{
     stage: string;
+    label: string;
     count: number;
     value: number;
   }>;
 }
 
+function formatCurrency(value: number): string {
+  if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
+  return `$${value}`;
+}
+
+function formatRelativeTime(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// Mini Kanban Card using Hammy Design - Compact
+function MiniKanbanCard({ deal }: { deal: KanbanDeal }) {
+  return (
+    <Link href={`/app/deals/${deal.id}`}>
+      <div className="neu-card p-3 hover-lift cursor-pointer group">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <h4 className="font-semibold text-sm text-surface-900 dark:text-surface-50 truncate group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+            {deal.name}
+          </h4>
+        </div>
+
+        <div className="flex items-center gap-2 mb-2">
+          {deal.assetType && (
+            <span className={cn(
+              'neu-badge text-xs px-1.5 py-0.5',
+              deal.assetType === 'SNF' && 'neu-badge-primary',
+              deal.assetType === 'ALF' && 'bg-accent-500/20 text-accent-700 dark:text-accent-300',
+            )}>
+              {deal.assetType}
+            </span>
+          )}
+          {deal.primaryState && (
+            <span className="text-xs text-surface-500 dark:text-surface-400 flex items-center gap-0.5">
+              <MapPin className="w-3 h-3" />
+              {deal.primaryState}
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between text-xs border-t border-surface-200 dark:border-surface-700 pt-2">
+          <span className="font-bold text-surface-900 dark:text-surface-50">
+            {formatCurrency(deal.value)}
+          </span>
+          <span className="text-surface-500 dark:text-surface-400">
+            {deal.beds} beds
+          </span>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+// Kanban Column using Hammy Design - Compact
+function KanbanColumn({ stage, deals }: { stage: typeof KANBAN_STAGES[0]; deals: KanbanDeal[] }) {
+  const Icon = stage.icon;
+  const totalValue = deals.reduce((sum, d) => sum + d.value, 0);
+
+  const headerColors = {
+    primary: 'bg-primary-500 text-white',
+    accent: 'bg-accent-500 text-white',
+    emerald: 'bg-emerald-500 text-white',
+    surface: 'bg-surface-400 dark:bg-surface-600 text-white',
+  };
+
+  const bgColors = {
+    primary: 'bg-primary-50 dark:bg-primary-950/20',
+    accent: 'bg-accent-50 dark:bg-accent-950/20',
+    emerald: 'bg-emerald-50 dark:bg-emerald-950/20',
+    surface: 'bg-surface-100 dark:bg-surface-800/50',
+  };
+
+  return (
+    <div className="flex-shrink-0 w-56">
+      {/* Column Header */}
+      <div className={cn('rounded-t-xl p-3', headerColors[stage.color as keyof typeof headerColors])}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <Icon className="w-3.5 h-3.5" />
+            <span className="text-xs font-semibold">{stage.label}</span>
+          </div>
+          <span className="text-xs font-medium bg-white/20 px-1.5 py-0.5 rounded-full">
+            {deals.length}
+          </span>
+        </div>
+        {deals.length > 0 && (
+          <div className="text-xs opacity-80 mt-0.5">
+            {formatCurrency(totalValue)}
+          </div>
+        )}
+      </div>
+
+      {/* Column Content */}
+      <div className={cn(
+        'space-y-2 p-2 rounded-b-xl border border-t-0 border-surface-200 dark:border-surface-700 min-h-[120px]',
+        bgColors[stage.color as keyof typeof bgColors]
+      )}>
+        {deals.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-4 text-center">
+            <Icon className="w-5 h-5 text-surface-300 mb-1" />
+            <p className="text-xs text-surface-400">No deals</p>
+          </div>
+        ) : (
+          deals.map((deal) => (
+            <MiniKanbanCard key={deal.id} deal={deal} />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardData | null>(null);
-  const [activityFilter, setActivityFilter] = useState<string>('all');
 
-  // Fetch real dashboard data
   useEffect(() => {
     const fetchData = async () => {
       try {
         const response = await fetch('/api/dashboard');
         const result = await response.json();
-
         if (result.success) {
           setData(result.data);
-        } else {
-          // Set empty state
-          setData({
-            stats: {
-              facilitiesTracked: 0,
-              activeTargets: 0,
-              pipelineValue: 0,
-              updatesToday: 0,
-              riskAlerts: 0,
-            },
-            recentActivity: [],
-            pipelineDeals: [],
-            riskAlerts: [],
-            pipelineOverview: [
-              { stage: 'Target', count: 0, value: 0 },
-              { stage: 'Contacted', count: 0, value: 0 },
-              { stage: 'LOI', count: 0, value: 0 },
-              { stage: 'Diligence', count: 0, value: 0 },
-              { stage: 'PSA', count: 0, value: 0 },
-              { stage: 'Closed', count: 0, value: 0 },
-            ],
-          });
         }
       } catch (err) {
         console.error('Failed to load dashboard:', err);
-        // Set empty state on error
-        setData({
-          stats: {
-            facilitiesTracked: 0,
-            activeTargets: 0,
-            pipelineValue: 0,
-            updatesToday: 0,
-            riskAlerts: 0,
-          },
-          recentActivity: [],
-          pipelineDeals: [],
-          riskAlerts: [],
-          pipelineOverview: [
-            { stage: 'Target', count: 0, value: 0 },
-            { stage: 'Contacted', count: 0, value: 0 },
-            { stage: 'LOI', count: 0, value: 0 },
-            { stage: 'Diligence', count: 0, value: 0 },
-            { stage: 'PSA', count: 0, value: 0 },
-            { stage: 'Closed', count: 0, value: 0 },
-          ],
-        });
       } finally {
         setLoading(false);
       }
     };
-
     fetchData();
   }, []);
+
+  // Group deals by status for Kanban
+  const dealsByStatus = useMemo(() => {
+    if (!data?.kanbanDeals) return {};
+    return data.kanbanDeals.reduce((acc, deal) => {
+      const status = deal.status || 'new';
+      if (!acc[status]) acc[status] = [];
+      acc[status].push(deal);
+      return acc;
+    }, {} as Record<string, KanbanDeal[]>);
+  }, [data?.kanbanDeals]);
+
+  // Get recent deals
+  const recentDeals = useMemo(() => {
+    if (!data?.kanbanDeals) return [];
+    return [...data.kanbanDeals]
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, 5);
+  }, [data?.kanbanDeals]);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
+        <div className="neu-card p-8 animate-pulse-glow">
+          <div className="w-12 h-12 rounded-full bg-primary-500/20 flex items-center justify-center">
+            <div className="w-6 h-6 rounded-full bg-primary-500 animate-ping" />
+          </div>
+        </div>
       </div>
     );
   }
 
-  const filteredActivity = activityFilter === 'all'
-    ? data?.recentActivity || []
-    : (data?.recentActivity || []).filter((item) => item.type === activityFilter);
-
-  // Check if dashboard is empty (no real data)
-  const isEmpty = !data || (
-    data.stats.facilitiesTracked === 0 &&
-    data.stats.activeTargets === 0 &&
-    data.pipelineDeals.length === 0
-  );
+  const isEmpty = !data || data.kanbanDeals.length === 0;
 
   if (isEmpty) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-8 stagger-children">
         {/* Page Header */}
-        <div className="page-header">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="page-header-title">Dashboard</h1>
-              <p className="page-header-subtitle">
-                Welcome to SNFalyze. Get started by creating your first deal.
-              </p>
-            </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-surface-900 dark:text-surface-50">Dashboard</h1>
+            <p className="text-surface-500 dark:text-surface-400 mt-1">
+              Welcome to SNFalyze. Get started by creating your first deal.
+            </p>
           </div>
         </div>
 
         {/* Empty State */}
-        <div className="card">
-          <div className="card-body py-16 text-center">
-            <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
-              <Sparkles className="w-8 h-8 text-primary-600 dark:text-primary-400" />
+        <Card variant="glass" className="glow">
+          <CardContent className="py-16 text-center">
+            <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-primary-500 flex items-center justify-center shadow-lg shadow-primary-500/30 animate-float">
+              <Sparkles className="w-10 h-10 text-white" />
             </div>
-            <h2 className="text-xl font-semibold text-surface-900 dark:text-surface-100 mb-2">
-              No deals yet
+            <h2 className="text-2xl font-bold text-surface-900 dark:text-surface-50 mb-3">
+              No deals in your pipeline
             </h2>
-            <p className="text-surface-600 dark:text-surface-400 max-w-md mx-auto mb-8">
-              Upload your first deal documents to get started. Our AI will analyze them
-              and help you build financial models automatically.
+            <p className="text-surface-500 dark:text-surface-400 max-w-md mx-auto mb-8">
+              Upload deal documents to get started. Our AI will analyze them and help you make better investment decisions.
             </p>
             <div className="flex items-center justify-center gap-4">
               <Link href="/app/deals/new/wizard">
                 <Button size="lg">
-                  <Sparkles className="w-5 h-5 mr-2" />
+                  <Sparkles className="w-5 h-5" />
                   Start Guided Wizard
                 </Button>
               </Link>
               <Link href="/upload">
-                <Button variant="outline" size="lg">
-                  <FileText className="w-5 h-5 mr-2" />
+                <Button variant="secondary" size="lg">
+                  <FileText className="w-5 h-5" />
                   Quick Upload
                 </Button>
               </Link>
             </div>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="grid md:grid-cols-3 gap-4">
-          <Link href="/app/deals/new/wizard" className="card hover:border-primary-500 transition-colors">
-            <div className="card-body">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
-                  <Sparkles className="w-5 h-5 text-primary-600" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-surface-900 dark:text-surface-100">Guided Wizard</h3>
-                  <p className="text-sm text-surface-500">Step-by-step deal setup</p>
-                </div>
-              </div>
-            </div>
-          </Link>
-          <Link href="/upload" className="card hover:border-primary-500 transition-colors">
-            <div className="card-body">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-emerald-600" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-surface-900 dark:text-surface-100">Upload Documents</h3>
-                  <p className="text-sm text-surface-500">Drag & drop P&L, census</p>
-                </div>
-              </div>
-            </div>
-          </Link>
-          <Link href="/app/map" className="card hover:border-primary-500 transition-colors">
-            <div className="card-body">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                  <Target className="w-5 h-5 text-amber-600" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-surface-900 dark:text-surface-100">Find Facilities</h3>
-                  <p className="text-sm text-surface-500">Search CMS database</p>
-                </div>
-              </div>
-            </div>
-          </Link>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Page Header */}
-      <div className="page-header">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="page-header-title">Dashboard</h1>
-            <p className="page-header-subtitle">
-              Welcome back. Here&apos;s what&apos;s happening with your pipeline.
-            </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-surface-900 dark:text-surface-50">Dashboard</h1>
+          <p className="text-sm text-surface-500 dark:text-surface-400">
+            Track your deal pipeline and investment opportunities
+          </p>
+        </div>
+        <Link href="/app/deals/new/wizard">
+          <Button size="sm">
+            <Plus className="w-4 h-4" />
+            New Deal
+          </Button>
+        </Link>
+      </div>
+
+      {/* Stats Cards - Compact inline */}
+      <div className="neu-card p-3">
+        <div className="flex flex-wrap items-center gap-6">
+          <div className="flex items-center gap-2">
+            <Briefcase className="w-4 h-4 text-primary-500" />
+            <span className="text-lg font-bold text-surface-900 dark:text-white">{data.stats.activeTargets}</span>
+            <span className="text-xs text-surface-500">Active Deals</span>
           </div>
           <div className="flex items-center gap-2">
-            <Link href="/app/deals/new/wizard">
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                New Deal
+            <DollarSign className="w-4 h-4 text-emerald-500" />
+            <span className="text-lg font-bold text-surface-900 dark:text-white">{formatCurrency(data.stats.pipelineValue)}</span>
+            <span className="text-xs text-surface-500">Pipeline</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <BedDouble className="w-4 h-4 text-blue-500" />
+            <span className="text-lg font-bold text-surface-900 dark:text-white">{(data.stats.totalBeds || 0).toLocaleString()}</span>
+            <span className="text-xs text-surface-500">Beds</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-purple-500" />
+            <span className="text-lg font-bold text-surface-900 dark:text-white">{data.stats.facilitiesTracked}</span>
+            <span className="text-xs text-surface-500">Facilities</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Deal Pipeline Kanban Board */}
+      <Card>
+        <CardHeader className="border-b border-surface-200 dark:border-surface-700 py-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Deal Pipeline</CardTitle>
+            <Link href="/app/deals">
+              <Button variant="secondary" size="sm">
+                Full Board
+                <ArrowRight className="w-3.5 h-3.5" />
               </Button>
             </Link>
           </div>
-        </div>
-      </div>
+        </CardHeader>
+        <CardContent className="p-4 overflow-x-auto">
+          <div className="flex gap-3 min-w-max">
+            {KANBAN_STAGES.filter(s => s.id !== 'passed').map((stage) => (
+              <KanbanColumn
+                key={stage.id}
+                stage={stage}
+                deals={dealsByStatus[stage.id] || []}
+              />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <StatCard
-          label="Facilities Tracked"
-          value={data.stats.facilitiesTracked}
-          icon={<Building2 className="w-5 h-5" />}
-        />
-        <StatCard
-          label="Active Targets"
-          value={data.stats.activeTargets}
-          icon={<Target className="w-5 h-5" />}
-        />
-        <StatCard
-          label="Pipeline Value"
-          value={data.stats.pipelineValue}
-          format="currency"
-          icon={<Briefcase className="w-5 h-5" />}
-        />
-        <StatCard
-          label="Updates Today"
-          value={data.stats.updatesToday}
-          icon={<TrendingUp className="w-5 h-5" />}
-        />
-        <StatCard
-          label="Risk Alerts"
-          value={data.stats.riskAlerts}
-          icon={<AlertTriangle className="w-5 h-5" />}
-        />
-      </div>
-
-      {/* Main Content Grid */}
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Activity Feed - Takes 2 columns */}
-        <div className="lg:col-span-2 card">
-          <div className="card-header">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
-                What Changed
-              </h2>
-              {filteredActivity.length > 0 && (
-                <div className="flex items-center gap-1">
-                  {['all', 'risk', 'survey', 'ownership', 'stage'].map((filter) => (
-                    <button
-                      key={filter}
-                      onClick={() => setActivityFilter(filter)}
-                      className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-                        activityFilter === filter
-                          ? 'bg-[var(--accent-light)] text-[var(--accent-solid)]'
-                          : 'text-[var(--color-text-secondary)] hover:bg-[var(--gray-100)]'
-                      }`}
-                    >
-                      {filter.charAt(0).toUpperCase() + filter.slice(1)}
-                    </button>
-                  ))}
+      {/* Bottom Row - Compact */}
+      <div className="grid lg:grid-cols-3 gap-4">
+        {/* Recent Activity */}
+        <div className="lg:col-span-2">
+          <Card>
+            <CardHeader className="border-b border-surface-200 dark:border-surface-700 py-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-primary-500" />
+                  <CardTitle className="text-base">Recent Deals</CardTitle>
                 </div>
-              )}
-            </div>
-          </div>
-          <div className="card-body">
-            {filteredActivity.length > 0 ? (
-              <>
-                <Timeline items={filteredActivity} />
-                <button className="w-full mt-4 py-2 text-sm font-medium text-[var(--accent-solid)] hover:text-[var(--accent-hover)] transition-colors">
-                  View all activity
-                </button>
-              </>
-            ) : (
-              <div className="text-center py-8 text-surface-500">
-                <TrendingUp className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p>No recent activity</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right Column */}
-        <div className="space-y-6">
-          {/* Risk Alerts */}
-          <div className="card">
-            <div className="card-header">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
-                  <Bell className="w-4 h-4 text-[var(--status-error-icon)]" />
-                  Risk Alerts
-                </h2>
-                {data.riskAlerts.length > 0 && (
-                  <Link
-                    href="/app/alerts"
-                    className="text-xs font-medium text-[var(--accent-solid)] hover:text-[var(--accent-hover)]"
-                  >
-                    View all
-                  </Link>
-                )}
-              </div>
-            </div>
-            {data.riskAlerts.length > 0 ? (
-              <div className="divide-y divide-[var(--color-border-muted)]">
-                {data.riskAlerts.map((alert) => (
-                  <Link
-                    key={alert.id}
-                    href={`/app/facilities/${alert.id}`}
-                    className="block px-5 py-3 hover:bg-[var(--gray-50)] transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-[var(--color-text-primary)] truncate">
-                          {alert.facility}
-                        </div>
-                        <div className="text-xs text-[var(--color-text-tertiary)] mt-0.5">
-                          {alert.reason}
-                        </div>
-                      </div>
-                      <RiskBadge level={alert.level} score={alert.score} showScore size="sm" />
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <div className="card-body text-center py-6 text-surface-500">
-                <AlertTriangle className="w-6 h-6 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No risk alerts</p>
-              </div>
-            )}
-          </div>
-
-          {/* Pipeline Summary */}
-          <div className="card">
-            <div className="card-header">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
-                  Pipeline
-                </h2>
-                <Link
-                  href="/app/deals"
-                  className="text-xs font-medium text-[var(--accent-solid)] hover:text-[var(--accent-hover)]"
-                >
+                <Link href="/app/deals" className="text-xs font-medium text-primary-500 hover:text-primary-600">
                   View all
                 </Link>
               </div>
-            </div>
-            {data.pipelineDeals.length > 0 ? (
-              <div className="divide-y divide-[var(--color-border-muted)]">
-                {data.pipelineDeals.map((deal) => (
-                  <Link
-                    key={deal.id}
-                    href={`/app/deals/${deal.id}`}
-                    className="block px-5 py-3 hover:bg-[var(--gray-50)] transition-colors"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-[var(--color-text-primary)] truncate">
-                          {deal.name}
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y divide-surface-200 dark:divide-surface-700">
+                {recentDeals.slice(0, 4).map((deal) => {
+                  const stageConfig = KANBAN_STAGES.find(s => s.id === deal.status);
+
+                  return (
+                    <Link
+                      key={deal.id}
+                      href={`/app/deals/${deal.id}`}
+                      className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-100 dark:hover:bg-surface-800/50 transition-colors group"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-medium text-sm text-surface-900 dark:text-surface-50 truncate group-hover:text-primary-600 transition-colors">
+                            {deal.name}
+                          </h3>
+                          {deal.assetType && (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-surface-100 dark:bg-surface-700 text-surface-600 dark:text-surface-400">
+                              {deal.assetType}
+                            </span>
+                          )}
                         </div>
-                        <div className="text-xs text-[var(--color-text-tertiary)] mt-0.5">
-                          ${(deal.value / 1000000).toFixed(1)}M · {deal.beds} beds
+                        <div className="flex items-center gap-2 text-xs text-surface-500 mt-0.5">
+                          <span className="font-semibold">{formatCurrency(deal.value)}</span>
+                          <span>•</span>
+                          <span>{deal.beds} beds</span>
+                          {deal.primaryState && (
+                            <>
+                              <span>•</span>
+                              <span>{deal.primaryState}</span>
+                            </>
+                          )}
                         </div>
                       </div>
-                      <StatusPill status={deal.stage} size="sm" />
-                    </div>
-                  </Link>
-                ))}
+                      <div className="text-right flex-shrink-0">
+                        <span className={cn(
+                          'text-xs px-1.5 py-0.5 rounded',
+                          stageConfig?.color === 'primary' && 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400',
+                          stageConfig?.color === 'accent' && 'bg-accent-100 text-accent-700 dark:bg-accent-900/30 dark:text-accent-400',
+                          stageConfig?.color === 'emerald' && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                        )}>
+                          {stageConfig?.label || 'New'}
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
               </div>
-            ) : (
-              <div className="card-body text-center py-6">
-                <Link href="/app/deals/new/wizard">
-                  <Button variant="outline" size="sm">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add First Deal
-                  </Button>
-                </Link>
-              </div>
-            )}
-          </div>
+            </CardContent>
+          </Card>
         </div>
-      </div>
 
-      {/* Pipeline Stages Overview */}
-      <div className="card">
-        <div className="card-header">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
-              Pipeline Overview
-            </h2>
-            <Link
-              href="/app/deals"
-              className="btn btn-secondary btn-sm"
-            >
-              View Pipeline
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-        </div>
-        <div className="card-body">
-          <div className="flex items-center gap-2">
-            {(data.pipelineOverview || [
-              { stage: 'Target', count: 0, value: 0 },
-              { stage: 'Contacted', count: 0, value: 0 },
-              { stage: 'LOI', count: 0, value: 0 },
-              { stage: 'Diligence', count: 0, value: 0 },
-              { stage: 'PSA', count: 0, value: 0 },
-              { stage: 'Closed', count: 0, value: 0 },
-            ]).map((item, index, array) => (
-              <div key={item.stage} className="flex items-center flex-1">
-                <div className="flex-1 text-center px-4 py-4 bg-[var(--gray-50)] rounded-lg">
-                  <div className="text-2xl font-semibold text-[var(--color-text-primary)] tabular-nums">
-                    {item.count}
-                  </div>
-                  <div className="text-xs font-medium text-[var(--color-text-secondary)] mt-1">
-                    {item.stage}
-                  </div>
-                  <div className="text-xs text-[var(--color-text-tertiary)] mt-0.5 tabular-nums">
-                    ${item.value}M
-                  </div>
+        {/* Quick Actions - Compact */}
+        <Card>
+          <CardHeader className="border-b border-surface-200 dark:border-surface-700 py-3">
+            <CardTitle className="text-base">Quick Actions</CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 space-y-2">
+            <Link href="/app/deals/new/wizard" className="block">
+              <div className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors">
+                <div className="w-8 h-8 rounded-lg bg-primary-500 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4 text-white" />
                 </div>
-                {index < array.length - 1 && (
-                  <ChevronRight className="w-4 h-4 text-[var(--color-text-disabled)] mx-1 flex-shrink-0" />
-                )}
+                <div>
+                  <h3 className="font-medium text-sm text-surface-900 dark:text-surface-50">New Deal Wizard</h3>
+                  <p className="text-xs text-surface-500">AI-guided setup</p>
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
+            </Link>
+
+            <Link href="/app/repository" className="block">
+              <div className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors">
+                <div className="w-8 h-8 rounded-lg bg-accent-500 flex items-center justify-center">
+                  <FileText className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-medium text-sm text-surface-900 dark:text-surface-50">Upload Documents</h3>
+                  <p className="text-xs text-surface-500">P&L, census reports</p>
+                </div>
+              </div>
+            </Link>
+
+            <Link href="/app/macro" className="block">
+              <div className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors">
+                <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center">
+                  <TrendingUp className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-medium text-sm text-surface-900 dark:text-surface-50">Macro Overview</h3>
+                  <p className="text-xs text-surface-500">30,000 ft view</p>
+                </div>
+              </div>
+            </Link>
+
+            <Link href="/app/partners" className="block">
+              <div className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors">
+                <div className="w-8 h-8 rounded-lg bg-purple-500 flex items-center justify-center">
+                  <Handshake className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-medium text-sm text-surface-900 dark:text-surface-50">Capital Partners</h3>
+                  <p className="text-xs text-surface-500">Lenders & investors</p>
+                </div>
+              </div>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

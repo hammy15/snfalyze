@@ -105,7 +105,7 @@ Similarity can be based on:
       limit = 5,
       includeDetails = true,
     } = input as {
-      assetType?: 'SNF' | 'ALF' | 'ILF';
+      assetType?: 'SNF' | 'ALF' | 'ILF' | 'HOSPICE';
       state?: string;
       minBeds?: number;
       maxBeds?: number;

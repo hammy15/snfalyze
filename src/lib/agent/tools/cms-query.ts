@@ -225,7 +225,7 @@ Data available:
 /**
  * Get CMS benchmarks for comparison
  */
-export function getCmsBenchmarks(assetType: 'SNF' | 'ALF' | 'ILF', state?: string) {
+export function getCmsBenchmarks(assetType: 'SNF' | 'ALF' | 'ILF' | 'HOSPICE', state?: string) {
   // These are approximate national benchmarks for SNFs
   // In a production system, these would be calculated from the database
   const snfBenchmarks = {

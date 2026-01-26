@@ -38,7 +38,16 @@ import {
   Home,
   Users,
   Heart,
+  Lock,
+  Unlock,
+  Eye,
+  EyeOff,
+  Shield,
+  Crown,
+  Loader2,
+  X,
 } from 'lucide-react';
+import { Card } from '@/components/ui/card';
 
 // =============================================================================
 // SETTING INPUT COMPONENTS
@@ -408,7 +417,18 @@ function AdjustmentsGrid<T extends Record<string, number>>({
 // MAIN ADMIN PAGE
 // =============================================================================
 
+// God Mode Password
+const GOD_MODE_PASSWORD = 'jockibox26';
+
 export default function AdminPage() {
+  // Authentication state
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // Settings state
   const [settings, setSettings] = useState<AlgorithmSettings>(DEFAULT_ALGORITHM_SETTINGS);
   const [originalSettings, setOriginalSettings] = useState<AlgorithmSettings>(DEFAULT_ALGORITHM_SETTINGS);
   const [hasChanges, setHasChanges] = useState(false);
@@ -416,6 +436,90 @@ export default function AdminPage() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [activeTab, setActiveTab] = useState<string>('valuation');
   const [activeAssetType, setActiveAssetType] = useState<AssetType>('SNF');
+
+  // Handle login
+  const handleLogin = async () => {
+    setIsLoggingIn(true);
+    setLoginError('');
+
+    // Verify password
+    if (password === GOD_MODE_PASSWORD) {
+      setIsAuthenticated(true);
+    } else {
+      setLoginError('Invalid password. Access denied.');
+    }
+    setIsLoggingIn(false);
+  };
+
+  // Login screen
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-surface-900 via-surface-800 to-surface-900">
+        <Card variant="default" className="w-full max-w-md p-8">
+          <div className="text-center mb-8">
+            <div className="inline-flex p-4 rounded-2xl bg-gradient-to-br from-primary-500/20 to-accent-500/20 mb-4">
+              <Shield className="w-12 h-12 text-primary-500" />
+            </div>
+            <h1 className="text-2xl font-bold text-surface-900 dark:text-white flex items-center justify-center gap-2">
+              Super Admin Access
+              <Crown className="w-6 h-6 text-amber-500" />
+            </h1>
+            <p className="text-surface-500 mt-2">Enter your credentials to access God Mode</p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                placeholder="Enter super admin password"
+                className="w-full pl-10 pr-10 py-3 rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 text-surface-900 dark:text-white placeholder-surface-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+              <button
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-600"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
+
+            {loginError && (
+              <div className="flex items-center gap-2 text-red-500 text-sm bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
+                <X className="w-4 h-4" />
+                {loginError}
+              </div>
+            )}
+
+            <button
+              onClick={handleLogin}
+              disabled={isLoggingIn || !password}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 text-white font-semibold hover:from-primary-600 hover:to-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+            >
+              {isLoggingIn ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <>
+                  <Unlock className="w-5 h-5" />
+                  Access God Mode
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="mt-6 pt-6 border-t border-surface-200 dark:border-surface-700">
+            <p className="text-xs text-center text-surface-400">
+              This area is restricted to super administrators only.
+              <br />
+              All actions are logged for security purposes.
+            </p>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   // Track changes
   useEffect(() => {
@@ -427,11 +531,17 @@ export default function AdminPage() {
     setValidationErrors(errors);
   }, [settings, originalSettings]);
 
-  // Load settings on mount
+  // Load settings on mount (only when authenticated)
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     const loadSettings = async () => {
       try {
-        const res = await fetch('/api/admin/settings');
+        const res = await fetch('/api/admin/settings', {
+          headers: {
+            'x-admin-password': GOD_MODE_PASSWORD,
+          },
+        });
         if (res.ok) {
           const data = await res.json();
           if (data.success && data.data) {
@@ -444,7 +554,7 @@ export default function AdminPage() {
       }
     };
     loadSettings();
-  }, []);
+  }, [isAuthenticated]);
 
   // Helper to update cap rate settings for current asset type
   const updateCapRateForAssetType = useCallback(
@@ -571,8 +681,11 @@ export default function AdminPage() {
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settings, changedBy: 'admin' }),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': GOD_MODE_PASSWORD,
+        },
+        body: JSON.stringify({ settings, changedBy: 'super_admin' }),
       });
 
       if (res.ok) {
@@ -656,15 +769,18 @@ export default function AdminPage() {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-[var(--accent-bg)] rounded-lg">
-                <Settings className="w-6 h-6 text-[var(--accent-solid)]" />
+              <div className="p-3 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500">
+                <Crown className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-[var(--color-text-primary)]">
-                  Algorithm Settings
+                <h1 className="text-xl font-bold text-[var(--color-text-primary)] flex items-center gap-2">
+                  Super Admin Settings
+                  <span className="px-2 py-0.5 text-xs font-medium bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-full">
+                    GOD MODE
+                  </span>
                 </h1>
                 <p className="text-sm text-[var(--color-text-tertiary)]">
-                  Configure all variables and assumptions for SNF, ALF, and ILF analysis
+                  Full control over all algorithms, AI, and system configurations
                 </p>
               </div>
             </div>

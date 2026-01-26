@@ -21,6 +21,9 @@ import {
   Users,
   Map,
   Wrench,
+  Crown,
+  BarChart3,
+  FolderOpen,
 } from 'lucide-react';
 
 interface TopBarProps {
@@ -29,10 +32,12 @@ interface TopBarProps {
 
 const NAV_ITEMS = [
   { href: '/app', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/app/macro', label: 'Macro', icon: BarChart3 },
   { href: '/app/deals', label: 'Deals', icon: FolderKanban },
   { href: '/app/facilities', label: 'Facilities', icon: Building2 },
   { href: '/app/partners', label: 'Partners', icon: Users },
   { href: '/app/map', label: 'Map', icon: Map },
+  { href: '/app/repository', label: 'Repository', icon: FolderOpen },
   { href: '/app/tools', label: 'Tools', icon: Wrench },
 ];
 
@@ -220,6 +225,14 @@ export function TopBar({ sidebarCollapsed }: TopBarProps) {
                     <Settings className="w-4 h-4" />
                     Settings
                   </button>
+                  <Link
+                    href="/app/admin"
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+                  >
+                    <Crown className="w-4 h-4" />
+                    Super Admin
+                  </Link>
                 </div>
                 <div className="border-t border-surface-200 dark:border-surface-700 py-1">
                   <button

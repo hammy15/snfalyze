@@ -193,21 +193,21 @@ export function CreateDealModal({ open, onOpenChange, onCreateDeal }: CreateDeal
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Asset Types *</Label>
-              <div className="flex gap-2">
-                {(['snf', 'alf', 'ilf'] as AssetType[]).map((type) => (
+              <div className="flex gap-2 flex-wrap">
+                {(['snf', 'alf', 'ilf', 'hospice'] as AssetType[]).map((type) => (
                   <Button
                     key={type}
                     type="button"
                     variant={formData.asset_types?.includes(type) ? 'default' : 'outline'}
                     onClick={() => toggleAssetType(type)}
-                    className="flex-1"
+                    className={type === 'hospice' ? 'flex-1 data-[state=selected]:bg-amber-500' : 'flex-1'}
                   >
                     {type.toUpperCase()}
                   </Button>
                 ))}
               </div>
               <p className="text-xs text-muted-foreground">
-                SNF = Skilled Nursing, ALF = Assisted Living, ILF = Independent Living
+                SNF = Skilled Nursing, ALF = Assisted Living, ILF = Independent Living, Hospice = Hospice Care
               </p>
             </div>
 

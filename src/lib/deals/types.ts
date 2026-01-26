@@ -1,7 +1,7 @@
 // Deal Analysis Framework Types
 // Based on Cascadia Healthcare's structured deal evaluation process
 
-export type AssetType = 'snf' | 'alf' | 'ilf';
+export type AssetType = 'snf' | 'alf' | 'ilf' | 'hospice';
 export type DealSource = 'broker' | 'seller_direct' | 'off_market' | 'auction' | 'other';
 export type DealStatus = 'active' | 'under_loi' | 'due_diligence' | 'closed' | 'passed' | 'dead';
 

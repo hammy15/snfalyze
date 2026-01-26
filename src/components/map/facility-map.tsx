@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import 'leaflet/dist/leaflet.css';
 
-export type AssetType = 'SNF' | 'ALF' | 'ILF';
+export type AssetType = 'SNF' | 'ALF' | 'ILF' | 'HOSPICE';
 
 export interface MapFacility {
   id: string;
@@ -27,6 +28,7 @@ interface FacilityMapProps {
   showSNF: boolean;
   showALF: boolean;
   showILF: boolean;
+  showHOSPICE?: boolean;
   showCascadia: boolean;
   showPotential: boolean;
   showDealLabels?: boolean;
@@ -38,6 +40,7 @@ const ASSET_COLORS = {
   SNF: '#1E40AF', // Blue
   ALF: '#059669', // Green
   ILF: '#7C3AED', // Purple
+  HOSPICE: '#F59E0B', // Amber/Orange
 };
 
 // Cascadia-specific colors (smaller markers with turquoise ring)
@@ -45,6 +48,7 @@ const CASCADIA_COLORS = {
   SNF: '#166534', // Dark Green
   ALF: '#C2410C', // Dark Orange
   ILF: '#CA8A04', // Dark Yellow
+  HOSPICE: '#B45309', // Dark Amber
 };
 
 const TURQUOISE_RING = '#14B8A6'; // Turquoise for Cascadia ring
@@ -54,6 +58,7 @@ export function FacilityMap({
   showSNF,
   showALF,
   showILF,
+  showHOSPICE = true,
   showCascadia,
   showPotential,
   showDealLabels = false,
@@ -70,6 +75,7 @@ export function FacilityMap({
     if (f.assetType === 'SNF' && !showSNF) return false;
     if (f.assetType === 'ALF' && !showALF) return false;
     if (f.assetType === 'ILF' && !showILF) return false;
+    if (f.assetType === 'HOSPICE' && !showHOSPICE) return false;
     if (f.isCascadia && !showCascadia) return false;
     if (!f.isCascadia && !showPotential) return false;
     return true;
@@ -133,29 +139,27 @@ export function FacilityMap({
           ? CASCADIA_COLORS[facility.assetType]
           : ASSET_COLORS[facility.assetType];
 
-        // Cascadia markers are smaller circles with turquoise ring
+        // Cascadia markers are smaller circles with enhanced turquoise ring
         // Potential deals are larger pin markers
-        const size = isCascadia ? 16 : 28;
-        const borderStyle = isCascadia
-          ? `3px solid ${TURQUOISE_RING}`
-          : '2px solid white';
+        const size = isCascadia ? 18 : 28;
 
         const icon = isCascadia
           ? L.divIcon({
-              className: 'custom-marker primary-marker',
+              className: 'custom-marker cascadia-marker',
               html: `
-                <div style="
+                <div class="cascadia-marker-inner" style="
                   background-color: ${color};
                   width: ${size}px;
                   height: ${size}px;
                   border-radius: 50%;
-                  border: ${borderStyle};
-                  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                  border: 1px solid ${TURQUOISE_RING};
+                  box-shadow: 0 0 12px rgba(20, 184, 166, 0.6), 0 2px 6px rgba(0,0,0,0.3);
+                  transition: all 0.2s ease;
                 "></div>
               `,
-              iconSize: [size + 6, size + 6],
-              iconAnchor: [(size + 6) / 2, (size + 6) / 2],
-              popupAnchor: [0, -(size + 6) / 2],
+              iconSize: [size + 8, size + 8],
+              iconAnchor: [(size + 8) / 2, (size + 8) / 2],
+              popupAnchor: [0, -(size + 8) / 2],
             })
           : L.divIcon({
               className: 'custom-marker deal-marker',
@@ -166,7 +170,7 @@ export function FacilityMap({
                   height: ${size}px;
                   border-radius: 50% 50% 50% 0;
                   transform: rotate(-45deg);
-                  border: ${borderStyle};
+                  border: 2px solid white;
                   box-shadow: 0 2px 5px rgba(0,0,0,0.3);
                   display: flex;
                   align-items: center;
@@ -335,8 +339,19 @@ export function FacilityMap({
           background: transparent !important;
           border: none !important;
         }
-        .primary-marker {
-          z-index: 100 !important;
+        .cascadia-marker {
+          z-index: 150 !important;
+        }
+        .cascadia-marker:hover .cascadia-marker-inner {
+          box-shadow: 0 0 20px rgba(20, 184, 166, 0.8), 0 0 30px rgba(20, 184, 166, 0.4), 0 2px 8px rgba(0,0,0,0.3) !important;
+          transform: scale(1.1);
+        }
+        @keyframes cascadia-pulse {
+          0%, 100% { box-shadow: 0 0 12px rgba(20, 184, 166, 0.6), 0 2px 6px rgba(0,0,0,0.3); }
+          50% { box-shadow: 0 0 18px rgba(20, 184, 166, 0.8), 0 2px 8px rgba(0,0,0,0.3); }
+        }
+        .cascadia-marker-inner {
+          animation: cascadia-pulse 2s ease-in-out infinite;
         }
         .deal-marker {
           z-index: 200 !important;
@@ -404,6 +419,13 @@ export function MapLegend() {
               />
               <span className="text-sm text-gray-700">ILF</span>
             </div>
+            <div className="flex items-center gap-2">
+              <span
+                className="w-4 h-4 rounded-full"
+                style={{ backgroundColor: ASSET_COLORS.HOSPICE }}
+              />
+              <span className="text-sm text-gray-700">Hospice</span>
+            </div>
           </div>
         </div>
 
@@ -412,36 +434,54 @@ export function MapLegend() {
           <div className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
             Cascadia Owned
           </div>
+          <div className="text-xs text-teal-600 mb-2 flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
+            Enhanced turquoise outline
+          </div>
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <span
-                className="w-3 h-3 rounded-full"
+                className="w-4 h-4 rounded-full shadow-sm"
                 style={{
                   backgroundColor: CASCADIA_COLORS.SNF,
-                  border: `2px solid ${TURQUOISE_RING}`,
+                  border: `1px solid ${TURQUOISE_RING}`,
+                  boxShadow: '0 0 8px rgba(20, 184, 166, 0.5)',
                 }}
               />
               <span className="text-sm text-gray-700">SNF</span>
             </div>
             <div className="flex items-center gap-2">
               <span
-                className="w-3 h-3 rounded-full"
+                className="w-4 h-4 rounded-full shadow-sm"
                 style={{
                   backgroundColor: CASCADIA_COLORS.ALF,
-                  border: `2px solid ${TURQUOISE_RING}`,
+                  border: `1px solid ${TURQUOISE_RING}`,
+                  boxShadow: '0 0 8px rgba(20, 184, 166, 0.5)',
                 }}
               />
               <span className="text-sm text-gray-700">ALF</span>
             </div>
             <div className="flex items-center gap-2">
               <span
-                className="w-3 h-3 rounded-full"
+                className="w-4 h-4 rounded-full shadow-sm"
                 style={{
                   backgroundColor: CASCADIA_COLORS.ILF,
-                  border: `2px solid ${TURQUOISE_RING}`,
+                  border: `1px solid ${TURQUOISE_RING}`,
+                  boxShadow: '0 0 8px rgba(20, 184, 166, 0.5)',
                 }}
               />
               <span className="text-sm text-gray-700">ILF</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className="w-4 h-4 rounded-full shadow-sm"
+                style={{
+                  backgroundColor: CASCADIA_COLORS.HOSPICE,
+                  border: `1px solid ${TURQUOISE_RING}`,
+                  boxShadow: '0 0 8px rgba(20, 184, 166, 0.5)',
+                }}
+              />
+              <span className="text-sm text-gray-700">Hospice</span>
             </div>
           </div>
         </div>
@@ -455,12 +495,14 @@ interface MapFiltersProps {
   showSNF: boolean;
   showALF: boolean;
   showILF: boolean;
+  showHOSPICE?: boolean;
   showCascadia: boolean;
   showPotential: boolean;
   showDealLabels?: boolean;
   onToggleSNF: () => void;
   onToggleALF: () => void;
   onToggleILF: () => void;
+  onToggleHOSPICE?: () => void;
   onToggleCascadia: () => void;
   onTogglePotential: () => void;
   onToggleDealLabels?: () => void;
@@ -468,6 +510,7 @@ interface MapFiltersProps {
     snf: number;
     alf: number;
     ilf: number;
+    hospice?: number;
     cascadia: number;
     potential: number;
     deals?: number;
@@ -478,12 +521,14 @@ export function MapFilters({
   showSNF,
   showALF,
   showILF,
+  showHOSPICE = true,
   showCascadia,
   showPotential,
   showDealLabels = false,
   onToggleSNF,
   onToggleALF,
   onToggleILF,
+  onToggleHOSPICE,
   onToggleCascadia,
   onTogglePotential,
   onToggleDealLabels,
@@ -543,6 +588,23 @@ export function MapFilters({
           <span className="text-xs text-gray-400">{facilityCounts.ilf}</span>
         </label>
 
+        {onToggleHOSPICE && (
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showHOSPICE}
+              onChange={onToggleHOSPICE}
+              className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
+            />
+            <span
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: ASSET_COLORS.HOSPICE }}
+            />
+            <span className="text-sm text-gray-700 flex-1">Hospice</span>
+            <span className="text-xs text-gray-400">{facilityCounts.hospice || 0}</span>
+          </label>
+        )}
+
         <div className="border-t border-gray-200 my-3 pt-3">
           <div className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
             Ownership
@@ -556,8 +618,12 @@ export function MapFilters({
               className="w-4 h-4 rounded border-gray-300 text-teal-500 focus:ring-teal-400"
             />
             <span
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: CASCADIA_COLORS.SNF, border: `2px solid ${TURQUOISE_RING}` }}
+              className="w-4 h-4 rounded-full"
+              style={{
+                backgroundColor: CASCADIA_COLORS.SNF,
+                border: `1px solid ${TURQUOISE_RING}`,
+                boxShadow: '0 0 6px rgba(20, 184, 166, 0.5)',
+              }}
             />
             <span className="text-sm text-gray-700 flex-1">Cascadia Owned</span>
             <span className="text-xs text-gray-400">{facilityCounts.cascadia}</span>

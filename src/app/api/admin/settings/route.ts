@@ -4,13 +4,62 @@ import {
   validateSettings,
   type AlgorithmSettings,
 } from '@/lib/admin/algorithm-settings';
+import {
+  AdminSettings,
+  DEFAULT_ADMIN_SETTINGS,
+  SettingsCategoryId,
+} from '@/lib/admin/settings-schema';
 
 // In-memory storage for now (replace with database in production)
 let currentSettings: AlgorithmSettings = DEFAULT_ALGORITHM_SETTINGS;
+let currentAdminSettings: AdminSettings = { ...DEFAULT_ADMIN_SETTINGS };
 let settingsHistory: { settings: AlgorithmSettings; timestamp: string; changedBy: string }[] = [];
 
-export async function GET() {
+// God mode password for super admin access
+const GOD_MODE_PASSWORD = 'jockibox26';
+
+function validateAuth(request: NextRequest): boolean {
+  const authHeader = request.headers.get('x-admin-password');
+  return authHeader === GOD_MODE_PASSWORD;
+}
+
+export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const type = searchParams.get('type');
+  const category = searchParams.get('category') as SettingsCategoryId | null;
+  const requireAuth = searchParams.get('auth') === 'true';
+
+  // If auth required or accessing admin settings, validate password
+  if (requireAuth || type === 'admin') {
+    if (!validateAuth(request)) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized - Invalid password' },
+        { status: 401 }
+      );
+    }
+  }
+
   try {
+    // Return admin settings (requires auth)
+    if (type === 'admin') {
+      if (category && category in currentAdminSettings) {
+        return NextResponse.json({
+          success: true,
+          data: {
+            category,
+            settings: currentAdminSettings[category as keyof AdminSettings],
+            lastUpdated: currentAdminSettings.lastUpdated,
+            updatedBy: currentAdminSettings.updatedBy,
+          },
+        });
+      }
+      return NextResponse.json({
+        success: true,
+        data: currentAdminSettings,
+      });
+    }
+
+    // Return algorithm settings (public read)
     return NextResponse.json({
       success: true,
       data: currentSettings,
@@ -25,15 +74,52 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
+  // Always require auth for PUT
+  if (!validateAuth(request)) {
+    return NextResponse.json(
+      { success: false, error: 'Unauthorized - Invalid password' },
+      { status: 401 }
+    );
+  }
+
   try {
     const body = await request.json();
-    const { settings, changedBy = 'system' } = body as {
-      settings: AlgorithmSettings;
-      changedBy?: string;
-    };
+    const { type, settings, category, changedBy = 'super_admin' } = body;
 
-    // Validate settings
-    const validation = validateSettings(settings);
+    // Update admin settings
+    if (type === 'admin') {
+      if (category && settings) {
+        // Update specific category
+        if (!(category in currentAdminSettings)) {
+          return NextResponse.json(
+            { success: false, error: `Invalid category: ${category}` },
+            { status: 400 }
+          );
+        }
+        (currentAdminSettings as any)[category] = {
+          ...(currentAdminSettings as any)[category],
+          ...settings,
+        };
+      } else if (settings) {
+        // Full replacement
+        currentAdminSettings = {
+          ...DEFAULT_ADMIN_SETTINGS,
+          ...settings,
+        };
+      }
+      currentAdminSettings.lastUpdated = new Date().toISOString();
+      currentAdminSettings.updatedBy = changedBy;
+
+      return NextResponse.json({
+        success: true,
+        message: category ? `${category} settings updated` : 'Admin settings updated',
+        data: category ? (currentAdminSettings as any)[category] : currentAdminSettings,
+      });
+    }
+
+    // Update algorithm settings
+    const algorithmSettings = settings as AlgorithmSettings;
+    const validation = validateSettings(algorithmSettings);
     if (!validation.valid) {
       return NextResponse.json(
         {
@@ -59,7 +145,7 @@ export async function PUT(request: NextRequest) {
 
     // Update current settings
     currentSettings = {
-      ...settings,
+      ...algorithmSettings,
       lastUpdated: new Date().toISOString(),
       updatedBy: changedBy,
     };
@@ -80,11 +166,29 @@ export async function PUT(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { action } = body;
+    const { action, type } = body;
+
+    // Actions requiring auth
+    const protectedActions = ['reset', 'rollback', 'reset-admin'];
+    if (protectedActions.includes(action)) {
+      if (!validateAuth(request)) {
+        return NextResponse.json(
+          { success: false, error: 'Unauthorized - Invalid password' },
+          { status: 401 }
+        );
+      }
+    }
 
     switch (action) {
+      case 'verify-password':
+        const isValid = validateAuth(request);
+        return NextResponse.json({
+          success: true,
+          valid: isValid,
+        });
+
       case 'reset':
-        // Reset to defaults
+        // Reset algorithm settings to defaults
         settingsHistory.push({
           settings: currentSettings,
           timestamp: new Date().toISOString(),
@@ -98,7 +202,22 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           success: true,
           data: currentSettings,
-          message: 'Settings reset to defaults',
+          message: 'Algorithm settings reset to defaults',
+        });
+
+      case 'reset-admin':
+        const { category } = body;
+        if (category && category in DEFAULT_ADMIN_SETTINGS) {
+          (currentAdminSettings as any)[category] = { ...(DEFAULT_ADMIN_SETTINGS as any)[category] };
+        } else {
+          currentAdminSettings = { ...DEFAULT_ADMIN_SETTINGS };
+        }
+        currentAdminSettings.lastUpdated = new Date().toISOString();
+        currentAdminSettings.updatedBy = 'admin_reset';
+        return NextResponse.json({
+          success: true,
+          data: currentAdminSettings,
+          message: category ? `${category} settings reset to defaults` : 'All admin settings reset to defaults',
         });
 
       case 'history':
@@ -143,6 +262,43 @@ export async function POST(request: NextRequest) {
           success: true,
           valid: validationResult.valid,
           errors: validationResult.errors,
+        });
+
+      case 'export':
+        return NextResponse.json({
+          success: true,
+          data: {
+            algorithm: currentSettings,
+            admin: currentAdminSettings,
+            exportedAt: new Date().toISOString(),
+          },
+        });
+
+      case 'import':
+        if (!validateAuth(request)) {
+          return NextResponse.json(
+            { success: false, error: 'Unauthorized - Invalid password' },
+            { status: 401 }
+          );
+        }
+        const { importData } = body;
+        if (importData.algorithm) {
+          currentSettings = {
+            ...importData.algorithm,
+            lastUpdated: new Date().toISOString(),
+            updatedBy: 'import',
+          };
+        }
+        if (importData.admin) {
+          currentAdminSettings = {
+            ...importData.admin,
+            lastUpdated: new Date().toISOString(),
+            updatedBy: 'import',
+          };
+        }
+        return NextResponse.json({
+          success: true,
+          message: 'Settings imported successfully',
         });
 
       default:

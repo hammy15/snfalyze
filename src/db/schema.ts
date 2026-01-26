@@ -16,7 +16,8 @@ import {
 import { relations } from 'drizzle-orm';
 
 // Enums
-export const assetTypeEnum = pgEnum('asset_type', ['SNF', 'ALF', 'ILF']);
+export const assetTypeEnum = pgEnum('asset_type', ['SNF', 'ALF', 'ILF', 'HOSPICE']);
+export const hospiceTypeEnum = pgEnum('hospice_type', ['freestanding', 'hospital_based', 'home_health_based']);
 export const dealStatusEnum = pgEnum('deal_status', [
   'new',
   'analyzing',
@@ -244,6 +245,18 @@ export const facilities = pgTable(
     verifiedAt: timestamp('verified_at', { withTimezone: true }),
     verifiedBy: varchar('verified_by', { length: 255 }),
     cmsDataSnapshot: jsonb('cms_data_snapshot'),
+    // Hospice-Specific Fields
+    hospiceType: hospiceTypeEnum('hospice_type'),
+    averageDailyPatientCensus: decimal('average_daily_patient_census', { precision: 10, scale: 2 }),
+    hospiceAdmissionsPerMonth: integer('hospice_admissions_per_month'),
+    averageLengthOfStay: decimal('average_length_of_stay', { precision: 10, scale: 2 }), // days
+    liveDischargeRate: decimal('live_discharge_rate', { precision: 5, scale: 4 }), // percentage
+    capPerPatientDay: decimal('cap_per_patient_day', { precision: 10, scale: 2 }), // Medicare cap
+    routineHomeCareRevenue: decimal('routine_home_care_revenue', { precision: 15, scale: 2 }),
+    continuousHomeCareRevenue: decimal('continuous_home_care_revenue', { precision: 15, scale: 2 }),
+    generalInpatientRevenue: decimal('general_inpatient_revenue', { precision: 15, scale: 2 }),
+    respiteCareRevenue: decimal('respite_care_revenue', { precision: 15, scale: 2 }),
+    serviceAreaCounties: text('service_area_counties').array(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   },
   (table) => ({
@@ -766,6 +779,7 @@ export const dealPortfolioMetrics = pgTable(
     snfCount: integer('snf_count').default(0),
     alfCount: integer('alf_count').default(0),
     ilfCount: integer('ilf_count').default(0),
+    hospiceCount: integer('hospice_count').default(0),
     portfolioRevenue: decimal('portfolio_revenue', { precision: 15, scale: 2 }),
     portfolioExpenses: decimal('portfolio_expenses', { precision: 15, scale: 2 }),
     portfolioNoi: decimal('portfolio_noi', { precision: 15, scale: 2 }),

@@ -397,6 +397,7 @@ export const facilityFilters: FilterConfig[] = [
       { value: 'snf', label: 'SNF', count: 1847 },
       { value: 'alf', label: 'ALF', count: 623 },
       { value: 'ilf', label: 'ILF', count: 312 },
+      { value: 'hospice', label: 'Hospice', count: 124 },
       { value: 'ccrc', label: 'CCRC', count: 65 },
     ],
   },
@@ -433,6 +434,18 @@ export const dealFilters: FilterConfig[] = [
       { value: 'diligence', label: 'Diligence', count: 8 },
       { value: 'psa', label: 'PSA', count: 4 },
       { value: 'closed', label: 'Closed', count: 15 },
+    ],
+  },
+  {
+    id: 'assetType',
+    label: 'Asset Type',
+    type: 'multiselect',
+    icon: <Building2 className="w-4 h-4" />,
+    options: [
+      { value: 'SNF', label: 'SNF' },
+      { value: 'ALF', label: 'ALF' },
+      { value: 'ILF', label: 'ILF' },
+      { value: 'HOSPICE', label: 'Hospice' },
     ],
   },
   {

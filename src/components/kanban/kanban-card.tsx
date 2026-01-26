@@ -43,6 +43,7 @@ export const KanbanCard = forwardRef<HTMLDivElement, KanbanCardProps>(
       SNF: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
       ALF: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
       ILF: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+      HOSPICE: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
     };
 
     const probabilityColor = deal.probability !== undefined
@@ -64,6 +65,7 @@ export const KanbanCard = forwardRef<HTMLDivElement, KanbanCardProps>(
           deal.assetType === 'SNF' && 'border-l-blue-500',
           deal.assetType === 'ALF' && 'border-l-purple-500',
           deal.assetType === 'ILF' && 'border-l-green-500',
+          deal.assetType === 'HOSPICE' && 'border-l-amber-500',
           !deal.assetType && 'border-l-gray-300'
         )}
       >

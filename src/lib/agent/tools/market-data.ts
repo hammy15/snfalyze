@@ -84,7 +84,7 @@ Use this tool when:
       limit = 10,
     } = input as {
       dataType: string;
-      assetType?: 'SNF' | 'ALF' | 'ILF';
+      assetType?: 'SNF' | 'ALF' | 'ILF' | 'HOSPICE';
       state?: string;
       region?: string;
       minBeds?: number;
@@ -152,7 +152,7 @@ Use this tool when:
 };
 
 async function getComparableSales(params: {
-  assetType?: 'SNF' | 'ALF' | 'ILF';
+  assetType?: 'SNF' | 'ALF' | 'ILF' | 'HOSPICE';
   state?: string;
   minBeds?: number;
   maxBeds?: number;
@@ -233,7 +233,7 @@ async function getComparableSales(params: {
 }
 
 function getCapRateBenchmarks(
-  assetType?: 'SNF' | 'ALF' | 'ILF',
+  assetType?: 'SNF' | 'ALF' | 'ILF' | 'HOSPICE',
   state?: string,
   region?: string
 ): Record<string, unknown> {
@@ -281,6 +281,20 @@ function getCapRateBenchmarks(
         south: { low: 0.055, median: 0.065, high: 0.075 },
       },
     },
+    HOSPICE: {
+      national: { low: 0.10, median: 0.12, high: 0.14 },
+      byQuality: {
+        premium: { low: 0.08, median: 0.10, high: 0.12 },
+        average: { low: 0.10, median: 0.12, high: 0.14 },
+        challenged: { low: 0.12, median: 0.14, high: 0.16 },
+      },
+      byRegion: {
+        west: { low: 0.09, median: 0.11, high: 0.13 },
+        northeast: { low: 0.10, median: 0.12, high: 0.14 },
+        midwest: { low: 0.11, median: 0.13, high: 0.15 },
+        south: { low: 0.10, median: 0.12, high: 0.14 },
+      },
+    },
   };
 
   // State to region mapping
@@ -321,7 +335,7 @@ function getCapRateBenchmarks(
 }
 
 async function getOccupancyBenchmarks(
-  assetType?: 'SNF' | 'ALF' | 'ILF',
+  assetType?: 'SNF' | 'ALF' | 'ILF' | 'HOSPICE',
   state?: string
 ): Promise<Record<string, unknown>> {
   // Get occupancy data from CMS for SNFs
@@ -373,7 +387,7 @@ async function getOccupancyBenchmarks(
 }
 
 async function getMarketOverview(
-  assetType?: 'SNF' | 'ALF' | 'ILF',
+  assetType?: 'SNF' | 'ALF' | 'ILF' | 'HOSPICE',
   state?: string,
   region?: string
 ): Promise<Record<string, unknown>> {

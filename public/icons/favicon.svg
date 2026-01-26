@@ -1,0 +1,48 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg32" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0D9488"/>
+      <stop offset="100%" style="stop-color:#14B8A6"/>
+    </linearGradient>
+    <linearGradient id="accent32" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#5EEAD4"/>
+      <stop offset="100%" style="stop-color:#99F6E4"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="32" height="32" rx="7.04" fill="url(#bg32)"/>
+
+  <!-- Subtle glow in corner -->
+  <circle cx="25.6" cy="6.4" r="9.6" fill="url(#accent32)" opacity="0.15"/>
+
+  <!-- Icon group -->
+  <g transform="translate(5.76, 5.76)">
+    <!-- Building silhouette (simplified) -->
+    <rect x="0" y="7.04" width="7.04" height="13.44" rx="0.64" fill="white" opacity="0.9"/>
+    <rect x="2.24" y="8.96" width="1.28" height="1.92" fill="url(#bg32)"/>
+    <rect x="2.24" y="12.16" width="1.28" height="1.92" fill="url(#bg32)"/>
+    <rect x="4.48" y="8.96" width="1.28" height="1.92" fill="url(#bg32)"/>
+    <rect x="4.48" y="12.16" width="1.28" height="1.92" fill="url(#bg32)"/>
+
+    <!-- Chart bars (ascending) -->
+    <rect x="8.96" y="14.08" width="3.2" height="6.4" rx="0.64" fill="white" opacity="0.7"/>
+    <rect x="12.8" y="10.24" width="3.2" height="10.24" rx="0.64" fill="white" opacity="0.85"/>
+    <rect x="16.64" y="5.76" width="3.2" height="14.72" rx="0.64" fill="white" opacity="1"/>
+
+    <!-- Trend line -->
+    <path
+      d="M10.56,12.8 L14.4,8.96 L18.24,3.84"
+      stroke="url(#accent32)"
+      stroke-width="1.12"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+    />
+
+    <!-- Data point dots -->
+    <circle cx="10.56" cy="12.8" r="0.8" fill="white"/>
+    <circle cx="14.4" cy="8.96" r="0.8" fill="white"/>
+    <circle cx="18.24" cy="3.84" r="1.12" fill="url(#accent32)"/>
+  </g>
+</svg>

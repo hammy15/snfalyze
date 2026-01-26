@@ -32,7 +32,7 @@ export interface AgentContext {
   dealId?: string;
   dealName?: string;
   dealSummary?: string;
-  assetType?: 'SNF' | 'ALF' | 'ILF';
+  assetType?: 'SNF' | 'ALF' | 'ILF' | 'HOSPICE';
 
   // Analysis state
   analysisStage?: string;
@@ -207,7 +207,7 @@ export interface ToolExecution {
 export interface DealMemoryEntry {
   dealId: string;
   dealName: string;
-  assetType: 'SNF' | 'ALF' | 'ILF';
+  assetType: 'SNF' | 'ALF' | 'ILF' | 'HOSPICE';
   state?: string;
   beds?: number;
   askingPrice?: number;
@@ -363,7 +363,7 @@ export interface AlgorithmPreset {
   name: string;
   description?: string;
   presetType: 'market' | 'risk_profile' | 'asset_type' | 'custom';
-  applicableAssetTypes?: ('SNF' | 'ALF' | 'ILF')[];
+  applicableAssetTypes?: ('SNF' | 'ALF' | 'ILF' | 'HOSPICE')[];
   applicableStates?: string[];
   settings: Record<string, unknown>;
   usageCount: number;

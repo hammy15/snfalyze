@@ -28,7 +28,10 @@ export function formatCurrency(
 }
 
 // Format percentage
-export function formatPercent(num: number, decimals = 1): string {
+export function formatPercent(num: number | null | undefined, decimals = 1): string {
+  if (num === null || num === undefined || typeof num !== 'number' || isNaN(num)) {
+    return '—'
+  }
   return `${num.toFixed(decimals)}%`
 }
 

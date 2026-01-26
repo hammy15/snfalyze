@@ -1,12 +1,53 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { PageHeader } from '@/components/layout/page-header';
-import { Card, CardContent } from '@/components/ui/card';
-import { FacilityMap, MapFacility, MapFilters, MapLegend } from '@/components/map/facility-map';
-import { Skeleton } from '@/components/ui/skeleton';
-import { EmptyStateNoFacilities, EmptyStateError } from '@/components/ui/empty-state';
-import { Search, Download, Filter, Building2 } from 'lucide-react';
+import dynamic from 'next/dynamic';
+import {
+  Search,
+  Download,
+  Filter,
+  Building2,
+  MapPin,
+  X,
+  Loader2,
+  AlertTriangle,
+  RefreshCw,
+} from 'lucide-react';
+import { cn, formatNumber } from '@/lib/utils';
+
+// Dynamically import map component to avoid SSR issues with Leaflet
+const FacilityMapComponent = dynamic(
+  () => import('@/components/map/facility-map').then((mod) => mod.FacilityMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-full flex items-center justify-center bg-surface-100 dark:bg-surface-800">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 text-primary-500 animate-spin mx-auto mb-3" />
+          <p className="text-sm text-surface-500">Loading map...</p>
+        </div>
+      </div>
+    ),
+  }
+);
+
+interface MapFacility {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  assetType: 'SNF' | 'ALF' | 'ILF' | 'HOSPICE';
+  beds: number;
+  lat: number;
+  lng: number;
+  isCascadia: boolean;
+  cmsRating?: number;
+  occupancy?: number;
+  dealId?: string;
+  dealName?: string;
+  askingPrice?: number;
+}
 
 export default function MapPage() {
   const [facilities, setFacilities] = useState<MapFacility[]>([]);
@@ -14,6 +55,7 @@ export default function MapPage() {
   const [showSNF, setShowSNF] = useState(true);
   const [showALF, setShowALF] = useState(true);
   const [showILF, setShowILF] = useState(true);
+  const [showHOSPICE, setShowHOSPICE] = useState(true);
   const [showCascadia, setShowCascadia] = useState(true);
   const [showPotential, setShowPotential] = useState(true);
   const [showDealLabels, setShowDealLabels] = useState(false);
@@ -23,15 +65,12 @@ export default function MapPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
     async function fetchFacilities() {
       try {
-        const response = await fetch('/api/facilities', {
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
+        setLoading(true);
+        setError(null);
+
+        const response = await fetch('/api/facilities');
 
         if (response.ok) {
           const data = await response.json();
@@ -42,7 +81,7 @@ export default function MapPage() {
               address: f.address as string || '',
               city: f.city as string || '',
               state: f.state as string || '',
-              assetType: f.assetType as 'SNF' | 'ALF' | 'ILF',
+              assetType: f.assetType as 'SNF' | 'ALF' | 'ILF' | 'HOSPICE',
               beds: f.licensedBeds as number || 0,
               lat: getLatForState(f.state as string, f.city as string),
               lng: getLngForState(f.state as string, f.city as string),
@@ -56,23 +95,13 @@ export default function MapPage() {
           setError('Failed to load facilities');
         }
       } catch (err) {
-        clearTimeout(timeoutId);
-        if (err instanceof Error && err.name === 'AbortError') {
-          setError('Request timed out. Database may be unavailable.');
-        } else {
-          console.error('Failed to fetch facilities:', err);
-          setError('Failed to connect to server');
-        }
+        console.error('Failed to fetch facilities:', err);
+        setError('Failed to connect to server');
       } finally {
         setLoading(false);
       }
     }
     fetchFacilities();
-
-    return () => {
-      clearTimeout(timeoutId);
-      controller.abort();
-    };
   }, []);
 
   function getLatForState(state: string, city: string): number {
@@ -95,6 +124,7 @@ export default function MapPage() {
         Colfax: 46.8799, default: 47.7511
       },
       AZ: { 'Sun City': 33.5978, Phoenix: 33.4484, default: 34.0489 },
+      CA: { 'San Diego': 32.7157, 'Los Angeles': 34.0522, 'San Francisco': 37.7749, 'La Jolla': 32.8328, default: 36.7783 },
     };
     const stateCoords = coords[state] || {};
     return stateCoords[city] || stateCoords.default || 45.0;
@@ -120,6 +150,7 @@ export default function MapPage() {
         Colfax: -117.3636, default: -120.7401
       },
       AZ: { 'Sun City': -112.2716, Phoenix: -112.0740, default: -111.0937 },
+      CA: { 'San Diego': -117.1611, 'Los Angeles': -118.2437, 'San Francisco': -122.4194, 'La Jolla': -117.2713, default: -119.4179 },
     };
     const stateCoords = coords[state] || {};
     return stateCoords[city] || stateCoords.default || -115.0;
@@ -130,6 +161,7 @@ export default function MapPage() {
       snf: facilities.filter((f) => f.assetType === 'SNF').length,
       alf: facilities.filter((f) => f.assetType === 'ALF').length,
       ilf: facilities.filter((f) => f.assetType === 'ILF').length,
+      hospice: facilities.filter((f) => f.assetType === 'HOSPICE').length,
       cascadia: facilities.filter((f) => f.isCascadia).length,
       potential: facilities.filter((f) => !f.isCascadia).length,
       deals: facilities.filter((f) => f.dealName).length,
@@ -153,270 +185,252 @@ export default function MapPage() {
       if (f.assetType === 'SNF' && !showSNF) return false;
       if (f.assetType === 'ALF' && !showALF) return false;
       if (f.assetType === 'ILF' && !showILF) return false;
+      if (f.assetType === 'HOSPICE' && !showHOSPICE) return false;
       if (f.isCascadia && !showCascadia) return false;
       if (!f.isCascadia && !showPotential) return false;
       return true;
     }).length;
-  }, [filteredFacilities, showSNF, showALF, showILF, showCascadia, showPotential]);
+  }, [filteredFacilities, showSNF, showALF, showILF, showHOSPICE, showCascadia, showPotential]);
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <PageHeader
-          title="Facility Map"
-          description="Geographic view of Cascadia facilities and potential acquisition targets"
-        />
-        <Card>
-          <CardContent className="py-12 text-center">
-            <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-surface-500 dark:text-surface-400">Loading facilities...</p>
-          </CardContent>
-        </Card>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-surface-900 dark:text-surface-100">Facility Map</h1>
+            <p className="text-sm text-surface-500 mt-0.5">Geographic view of facilities</p>
+          </div>
+        </div>
+        <div className="neu-card h-[600px] flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="w-8 h-8 text-primary-500 animate-spin mx-auto mb-3" />
+            <p className="text-surface-500">Loading facilities...</p>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="space-y-6">
-        <PageHeader
-          title="Facility Map"
-          description="Geographic view of Cascadia facilities and potential acquisition targets"
-        />
-        <Card>
-          <CardContent className="py-12">
-            <EmptyStateError onRetry={() => window.location.reload()} />
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (facilities.length === 0) {
-    return (
-      <div className="space-y-6">
-        <PageHeader
-          title="Facility Map"
-          description="Geographic view of Cascadia facilities and potential acquisition targets"
-        />
-        <Card>
-          <CardContent className="py-12">
-            <EmptyStateNoFacilities />
-          </CardContent>
-        </Card>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-surface-900 dark:text-surface-100">Facility Map</h1>
+            <p className="text-sm text-surface-500 mt-0.5">Geographic view of facilities</p>
+          </div>
+        </div>
+        <div className="neu-card h-[600px] flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-12 h-12 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center mx-auto mb-3">
+              <AlertTriangle className="w-6 h-6 text-rose-600 dark:text-rose-400" />
+            </div>
+            <h3 className="font-semibold text-surface-900 dark:text-surface-100 mb-1">Something went wrong</h3>
+            <p className="text-sm text-surface-500 mb-4">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="neu-button-primary px-4 py-2 rounded-lg text-sm font-medium inline-flex items-center gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Try Again
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Facility Map"
-        description="Geographic view of Cascadia facilities and potential acquisition targets"
-      />
-
-      {/* Top controls */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
-          <input
-            type="text"
-            placeholder="Search facilities, cities, or deals..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-surface-100 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-          />
+    <div className="space-y-4">
+      {/* Header - Compact */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-surface-900 dark:text-surface-100">Facility Map</h1>
+          <p className="text-sm text-surface-500 mt-0.5">Geographic view of facilities and acquisition targets</p>
         </div>
-
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
-              showFilters
-                ? 'bg-primary-500 text-white border-primary-500'
-                : 'bg-white dark:bg-surface-800 text-surface-700 dark:text-surface-300 border-surface-300 dark:border-surface-600 hover:bg-surface-50 dark:hover:bg-surface-700'
-            }`}
+            className={cn(
+              'neu-button px-3 py-2 rounded-lg text-sm font-medium inline-flex items-center gap-2',
+              showFilters && 'bg-primary-500 text-white'
+            )}
           >
             <Filter className="w-4 h-4" />
             Filters
           </button>
-
-          <button className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-surface-800 text-surface-700 dark:text-surface-300 border border-surface-300 dark:border-surface-600 rounded-lg hover:bg-surface-50 dark:hover:bg-surface-700 transition-colors">
+          <button className="neu-button px-3 py-2 rounded-lg text-sm font-medium inline-flex items-center gap-2">
             <Download className="w-4 h-4" />
             Export
           </button>
         </div>
       </div>
 
-      {/* Stats bar */}
-      <Card>
-        <CardContent className="py-4">
-          <div className="flex flex-wrap gap-6 text-sm">
-            <div>
-              <span className="text-surface-500 dark:text-surface-400">Showing:</span>
-              <span className="ml-2 font-semibold text-surface-900 dark:text-surface-100">{visibleCount} facilities</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: '#1E40AF' }}></span>
-              <span className="text-surface-600 dark:text-surface-400">{facilityCounts.snf} SNF</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: '#059669' }}></span>
-              <span className="text-surface-600 dark:text-surface-400">{facilityCounts.alf} ALF</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: '#7C3AED' }}></span>
-              <span className="text-surface-600 dark:text-surface-400">{facilityCounts.ilf} ILF</span>
-            </div>
-            <div className="border-l border-surface-300 dark:border-surface-600 pl-6 flex items-center gap-2">
-              <span
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: '#166534', border: '2px solid #14B8A6' }}
-              ></span>
-              <span className="text-surface-500 dark:text-surface-400">Cascadia:</span>
-              <span className="font-semibold text-primary-600 dark:text-primary-400">{facilityCounts.cascadia}</span>
-            </div>
-            <div>
-              <span className="text-surface-500 dark:text-surface-400">Potential:</span>
-              <span className="ml-2 font-semibold text-surface-900 dark:text-surface-100">{facilityCounts.potential}</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Main content */}
-      <div className="flex gap-6">
-        {/* Filters sidebar */}
-        {showFilters && (
-          <div className="w-64 flex-shrink-0 space-y-4">
-            <MapFilters
-              showSNF={showSNF}
-              showALF={showALF}
-              showILF={showILF}
-              showCascadia={showCascadia}
-              showPotential={showPotential}
-              showDealLabels={showDealLabels}
-              onToggleSNF={() => setShowSNF(!showSNF)}
-              onToggleALF={() => setShowALF(!showALF)}
-              onToggleILF={() => setShowILF(!showILF)}
-              onToggleCascadia={() => setShowCascadia(!showCascadia)}
-              onTogglePotential={() => setShowPotential(!showPotential)}
-              onToggleDealLabels={() => setShowDealLabels(!showDealLabels)}
-              facilityCounts={facilityCounts}
+      {/* Stats & Search - Compact inline bar */}
+      <div className="neu-card p-3">
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Search */}
+          <div className="relative flex-1 min-w-[200px] max-w-xs">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
+            <input
+              type="text"
+              placeholder="Search facilities..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 text-sm bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/50"
             />
-            <MapLegend />
           </div>
-        )}
 
-        {/* Map container */}
-        <div className="flex-1 relative" style={{ zIndex: 1 }}>
-          <div
-            className="bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700"
-            style={{
-              borderRadius: '0.5rem',
-              overflow: 'visible',
-              position: 'relative',
-              zIndex: 1,
-            }}
-          >
-            <div
-              className="h-[600px] relative"
-              style={{
-                overflow: 'visible',
-                borderRadius: '0.5rem',
-              }}
-            >
-              <FacilityMap
-                facilities={filteredFacilities}
-                showSNF={showSNF}
-                showALF={showALF}
-                showILF={showILF}
-                showCascadia={showCascadia}
-                showPotential={showPotential}
-                showDealLabels={showDealLabels}
-                onFacilityClick={setSelectedFacility}
-              />
-            </div>
+          {/* Compact stats */}
+          <div className="flex items-center gap-4 text-sm flex-wrap">
+            <span className="text-surface-500">Showing <strong className="text-surface-900 dark:text-surface-100">{visibleCount}</strong></span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+              <span className="text-surface-600 dark:text-surface-400">{facilityCounts.snf} SNF</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
+              <span className="text-surface-600 dark:text-surface-400">{facilityCounts.alf} ALF</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-purple-600" />
+              <span className="text-surface-600 dark:text-surface-400">{facilityCounts.ilf} ILF</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+              <span className="text-surface-600 dark:text-surface-400">{facilityCounts.hospice} Hospice</span>
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Selected facility detail panel */}
+      {/* Main content */}
+      <div className="flex gap-4">
+        {/* Filters sidebar - Compact */}
+        {showFilters && (
+          <div className="w-56 flex-shrink-0 space-y-3">
+            <div className="neu-card p-3">
+              <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-2">Asset Type</h4>
+              <div className="space-y-1.5">
+                {[
+                  { key: 'snf', label: 'SNF', color: '#1E40AF', checked: showSNF, toggle: () => setShowSNF(!showSNF), count: facilityCounts.snf },
+                  { key: 'alf', label: 'ALF', color: '#059669', checked: showALF, toggle: () => setShowALF(!showALF), count: facilityCounts.alf },
+                  { key: 'ilf', label: 'ILF', color: '#7C3AED', checked: showILF, toggle: () => setShowILF(!showILF), count: facilityCounts.ilf },
+                  { key: 'hospice', label: 'Hospice', color: '#F59E0B', checked: showHOSPICE, toggle: () => setShowHOSPICE(!showHOSPICE), count: facilityCounts.hospice },
+                ].map((item) => (
+                  <label key={item.key} className="flex items-center gap-2 cursor-pointer text-sm">
+                    <input
+                      type="checkbox"
+                      checked={item.checked}
+                      onChange={item.toggle}
+                      className="w-3.5 h-3.5 rounded border-surface-300 text-primary-600"
+                    />
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                    <span className="flex-1 text-surface-700 dark:text-surface-300">{item.label}</span>
+                    <span className="text-xs text-surface-400">{item.count}</span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="border-t border-surface-200 dark:border-surface-700 mt-3 pt-3">
+                <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-2">Ownership</h4>
+                <div className="space-y-1.5">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm">
+                    <input
+                      type="checkbox"
+                      checked={showCascadia}
+                      onChange={() => setShowCascadia(!showCascadia)}
+                      className="w-3.5 h-3.5 rounded border-surface-300 text-primary-600"
+                    />
+                    <span className="w-2.5 h-2.5 rounded-full bg-green-700 ring-2 ring-primary-500" />
+                    <span className="flex-1 text-surface-700 dark:text-surface-300">Cascadia</span>
+                    <span className="text-xs text-surface-400">{facilityCounts.cascadia}</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer text-sm">
+                    <input
+                      type="checkbox"
+                      checked={showPotential}
+                      onChange={() => setShowPotential(!showPotential)}
+                      className="w-3.5 h-3.5 rounded border-surface-300 text-primary-600"
+                    />
+                    <span className="w-2.5 h-2.5 rounded-full bg-surface-400" />
+                    <span className="flex-1 text-surface-700 dark:text-surface-300">Potential</span>
+                    <span className="text-xs text-surface-400">{facilityCounts.potential}</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Legend - Compact */}
+            <div className="neu-card p-3">
+              <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-2">Legend</h4>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded-full bg-blue-600" />
+                  <span className="text-surface-600 dark:text-surface-400">Potential Deal</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-green-700 ring-2 ring-primary-500" />
+                  <span className="text-surface-600 dark:text-surface-400">Cascadia Owned</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Map container */}
+        <div className="flex-1">
+          <div className="neu-card overflow-hidden" style={{ height: '600px' }}>
+            <FacilityMapComponent
+              facilities={filteredFacilities}
+              showSNF={showSNF}
+              showALF={showALF}
+              showILF={showILF}
+              showHOSPICE={showHOSPICE}
+              showCascadia={showCascadia}
+              showPotential={showPotential}
+              showDealLabels={showDealLabels}
+              onFacilityClick={setSelectedFacility}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Selected facility popup */}
       {selectedFacility && (
-        <div className="fixed bottom-6 right-6 w-80 bg-white dark:bg-surface-800 rounded-lg shadow-xl border border-surface-200 dark:border-surface-700 overflow-hidden z-50">
+        <div className="fixed bottom-4 right-4 w-72 neu-card overflow-hidden z-50 shadow-xl">
           <div
-            className="h-2"
+            className="h-1.5"
             style={{
-              backgroundColor: selectedFacility.isCascadia
-                ? selectedFacility.assetType === 'SNF'
-                  ? '#166534'
-                  : selectedFacility.assetType === 'ALF'
-                  ? '#C2410C'
-                  : '#CA8A04'
-                : selectedFacility.assetType === 'SNF'
-                ? '#1E40AF'
-                : selectedFacility.assetType === 'ALF'
-                ? '#059669'
-                : '#7C3AED',
+              backgroundColor: selectedFacility.assetType === 'SNF' ? '#1E40AF' : selectedFacility.assetType === 'ALF' ? '#059669' : selectedFacility.assetType === 'HOSPICE' ? '#F59E0B' : '#7C3AED',
             }}
           />
-          <div className="p-4">
-            <div className="flex items-start justify-between mb-3">
+          <div className="p-3">
+            <div className="flex items-start justify-between mb-2">
               <div>
-                <span className="text-xs font-medium text-surface-500 dark:text-surface-400">
-                  {selectedFacility.assetType}
-                  {selectedFacility.isCascadia && ' • Cascadia Owned'}
-                </span>
-                <h3 className="font-semibold text-surface-900 dark:text-surface-100">{selectedFacility.name}</h3>
-                <p className="text-sm text-surface-600 dark:text-surface-400">
-                  {selectedFacility.city}, {selectedFacility.state}
-                </p>
+                <span className="text-xs text-surface-500">{selectedFacility.assetType}</span>
+                <h3 className="font-semibold text-surface-900 dark:text-surface-100 text-sm">{selectedFacility.name}</h3>
+                <p className="text-xs text-surface-500">{selectedFacility.city}, {selectedFacility.state}</p>
               </div>
               <button
                 onClick={() => setSelectedFacility(null)}
-                className="text-surface-400 hover:text-surface-600 dark:hover:text-surface-300"
+                className="p-1 hover:bg-surface-100 dark:hover:bg-surface-800 rounded"
               >
-                ×
+                <X className="w-4 h-4 text-surface-400" />
               </button>
             </div>
-
-            <div className="grid grid-cols-2 gap-3 text-sm mb-4">
-              <div className="bg-surface-50 dark:bg-surface-700 rounded p-2">
-                <div className="text-surface-500 dark:text-surface-400 text-xs">Beds</div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="bg-surface-50 dark:bg-surface-800 rounded p-1.5">
+                <div className="text-surface-500">Beds</div>
                 <div className="font-semibold text-surface-900 dark:text-surface-100">{selectedFacility.beds}</div>
               </div>
               {selectedFacility.cmsRating && (
-                <div className="bg-surface-50 dark:bg-surface-700 rounded p-2">
-                  <div className="text-surface-500 dark:text-surface-400 text-xs">CMS Rating</div>
+                <div className="bg-surface-50 dark:bg-surface-800 rounded p-1.5">
+                  <div className="text-surface-500">CMS</div>
                   <div className="font-semibold text-surface-900 dark:text-surface-100">{selectedFacility.cmsRating}/5</div>
                 </div>
               )}
-              {selectedFacility.occupancy && (
-                <div className="bg-surface-50 dark:bg-surface-700 rounded p-2">
-                  <div className="text-surface-500 dark:text-surface-400 text-xs">Occupancy</div>
-                  <div className="font-semibold text-surface-900 dark:text-surface-100">
-                    {(selectedFacility.occupancy * 100).toFixed(0)}%
-                  </div>
-                </div>
-              )}
-              {selectedFacility.askingPrice && (
-                <div className="bg-surface-50 dark:bg-surface-700 rounded p-2">
-                  <div className="text-surface-500 dark:text-surface-400 text-xs">Asking Price</div>
-                  <div className="font-semibold text-surface-900 dark:text-surface-100">
-                    ${(selectedFacility.askingPrice / 1000000).toFixed(1)}M
-                  </div>
-                </div>
-              )}
             </div>
-
-            {selectedFacility.dealName && (
-              <a
-                href={`/app/deals/${selectedFacility.dealId}`}
-                className="block w-full text-center py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium"
-              >
-                View Deal: {selectedFacility.dealName}
-              </a>
-            )}
           </div>
         </div>
       )}

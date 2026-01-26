@@ -231,7 +231,7 @@ export async function getDealMemoryHistory(
  * Find similar deals from memory
  */
 export async function findSimilarDeals(params: {
-  assetType?: 'SNF' | 'ALF' | 'ILF';
+  assetType?: 'SNF' | 'ALF' | 'ILF' | 'HOSPICE';
   state?: string;
   minBeds?: number;
   maxBeds?: number;
@@ -329,7 +329,7 @@ export async function findSimilarDeals(params: {
       return {
         dealId: deal.id,
         dealName: deal.name,
-        assetType: deal.assetType as 'SNF' | 'ALF' | 'ILF',
+        assetType: deal.assetType as 'SNF' | 'ALF' | 'ILF' | 'HOSPICE',
         state: deal.primaryState || undefined,
         beds: deal.beds || undefined,
         askingPrice: deal.askingPrice ? Number(deal.askingPrice) : undefined,

@@ -20,4 +20,5 @@ export interface KanbanDealData {
   nextActionDate?: Date;
   probability?: number;
   assetType?: string;
+  primaryState?: string;
 }

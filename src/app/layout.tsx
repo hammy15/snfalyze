@@ -30,6 +30,20 @@ export const metadata: Metadata = {
     siteName: 'SNFalyze',
     title: 'SNFalyze - Cascadia Healthcare',
     description: 'Intelligent deal analysis platform for healthcare facility acquisitions',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'SNFalyze - Intelligent Deal Analysis Platform',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'SNFalyze - Cascadia Healthcare',
+    description: 'Intelligent deal analysis platform for healthcare facility acquisitions',
+    images: ['/og-image.png'],
   },
 };
 

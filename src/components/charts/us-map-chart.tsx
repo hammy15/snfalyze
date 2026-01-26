@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 
 interface StateData {
@@ -75,7 +75,7 @@ const statePaths: Record<string, { d: string; labelPos: [number, number] }> = {
 
 export function USMapChart({
   data,
-  colorScale = ['#DBEAFE', '#1E40AF'],
+  colorScale = ['#99F6E4', '#0D9488'], // Turquoise Hammy design
   onStateClick,
   selectedState,
   className,
@@ -88,6 +88,8 @@ export function USMapChart({
     return Math.max(...data.map((d) => d.value), 1);
   }, [data]);
 
+  const [hoveredState, setHoveredState] = useState<string | null>(null);
+
   const getColor = (value: number) => {
     const ratio = value / maxValue;
     const [r1, g1, b1] = hexToRgb(colorScale[0]);
@@ -98,47 +100,103 @@ export function USMapChart({
     return `rgb(${r}, ${g}, ${b})`;
   };
 
+  // Get tooltip content for hovered state
+  const hoveredStateData = hoveredState ? dataMap.get(hoveredState) : null;
+
   return (
-    <div className={cn('relative overflow-hidden', className)}>
+    <div
+      className={cn(
+        'relative overflow-hidden rounded-xl',
+        // Neumorphic container styling
+        'bg-gradient-to-br from-surface-50 to-surface-100 dark:from-surface-800 dark:to-surface-900',
+        'shadow-[6px_6px_12px_rgba(0,0,0,0.1),-6px_-6px_12px_rgba(255,255,255,0.8)]',
+        'dark:shadow-[6px_6px_12px_rgba(0,0,0,0.3),-6px_-6px_12px_rgba(255,255,255,0.05)]',
+        'border border-surface-200/50 dark:border-surface-700/50',
+        'p-4',
+        className
+      )}
+    >
       <svg
         viewBox="0 0 959 593"
         className="w-full h-full"
         preserveAspectRatio="xMidYMid meet"
-        style={{ minHeight: '200px' }}
+        style={{ minHeight: '250px' }}
       >
+        {/* Background for better contrast */}
+        <rect x="0" y="0" width="959" height="593" fill="transparent" />
+
         {Object.entries(statePaths).map(([state, { d }]) => {
           const stateData = dataMap.get(state);
           const value = stateData?.value || 0;
           const isSelected = state === selectedState;
+          const isHovered = state === hoveredState;
+
+          // Determine stroke color and width based on state
+          const strokeColor = isSelected
+            ? '#14B8A6'
+            : isHovered
+              ? '#2DD4BF'
+              : '#94A3B8';
+
+          const strokeWidth = isSelected
+            ? 2.5
+            : isHovered
+              ? 1.5
+              : 1;
+
+          // Fill color: turquoise gradient for values, light gray for empty
+          const fillColor = value > 0
+            ? getColor(value)
+            : '#E2E8F0';
 
           return (
             <g key={state}>
               <path
                 d={d}
-                fill={value > 0 ? getColor(value) : 'currentColor'}
-                stroke={isSelected ? '#14B8A6' : '#6B7280'}
-                strokeWidth={isSelected ? 2.5 : 0.75}
+                fill={fillColor}
+                stroke={strokeColor}
+                strokeWidth={strokeWidth}
+                strokeLinejoin="round"
                 className={cn(
-                  'transition-all duration-200 text-surface-200 dark:text-surface-700',
-                  onStateClick && 'cursor-pointer hover:brightness-110'
+                  'transition-all duration-200',
+                  onStateClick && 'cursor-pointer',
+                  isHovered && 'brightness-110',
+                  isSelected && 'drop-shadow-lg'
                 )}
+                style={{
+                  filter: isSelected
+                    ? 'drop-shadow(0 2px 4px rgba(20, 184, 166, 0.5))'
+                    : isHovered
+                      ? 'drop-shadow(0 1px 2px rgba(20, 184, 166, 0.3))'
+                      : undefined,
+                }}
                 onClick={() => onStateClick?.(state)}
+                onMouseEnter={() => setHoveredState(state)}
+                onMouseLeave={() => setHoveredState(null)}
               />
-              {value > 0 && (
-                <title>
-                  {state}: {stateData?.label || value}
-                </title>
-              )}
+              <title>
+                {state}: {stateData?.label || value || 'No deals'}
+              </title>
             </g>
           );
         })}
       </svg>
 
-      {/* Legend */}
-      <div className="absolute bottom-2 right-2 flex items-center gap-2 text-xs text-surface-500 bg-white/90 dark:bg-surface-800/90 px-2 py-1 rounded shadow-sm">
+      {/* Hover tooltip */}
+      {hoveredState && (
+        <div className="absolute top-4 left-4 bg-surface-900/90 dark:bg-surface-100/90 text-white dark:text-surface-900 px-3 py-2 rounded-lg shadow-lg text-sm font-medium">
+          <span className="text-teal-400 dark:text-teal-600">{hoveredState}</span>
+          <span className="mx-2">•</span>
+          <span>{hoveredStateData?.label || hoveredStateData?.value || 'No deals'}</span>
+        </div>
+      )}
+
+      {/* Legend with neumorphic styling */}
+      <div className="absolute bottom-4 right-4 flex items-center gap-3 text-xs text-surface-600 dark:text-surface-400 bg-white/95 dark:bg-surface-800/95 px-3 py-2 rounded-lg shadow-md border border-surface-200/50 dark:border-surface-700/50">
+        <span className="font-medium">Deals:</span>
         <span>Low</span>
         <div
-          className="w-20 h-2.5 rounded"
+          className="w-24 h-3 rounded-full shadow-inner"
           style={{
             background: `linear-gradient(to right, ${colorScale[0]}, ${colorScale[1]})`,
           }}

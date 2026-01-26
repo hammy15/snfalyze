@@ -5,6 +5,7 @@ import { InstallPrompt } from '@/components/pwa/install-prompt';
 import './globals.css';
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://snfalyze.ai'),
   title: 'SNFalyze | Cascadia Healthcare',
   description: 'AI-driven underwriting and deal intelligence platform for skilled nursing, assisted living, and independent living facilities.',
   manifest: '/manifest.json',

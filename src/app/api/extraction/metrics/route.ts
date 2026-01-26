@@ -5,6 +5,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
 import { db } from '@/db';
 import { extractionMetrics, fieldCorrections } from '@/db/schema';
 import { eq, and, gte, desc, sql } from 'drizzle-orm';

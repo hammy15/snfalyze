@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { lookupProviderByCCN, searchProvidersByName } from '@/lib/cms';
 
+export const dynamic = 'force-dynamic';
+
 // Unified CMS provider search endpoint
 // Supports: ?ccn=XXXXXX or ?name=provider+name
 export async function GET(request: NextRequest) {

@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, documents, wizardSessions } from '@/db';
+import { db, documents, wizardSessions, facilities, financialPeriods, facilityCensusPeriods, facilityPayerRates, dealCoaMappings, extractionClarifications } from '@/db';
 import { eq } from 'drizzle-orm';
-import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
 import { randomUUID } from 'crypto';
-
-// Use /tmp on Vercel (serverless), local uploads folder in development
-const getUploadsDir = () => {
-  if (process.env.VERCEL) {
-    return '/tmp/wizard-uploads';
-  }
-  return join(process.cwd(), 'uploads', 'wizard');
-};
+import { classifyDocument, extractFinancialValues } from '@/lib/documents/processor';
+import { analyzeDocument, type DocumentAnalysisResult } from '@/lib/documents/ai-analyzer';
+import { extractPLData } from '@/lib/extraction/pl-extractor';
+import { extractCensusData } from '@/lib/extraction/census-extractor';
+import { extractRatesFromText, extractRatesFromTable } from '@/lib/extraction/rate-extractor';
+import { mapExtractedDataToCOAWithLearning } from '@/lib/coa/coa-mapper';
+import pdfParse from 'pdf-parse';
+import * as XLSX from 'xlsx';
+import Papa from 'papaparse';
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,19 +39,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate unique filename
+    // Generate unique ID
     const fileId = randomUUID();
-    const ext = file.name.split('.').pop() || 'pdf';
-    const filename = `${fileId}.${ext}`;
-
-    // Ensure uploads directory exists
-    const uploadsDir = getUploadsDir();
-    await mkdir(uploadsDir, { recursive: true });
-
-    // Save file
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const filePath = join(uploadsDir, filename);
-    await writeFile(filePath, buffer);
 
     // Determine file type based on extension
     type DocumentType = 'financial_statement' | 'rent_roll' | 'census_report' | 'staffing_report' | 'survey_report' | 'cost_report' | 'om_package' | 'lease_agreement' | 'appraisal' | 'environmental' | 'other';
@@ -87,6 +75,9 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
+    // Process document in background (like main upload route)
+    processDocument(doc.id, file, dealId).catch(console.error);
+
     return NextResponse.json({
       success: true,
       data: {
@@ -103,4 +94,639 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Process uploaded document - parse, analyze, extract data
+ */
+async function processDocument(documentId: string, file: File, dealId: string | null) {
+  try {
+    // Update status to parsing
+    await db
+      .update(documents)
+      .set({ status: 'parsing' })
+      .where(eq(documents.id, documentId));
+
+    // Read file content
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    let rawText = '';
+    let extractedData: Record<string, any> = {};
+
+    // Process based on file type
+    const fileType = file.type;
+    const fileName = file.name.toLowerCase();
+
+    if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
+      try {
+        const pdfData = await pdfParse(buffer);
+        rawText = pdfData.text;
+        extractedData.pageCount = pdfData.numpages;
+        extractedData.pdfInfo = pdfData.info;
+        console.log(`[Wizard] Extracted ${rawText.length} chars from PDF (${pdfData.numpages} pages)`);
+      } catch (pdfError) {
+        console.error('PDF parsing error:', pdfError);
+        rawText = `[Error extracting PDF: ${pdfError instanceof Error ? pdfError.message : 'Unknown error'}]`;
+      }
+    } else if (
+      fileType.includes('spreadsheet') ||
+      fileType.includes('excel') ||
+      fileName.endsWith('.xlsx') ||
+      fileName.endsWith('.xls')
+    ) {
+      try {
+        const workbook = XLSX.read(buffer, { type: 'buffer' });
+        const sheets: Record<string, any[][]> = {};
+        const textParts: string[] = [];
+
+        for (const sheetName of workbook.SheetNames) {
+          const sheet = workbook.Sheets[sheetName];
+          const data = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+          sheets[sheetName] = data;
+
+          textParts.push(`=== Sheet: ${sheetName} ===`);
+          for (const row of data) {
+            if (row && row.some(cell => cell !== null && cell !== undefined && cell !== '')) {
+              textParts.push(row.map(cell => cell ?? '').join('\t'));
+            }
+          }
+        }
+
+        rawText = textParts.join('\n');
+        extractedData.sheets = sheets;
+        extractedData.sheetNames = workbook.SheetNames;
+        console.log(`[Wizard] Extracted ${workbook.SheetNames.length} sheets from Excel`);
+      } catch (xlsxError) {
+        console.error('Excel parsing error:', xlsxError);
+        rawText = `[Error extracting Excel: ${xlsxError instanceof Error ? xlsxError.message : 'Unknown error'}]`;
+      }
+    } else if (fileName.endsWith('.csv')) {
+      try {
+        const csvText = buffer.toString('utf-8');
+        const parseResult = Papa.parse(csvText, {
+          header: false,
+          skipEmptyLines: true,
+        });
+
+        const textParts: string[] = [];
+        for (const row of parseResult.data as string[][]) {
+          textParts.push(row.join('\t'));
+        }
+
+        rawText = textParts.join('\n');
+        extractedData.csvData = parseResult.data;
+        extractedData.rowCount = parseResult.data.length;
+        console.log(`[Wizard] Extracted ${parseResult.data.length} rows from CSV`);
+      } catch (csvError) {
+        console.error('CSV parsing error:', csvError);
+        rawText = `[Error extracting CSV: ${csvError instanceof Error ? csvError.message : 'Unknown error'}]`;
+      }
+    } else if (fileType.includes('image')) {
+      rawText = `[Image file: ${file.name} - OCR processing available but requires additional setup]`;
+      extractedData.requiresOcr = true;
+    } else {
+      rawText = buffer.toString('utf-8');
+    }
+
+    // Classify document
+    const documentType = classifyDocument(rawText, file.name);
+
+    // Update status to normalizing
+    await db
+      .update(documents)
+      .set({ status: 'normalizing', type: documentType as any })
+      .where(eq(documents.id, documentId));
+
+    // Extract financial values using regex patterns
+    const extractedValues = extractFinancialValues(rawText);
+    extractedData = {
+      ...extractedData,
+      values: extractedValues,
+      documentType,
+    };
+
+    // Update status to analyzing
+    await db
+      .update(documents)
+      .set({ status: 'analyzing' })
+      .where(eq(documents.id, documentId));
+
+    // Run AI analysis if we have actual text content
+    let aiAnalysis: DocumentAnalysisResult | null = null;
+    if (rawText.length > 100 && !rawText.startsWith('[Error') && !rawText.startsWith('[Image')) {
+      try {
+        console.log(`[Wizard] Starting AI analysis for document ${documentId}...`);
+        aiAnalysis = await analyzeDocument({
+          documentId,
+          filename: file.name,
+          documentType,
+          rawText,
+          spreadsheetData: extractedData.sheets,
+        });
+        console.log(`[Wizard] AI analysis complete. Confidence: ${aiAnalysis.confidence}`);
+
+        extractedData = {
+          ...extractedData,
+          aiAnalysis: {
+            summary: aiAnalysis.summary,
+            keyFindings: aiAnalysis.keyFindings,
+            confidence: aiAnalysis.confidence,
+            documentType: aiAnalysis.documentType,
+          },
+          fields: aiAnalysis.extractedFields,
+        };
+
+        // Create clarifications in database if needed
+        if (aiAnalysis.clarificationsNeeded.length > 0) {
+          const priorityMap: Record<string, number> = { high: 9, medium: 5, low: 2 };
+          for (const clarification of aiAnalysis.clarificationsNeeded) {
+            await db.insert(extractionClarifications).values({
+              documentId,
+              dealId,
+              fieldName: clarification.field,
+              extractedValue: clarification.extractedValue != null ? String(clarification.extractedValue) : null,
+              suggestedValues: clarification.possibleValues || [],
+              clarificationType: 'low_confidence',
+              priority: priorityMap[clarification.priority] || 5,
+              reason: clarification.reason,
+              status: 'pending',
+            });
+          }
+          console.log(`[Wizard] Created ${aiAnalysis.clarificationsNeeded.length} clarifications`);
+        }
+      } catch (aiError) {
+        console.error('[Wizard] AI analysis failed (continuing with basic extraction):', aiError);
+      }
+    }
+
+    // Mark as extracting
+    await db
+      .update(documents)
+      .set({
+        status: 'extracting',
+        rawText,
+        extractedData,
+        processedAt: new Date(),
+      })
+      .where(eq(documents.id, documentId));
+
+    // Run deep extraction to populate financial_periods, census, and rates tables
+    const deepExtractionResult = await runDeepExtraction(
+      documentId,
+      extractedData.sheets,
+      rawText,
+      dealId
+    );
+
+    // Update with deep extraction results
+    await db
+      .update(documents)
+      .set({
+        status: 'complete',
+        extractedData: {
+          ...extractedData,
+          deepExtraction: deepExtractionResult,
+        },
+      })
+      .where(eq(documents.id, documentId));
+
+    console.log(`[Wizard] Deep extraction complete for ${documentId}:`, deepExtractionResult);
+  } catch (error) {
+    console.error('[Wizard] Error processing document:', error);
+
+    await db
+      .update(documents)
+      .set({
+        status: 'error',
+        errors: [error instanceof Error ? error.message : 'Unknown error'],
+      })
+      .where(eq(documents.id, documentId));
+  }
+}
+
+/**
+ * Classify sheet type based on content
+ */
+function classifySheetType(data: any[][]): 'pl' | 'census' | 'rates' | 'unknown' {
+  if (!data || data.length < 2) return 'unknown';
+
+  const sampleText = data
+    .slice(0, 30)
+    .flat()
+    .filter(c => c != null)
+    .map(c => String(c).toLowerCase())
+    .join(' ');
+
+  if (
+    (sampleText.includes('revenue') && sampleText.includes('expense')) ||
+    sampleText.includes('ebitda') ||
+    sampleText.includes('income statement') ||
+    sampleText.includes('p&l')
+  ) {
+    return 'pl';
+  }
+
+  if (
+    sampleText.includes('patient days') ||
+    sampleText.includes('census') ||
+    (sampleText.includes('medicare') && sampleText.includes('days'))
+  ) {
+    return 'census';
+  }
+
+  if (
+    sampleText.includes('ppd') ||
+    sampleText.includes('per diem') ||
+    (sampleText.includes('rate') && sampleText.includes('payer'))
+  ) {
+    return 'rates';
+  }
+
+  return 'unknown';
+}
+
+/**
+ * Run deep extraction on document sheets to populate database tables
+ */
+async function runDeepExtraction(
+  documentId: string,
+  sheets: Record<string, any[][]> | undefined,
+  rawText: string,
+  dealId: string | null
+): Promise<{
+  financialPeriodsCreated: number;
+  censusPeriodsCreated: number;
+  payerRatesCreated: number;
+  coaMappingsCreated: number;
+  sheetsProcessed: number;
+  warnings: string[];
+}> {
+  const result = {
+    financialPeriodsCreated: 0,
+    censusPeriodsCreated: 0,
+    payerRatesCreated: 0,
+    coaMappingsCreated: 0,
+    sheetsProcessed: 0,
+    warnings: [] as string[],
+  };
+
+  if (!dealId) {
+    result.warnings.push('No deal associated with document');
+    return result;
+  }
+
+  // Get facility for this deal (use first facility if multiple)
+  const [facility] = await db
+    .select()
+    .from(facilities)
+    .where(eq(facilities.dealId, dealId))
+    .limit(1);
+
+  if (!facility) {
+    result.warnings.push('No facility found for deal');
+    return result;
+  }
+
+  // Process Excel sheets
+  if (sheets && Object.keys(sheets).length > 0) {
+    for (const [sheetName, sheetData] of Object.entries(sheets)) {
+      if (!Array.isArray(sheetData) || sheetData.length < 2) continue;
+
+      const sheetType = classifySheetType(sheetData);
+      result.sheetsProcessed++;
+
+      try {
+        switch (sheetType) {
+          case 'pl': {
+            const plData = extractPLData(sheetData, sheetName, []);
+            for (const period of plData) {
+              try {
+                await db.insert(financialPeriods).values({
+                  dealId,
+                  facilityId: facility.id,
+                  periodStart: period.periodStart.toISOString().split('T')[0],
+                  periodEnd: period.periodEnd.toISOString().split('T')[0],
+                  isAnnualized: period.isAnnualized,
+                  totalRevenue: period.totalRevenue.toFixed(2),
+                  medicareRevenue: period.medicareRevenue?.toFixed(2),
+                  medicaidRevenue: period.medicaidRevenue?.toFixed(2),
+                  managedCareRevenue: period.managedCareRevenue?.toFixed(2),
+                  privatePayRevenue: period.privatePayRevenue?.toFixed(2),
+                  otherRevenue: period.otherRevenue?.toFixed(2),
+                  totalExpenses: period.totalExpenses.toFixed(2),
+                  laborCost: period.totalLaborCost?.toFixed(2),
+                  agencyLabor: period.agencyLabor?.toFixed(2),
+                  foodCost: period.foodCost?.toFixed(2),
+                  suppliesCost: period.suppliesCost?.toFixed(2),
+                  utilitiesCost: period.utilitiesCost?.toFixed(2),
+                  insuranceCost: period.insuranceCost?.toFixed(2),
+                  managementFee: period.managementFee?.toFixed(2),
+                  otherExpenses: period.otherExpenses?.toFixed(2),
+                  noi: period.noi?.toFixed(2),
+                  ebitdar: period.ebitdar?.toFixed(2),
+                  source: 'extracted',
+                  sourceDocumentId: documentId,
+                });
+                result.financialPeriodsCreated++;
+              } catch (err: any) {
+                if (err.code !== '23505') {
+                  result.warnings.push(`Error inserting financial period: ${err.message}`);
+                }
+              }
+            }
+
+            // Create COA mappings for P&L line items
+            const coaMappingsCreated = await createCOAMappingsFromPL(
+              sheetData,
+              documentId,
+              dealId,
+              facility.id
+            );
+            result.coaMappingsCreated += coaMappingsCreated;
+            break;
+          }
+
+          case 'census': {
+            const censusData = extractCensusData(sheetData, sheetName, []);
+            for (const census of censusData) {
+              try {
+                await db.insert(facilityCensusPeriods).values({
+                  facilityId: facility.id,
+                  periodStart: census.periodStart.toISOString().split('T')[0],
+                  periodEnd: census.periodEnd.toISOString().split('T')[0],
+                  medicarePartADays: census.medicarePartADays,
+                  medicareAdvantageDays: census.medicareAdvantageDays,
+                  managedCareDays: census.managedCareDays,
+                  medicaidDays: census.medicaidDays,
+                  managedMedicaidDays: census.managedMedicaidDays,
+                  privateDays: census.privateDays,
+                  vaContractDays: census.vaContractDays,
+                  hospiceDays: census.hospiceDays,
+                  otherDays: census.otherDays,
+                  totalBeds: census.totalBeds || facility.licensedBeds || facility.certifiedBeds,
+                  occupancyRate: census.occupancyRate?.toString(),
+                  source: 'extracted',
+                });
+                result.censusPeriodsCreated++;
+              } catch (err: any) {
+                if (err.code !== '23505') {
+                  result.warnings.push(`Error inserting census period: ${err.message}`);
+                }
+              }
+            }
+            break;
+          }
+
+          case 'rates': {
+            const rateData = extractRatesFromTable(sheetData, documentId, []);
+            for (const rate of rateData) {
+              try {
+                await db.insert(facilityPayerRates).values({
+                  facilityId: facility.id,
+                  effectiveDate: rate.effectiveDate.toISOString().split('T')[0],
+                  medicarePartAPpd: rate.medicarePartAPpd?.toFixed(2),
+                  medicareAdvantagePpd: rate.medicareAdvantagePpd?.toFixed(2),
+                  managedCarePpd: rate.managedCarePpd?.toFixed(2),
+                  medicaidPpd: rate.medicaidPpd?.toFixed(2),
+                  managedMedicaidPpd: rate.managedMedicaidPpd?.toFixed(2),
+                  privatePpd: rate.privatePpd?.toFixed(2),
+                  vaContractPpd: rate.vaContractPpd?.toFixed(2),
+                  hospicePpd: rate.hospicePpd?.toFixed(2),
+                  ancillaryRevenuePpd: rate.ancillaryRevenuePpd?.toFixed(2),
+                  therapyRevenuePpd: rate.therapyRevenuePpd?.toFixed(2),
+                  source: 'extracted',
+                });
+                result.payerRatesCreated++;
+              } catch (err: any) {
+                if (err.code !== '23505') {
+                  result.warnings.push(`Error inserting payer rate: ${err.message}`);
+                }
+              }
+            }
+            break;
+          }
+
+          default: {
+            // Try to extract any recognizable data from unknown sheets
+            const plData = extractPLData(sheetData, sheetName, []);
+            const censusData = extractCensusData(sheetData, sheetName, []);
+
+            for (const period of plData) {
+              try {
+                await db.insert(financialPeriods).values({
+                  dealId,
+                  facilityId: facility.id,
+                  periodStart: period.periodStart.toISOString().split('T')[0],
+                  periodEnd: period.periodEnd.toISOString().split('T')[0],
+                  isAnnualized: period.isAnnualized,
+                  totalRevenue: period.totalRevenue.toFixed(2),
+                  totalExpenses: period.totalExpenses.toFixed(2),
+                  ebitdar: period.ebitdar?.toFixed(2),
+                  source: 'extracted',
+                  sourceDocumentId: documentId,
+                });
+                result.financialPeriodsCreated++;
+              } catch (err: any) {
+                if (err.code !== '23505') {
+                  // Ignore duplicate errors
+                }
+              }
+            }
+
+            for (const census of censusData) {
+              try {
+                await db.insert(facilityCensusPeriods).values({
+                  facilityId: facility.id,
+                  periodStart: census.periodStart.toISOString().split('T')[0],
+                  periodEnd: census.periodEnd.toISOString().split('T')[0],
+                  medicarePartADays: census.medicarePartADays,
+                  medicaidDays: census.medicaidDays,
+                  privateDays: census.privateDays,
+                  totalBeds: facility.licensedBeds || facility.certifiedBeds,
+                  source: 'extracted',
+                });
+                result.censusPeriodsCreated++;
+              } catch (err: any) {
+                if (err.code !== '23505') {
+                  // Ignore duplicate errors
+                }
+              }
+            }
+            break;
+          }
+        }
+      } catch (err) {
+        result.warnings.push(`Error processing sheet "${sheetName}": ${err instanceof Error ? err.message : 'Unknown'}`);
+      }
+    }
+  }
+
+  // Also extract rates from PDF text if available
+  if (rawText && rawText.length > 100 && !rawText.startsWith('[Error')) {
+    const pdfRates = extractRatesFromText(rawText, documentId, []);
+    for (const rate of pdfRates) {
+      try {
+        await db.insert(facilityPayerRates).values({
+          facilityId: facility.id,
+          effectiveDate: rate.effectiveDate.toISOString().split('T')[0],
+          medicarePartAPpd: rate.medicarePartAPpd?.toFixed(2),
+          medicareAdvantagePpd: rate.medicareAdvantagePpd?.toFixed(2),
+          managedCarePpd: rate.managedCarePpd?.toFixed(2),
+          medicaidPpd: rate.medicaidPpd?.toFixed(2),
+          managedMedicaidPpd: rate.managedMedicaidPpd?.toFixed(2),
+          privatePpd: rate.privatePpd?.toFixed(2),
+          vaContractPpd: rate.vaContractPpd?.toFixed(2),
+          hospicePpd: rate.hospicePpd?.toFixed(2),
+          ancillaryRevenuePpd: rate.ancillaryRevenuePpd?.toFixed(2),
+          therapyRevenuePpd: rate.therapyRevenuePpd?.toFixed(2),
+          source: 'rate_letter',
+        });
+        result.payerRatesCreated++;
+      } catch (err: any) {
+        if (err.code !== '23505') {
+          result.warnings.push(`Error inserting PDF rate: ${err.message}`);
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Create COA mappings from P&L sheet data
+ */
+async function createCOAMappingsFromPL(
+  sheetData: any[][],
+  documentId: string,
+  dealId: string,
+  facilityId: string
+): Promise<number> {
+  let mappingsCreated = 0;
+
+  // Extract line items with labels and values
+  const lineItems: Array<{
+    label: string;
+    rawLabel: string;
+    values: Array<{ month: string; value: number }>;
+    confidence: number;
+  }> = [];
+
+  // Find header row (months or periods)
+  let headerRowIndex = -1;
+  let monthColumns: string[] = [];
+
+  for (let i = 0; i < Math.min(10, sheetData.length); i++) {
+    const row = sheetData[i];
+    if (!row) continue;
+
+    const monthPattern = /(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|q[1-4]|[0-9]{4})/i;
+    const monthMatches = row.filter(cell => cell && monthPattern.test(String(cell)));
+
+    if (monthMatches.length >= 3) {
+      headerRowIndex = i;
+      monthColumns = row.map((cell: any) => String(cell || ''));
+      break;
+    }
+  }
+
+  // Extract data rows
+  for (let i = headerRowIndex + 1; i < sheetData.length; i++) {
+    const row = sheetData[i];
+    if (!row || !row[0]) continue;
+
+    const label = String(row[0]).trim();
+    if (!label || label.length < 2) continue;
+
+    // Skip total/subtotal rows
+    if (/^(total|subtotal|grand total)/i.test(label)) continue;
+
+    const values: Array<{ month: string; value: number }> = [];
+    for (let j = 1; j < row.length && j < monthColumns.length; j++) {
+      const cellValue = row[j];
+      if (cellValue !== null && cellValue !== undefined && !isNaN(Number(cellValue))) {
+        values.push({
+          month: monthColumns[j] || `Col${j}`,
+          value: Number(cellValue),
+        });
+      }
+    }
+
+    if (values.length > 0) {
+      lineItems.push({
+        label: label.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '_').trim(),
+        rawLabel: label,
+        values,
+        confidence: 0.8,
+      });
+    }
+  }
+
+  // Map to COA using the mapper with learning
+  const { mappings, suggestions } = await mapExtractedDataToCOAWithLearning(
+    {
+      source: documentId,
+      extractedAt: new Date(),
+      confidence: 0.8,
+      lineItems: lineItems.map(item => ({
+        ...item,
+        category: undefined,
+      })),
+    },
+    dealId
+  );
+
+  // Insert mapped items
+  for (const mapping of mappings) {
+    try {
+      // Insert one record per month-value pair for granular tracking
+      for (const [month, value] of Object.entries(mapping.monthlyValues)) {
+        await db.insert(dealCoaMappings).values({
+          dealId,
+          facilityId,
+          documentId,
+          sourceLabel: mapping.sourceLabel,
+          sourceValue: value.toFixed(2),
+          sourceMonth: month,
+          coaCode: mapping.coaCode,
+          coaName: mapping.coaName,
+          mappingConfidence: mapping.confidence.toFixed(4),
+          mappingMethod: mapping.mappingMethod === 'exact' ? 'auto' : mapping.mappingMethod === 'ml' ? 'auto' : 'suggested',
+          isMapped: true,
+          proformaDestination: mapping.coaCode,
+        });
+        mappingsCreated++;
+      }
+    } catch (err: any) {
+      if (err.code !== '23505') {
+        console.warn(`[Wizard] Error creating COA mapping: ${err.message}`);
+      }
+    }
+  }
+
+  // Insert suggestions (unmapped items) for manual review
+  for (const suggestion of suggestions) {
+    try {
+      const topSuggestion = suggestion.suggestions[0];
+      await db.insert(dealCoaMappings).values({
+        dealId,
+        facilityId,
+        documentId,
+        sourceLabel: suggestion.sourceLabel,
+        coaCode: topSuggestion?.coaCode || null,
+        coaName: topSuggestion?.coaName || null,
+        mappingConfidence: (topSuggestion?.confidence || 0).toFixed(4),
+        mappingMethod: 'suggested',
+        isMapped: false,
+      });
+      mappingsCreated++;
+    } catch (err: any) {
+      if (err.code !== '23505') {
+        console.warn(`[Wizard] Error creating COA suggestion: ${err.message}`);
+      }
+    }
+  }
+
+  return mappingsCreated;
 }

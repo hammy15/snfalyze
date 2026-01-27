@@ -7,5 +7,6 @@ export { DealStructureSetup } from './stages/DealStructureSetup';
 export { FacilityIdentification } from './stages/FacilityIdentification';
 export { DocumentOrganization } from './stages/DocumentOrganization';
 export { DocumentExtraction } from './stages/DocumentExtraction';
+export { ClarificationReview } from './stages/ClarificationReview';
 export { COAMappingReview } from './stages/COAMappingReview';
 export { FinancialConsolidation } from './stages/FinancialConsolidation';

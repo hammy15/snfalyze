@@ -11,6 +11,7 @@ import {
   facilityPayerRates,
   facilities,
   extractionClarifications,
+  dealCoaMappings,
 } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 import type {
@@ -21,6 +22,7 @@ import type {
   PipelineClarification,
 } from '../types';
 import { ExtractionContextManager } from '../context/extraction-context';
+import { findCOAMatchWithLearning, type MappingResult } from '@/lib/coa/coa-mapper';
 
 // ============================================================================
 // DATABASE WRITER
@@ -30,6 +32,7 @@ export interface PopulationResult {
   financialPeriodsWritten: number;
   censusPeriodsWritten: number;
   payerRatesWritten: number;
+  coaMappingsWritten: number;
   clarificationsWritten: number;
   facilitiesUpdated: number;
   errors: string[];
@@ -50,6 +53,7 @@ export async function writeToDatabase(params: {
     financialPeriodsWritten: 0,
     censusPeriodsWritten: 0,
     payerRatesWritten: 0,
+    coaMappingsWritten: 0,
     clarificationsWritten: 0,
     facilitiesUpdated: 0,
     errors: [],
@@ -67,15 +71,19 @@ export async function writeToDatabase(params: {
   await writeFinancialPeriods(context.extractedPeriods, facilityMappings, context.dealId, result);
 
   // 3. Write census periods
-  onProgress?.(40, 'Writing census periods...');
+  onProgress?.(35, 'Writing census periods...');
   await writeCensusPeriods(context.extractedCensus, facilityMappings, result);
 
   // 4. Write payer rates
-  onProgress?.(60, 'Writing payer rates...');
+  onProgress?.(50, 'Writing payer rates...');
   await writePayerRates(context.extractedRates, facilityMappings, result);
 
-  // 5. Write clarifications
-  onProgress?.(80, 'Writing clarification requests...');
+  // 5. Write COA mappings
+  onProgress?.(65, 'Creating COA mappings...');
+  await writeCoaMappings(context, facilityMappings, result);
+
+  // 6. Write clarifications
+  onProgress?.(85, 'Writing clarification requests...');
   await writeClarifications(context.pendingClarifications, context.dealId, result);
 
   onProgress?.(100, 'Database population complete');
@@ -381,6 +389,247 @@ async function writePayerRates(
       result.errors.push(
         `Failed to write payer rates for ${rate.facilityName}: ${error instanceof Error ? error.message : 'Unknown'}`
       );
+    }
+  }
+}
+
+// ============================================================================
+// COA MAPPINGS
+// ============================================================================
+
+interface LineItemForCOA {
+  label: string;
+  category?: string;
+  value: number;
+  period: string;
+  documentId?: string;
+  facilityId?: string;
+}
+
+async function writeCoaMappings(
+  context: ExtractionContext,
+  facilityMappings: Map<string, string>,
+  result: PopulationResult
+): Promise<void> {
+  // Collect line items from financial periods for COA mapping
+  const lineItems: LineItemForCOA[] = [];
+
+  for (const period of context.extractedPeriods) {
+    const dbFacilityId = facilityMappings.get(period.facilityId);
+    if (!dbFacilityId) continue;
+
+    const periodKey = `${period.periodStart.toISOString().split('T')[0]}`;
+
+    // Revenue line items
+    if (period.revenue.byPayer.medicarePartA > 0) {
+      lineItems.push({
+        label: 'Medicare Part A Revenue',
+        category: 'Revenue',
+        value: period.revenue.byPayer.medicarePartA,
+        period: periodKey,
+        documentId: period.sources[0]?.documentId,
+        facilityId: dbFacilityId,
+      });
+    }
+    if (period.revenue.byPayer.medicareAdvantage > 0) {
+      lineItems.push({
+        label: 'Medicare Advantage Revenue',
+        category: 'Revenue',
+        value: period.revenue.byPayer.medicareAdvantage,
+        period: periodKey,
+        documentId: period.sources[0]?.documentId,
+        facilityId: dbFacilityId,
+      });
+    }
+    if (period.revenue.byPayer.medicaid > 0) {
+      lineItems.push({
+        label: 'Medicaid Revenue',
+        category: 'Revenue',
+        value: period.revenue.byPayer.medicaid,
+        period: periodKey,
+        documentId: period.sources[0]?.documentId,
+        facilityId: dbFacilityId,
+      });
+    }
+    if (period.revenue.byPayer.managedMedicaid > 0) {
+      lineItems.push({
+        label: 'Managed Medicaid Revenue',
+        category: 'Revenue',
+        value: period.revenue.byPayer.managedMedicaid,
+        period: periodKey,
+        documentId: period.sources[0]?.documentId,
+        facilityId: dbFacilityId,
+      });
+    }
+    if (period.revenue.byPayer.managedCare > 0) {
+      lineItems.push({
+        label: 'Managed Care Revenue',
+        category: 'Revenue',
+        value: period.revenue.byPayer.managedCare,
+        period: periodKey,
+        documentId: period.sources[0]?.documentId,
+        facilityId: dbFacilityId,
+      });
+    }
+    if (period.revenue.byPayer.private > 0) {
+      lineItems.push({
+        label: 'Private Pay Revenue',
+        category: 'Revenue',
+        value: period.revenue.byPayer.private,
+        period: periodKey,
+        documentId: period.sources[0]?.documentId,
+        facilityId: dbFacilityId,
+      });
+    }
+    if (period.revenue.byPayer.va > 0) {
+      lineItems.push({
+        label: 'VA Revenue',
+        category: 'Revenue',
+        value: period.revenue.byPayer.va,
+        period: periodKey,
+        documentId: period.sources[0]?.documentId,
+        facilityId: dbFacilityId,
+      });
+    }
+    if (period.revenue.byPayer.hospice > 0) {
+      lineItems.push({
+        label: 'Hospice Revenue',
+        category: 'Revenue',
+        value: period.revenue.byPayer.hospice,
+        period: periodKey,
+        documentId: period.sources[0]?.documentId,
+        facilityId: dbFacilityId,
+      });
+    }
+
+    // Expense line items
+    if (period.expenses.labor.core > 0) {
+      lineItems.push({
+        label: 'Core Labor',
+        category: 'Nursing',
+        value: period.expenses.labor.core,
+        period: periodKey,
+        documentId: period.sources[0]?.documentId,
+        facilityId: dbFacilityId,
+      });
+    }
+    if (period.expenses.labor.agency > 0) {
+      lineItems.push({
+        label: 'Agency Labor',
+        category: 'Nursing',
+        value: period.expenses.labor.agency,
+        period: periodKey,
+        documentId: period.sources[0]?.documentId,
+        facilityId: dbFacilityId,
+      });
+    }
+    if (period.expenses.operating.dietary > 0) {
+      lineItems.push({
+        label: 'Dietary Expense',
+        category: 'Dietary',
+        value: period.expenses.operating.dietary,
+        period: periodKey,
+        documentId: period.sources[0]?.documentId,
+        facilityId: dbFacilityId,
+      });
+    }
+    if (period.expenses.operating.supplies > 0) {
+      lineItems.push({
+        label: 'Supplies',
+        category: 'Plant',
+        value: period.expenses.operating.supplies,
+        period: periodKey,
+        documentId: period.sources[0]?.documentId,
+        facilityId: dbFacilityId,
+      });
+    }
+    if (period.expenses.operating.utilities > 0) {
+      lineItems.push({
+        label: 'Utilities',
+        category: 'Plant',
+        value: period.expenses.operating.utilities,
+        period: periodKey,
+        documentId: period.sources[0]?.documentId,
+        facilityId: dbFacilityId,
+      });
+    }
+    if (period.expenses.fixed.insurance > 0) {
+      lineItems.push({
+        label: 'Insurance',
+        category: 'Admin',
+        value: period.expenses.fixed.insurance,
+        period: periodKey,
+        documentId: period.sources[0]?.documentId,
+        facilityId: dbFacilityId,
+      });
+    }
+    if (period.expenses.fixed.managementFee > 0) {
+      lineItems.push({
+        label: 'Management Fee',
+        category: 'Admin',
+        value: period.expenses.fixed.managementFee,
+        period: periodKey,
+        documentId: period.sources[0]?.documentId,
+        facilityId: dbFacilityId,
+      });
+    }
+    if (period.expenses.fixed.propertyTax > 0) {
+      lineItems.push({
+        label: 'Property Tax',
+        category: 'Admin',
+        value: period.expenses.fixed.propertyTax,
+        period: periodKey,
+        documentId: period.sources[0]?.documentId,
+        facilityId: dbFacilityId,
+      });
+    }
+  }
+
+  // Map each line item to COA and write to database
+  for (const item of lineItems) {
+    try {
+      // Use COA mapper with learning
+      const match = await findCOAMatchWithLearning(item.label, item.category, context.dealId);
+
+      if (match) {
+        await db.insert(dealCoaMappings).values({
+          dealId: context.dealId,
+          facilityId: item.facilityId || null,
+          documentId: item.documentId || null,
+          sourceLabel: item.label,
+          sourceValue: item.value.toFixed(2),
+          sourceMonth: item.period,
+          coaCode: match.coaCode,
+          coaName: match.reason.includes(':') ? match.reason.split(':')[1]?.trim() : item.label,
+          mappingConfidence: match.confidence.toFixed(4),
+          mappingMethod: match.confidence >= 0.90 ? 'auto' : 'suggested',
+          isMapped: match.confidence >= 0.70,
+          proformaDestination: match.coaCode,
+        });
+        result.coaMappingsWritten++;
+      } else {
+        // Insert as unmapped for manual review
+        await db.insert(dealCoaMappings).values({
+          dealId: context.dealId,
+          facilityId: item.facilityId || null,
+          documentId: item.documentId || null,
+          sourceLabel: item.label,
+          sourceValue: item.value.toFixed(2),
+          sourceMonth: item.period,
+          mappingConfidence: '0.0000',
+          mappingMethod: 'suggested',
+          isMapped: false,
+        });
+        result.coaMappingsWritten++;
+      }
+    } catch (error) {
+      // Ignore duplicates, log other errors
+      const err = error as any;
+      if (err.code !== '23505') {
+        result.warnings.push(
+          `Failed to write COA mapping for ${item.label}: ${err.message || 'Unknown'}`
+        );
+      }
     }
   }
 }

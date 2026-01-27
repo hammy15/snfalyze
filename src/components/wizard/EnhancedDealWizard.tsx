@@ -119,6 +119,12 @@ export interface WizardStageData {
       isMapped: boolean;
     }>;
   };
+  clarificationReview?: {
+    total?: number;
+    resolved?: number;
+    skipped?: number;
+    pending?: number;
+  };
   financialConsolidation?: {
     censusVerified?: boolean;
     ppdCalculated?: boolean;
@@ -626,6 +632,9 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
         coaMappingReview: data.coaMappingReview
           ? { ...prev.coaMappingReview, ...data.coaMappingReview }
           : prev.coaMappingReview,
+        clarificationReview: data.clarificationReview
+          ? { ...prev.clarificationReview, ...data.clarificationReview }
+          : prev.clarificationReview,
         financialConsolidation: data.financialConsolidation
           ? { ...prev.financialConsolidation, ...data.financialConsolidation }
           : prev.financialConsolidation,

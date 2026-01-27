@@ -51,3 +51,13 @@ export {
   type FieldEditorProps,
   type InlineFieldEditorProps,
 } from './field-editor';
+
+// Pipeline Progress
+export {
+  ExtractionPipelineProgress,
+} from './ExtractionPipelineProgress';
+
+// Pipeline Clarification Panel (for AI pipeline)
+export {
+  ClarificationPanel as PipelineClarificationPanel,
+} from './ClarificationPanel';

@@ -398,6 +398,7 @@ export interface PipelineClarification {
   id: string;
   sessionId: string;
   dealId: string;
+  documentId?: string;
   facilityId?: string;
 
   // What needs clarification

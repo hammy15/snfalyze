@@ -27,10 +27,13 @@ import type {
 
 // Re-export types and utilities
 export * from './types';
+export * from './stream/event-types';
 export { ExtractionContextManager } from './context/extraction-context';
 export { FacilityProfileBuilder } from './context/facility-profile';
 export { AIDocumentReader, createAIDocumentReader } from './ai/document-reader';
 export { ProgressEmitter, createProgressEmitter, createSSEResponse } from './stream/progress-emitter';
+export { resolveConflict, resolveConflictsBatch, generateSuggestedValues } from './validation/conflict-resolver';
+export { normalizeFinancialPeriod, normalizeCensusPeriod, normalizePayerRate } from './normalization/normalizer';
 
 // ============================================================================
 // PIPELINE SESSION STORE (In-memory for now)
@@ -263,20 +266,13 @@ export class ExtractionPipeline {
   // Document Processing
   // --------------------------------------------------------------------------
 
-  private async loadDocuments(): Promise<{
-    id: string;
-    filename: string;
-    rawText: string | null;
-    extractedData: unknown;
-    type: string | null;
-  }[]> {
+  private async loadDocuments(): Promise<{ id: string; filename: string; rawText: string | null; extractedData: unknown }[]> {
     const docs = await db
       .select({
         id: documents.id,
         filename: documents.filename,
         rawText: documents.rawText,
         extractedData: documents.extractedData,
-        type: documents.type,
       })
       .from(documents)
       .where(inArray(documents.id, this.documentIds));
@@ -285,20 +281,14 @@ export class ExtractionPipeline {
   }
 
   private async processDocument(
-    doc: {
-      id: string;
-      filename: string;
-      rawText: string | null;
-      extractedData: unknown;
-      type: string | null;
-    },
+    doc: { id: string; filename: string; rawText: string | null; extractedData: unknown },
     index: number,
     total: number
   ): Promise<void> {
     this.emitter.documentStarted(doc.id, doc.filename, index, total);
 
-    // Load document content from database fields
-    const content = this.parseDocumentContent(doc);
+    // Load document content from stored data
+    const content = await this.loadDocumentContent(doc);
     if (!content) {
       this.emitter.error(`Failed to load content for ${doc.filename}`, 'LOAD_ERROR', true);
       return;
@@ -394,106 +384,124 @@ export class ExtractionPipeline {
     this.updateProgress();
   }
 
-  /**
-   * Parse document content from database fields (rawText and extractedData).
-   * The content is already extracted during upload and stored in the database.
-   */
-  private parseDocumentContent(doc: {
-    id: string;
-    filename: string;
-    rawText: string | null;
-    extractedData: unknown;
-    type: string | null;
-  }): DocumentContent | null {
+  private async loadDocumentContent(
+    doc: { id: string; filename: string; rawText: string | null; extractedData: unknown }
+  ): Promise<DocumentContent | null> {
     try {
-      const filename = doc.filename.toLowerCase();
-      const extractedData = doc.extractedData as Record<string, unknown> | null;
+      const fileType = this.getFileType(doc.filename);
 
-      // Excel files - sheets are stored in extractedData
-      if (
-        filename.endsWith('.xlsx') ||
-        filename.endsWith('.xls') ||
-        (extractedData && 'sheets' in extractedData)
-      ) {
-        const sheets = this.parseExcelFromExtractedData(extractedData);
-        if (sheets.length > 0) {
-          return { type: 'excel', sheets };
+      // If we have extractedData with sheets, use that
+      if (doc.extractedData && typeof doc.extractedData === 'object') {
+        const data = doc.extractedData as Record<string, unknown>;
+
+        // Check if it contains sheet data
+        if (data.sheets && Array.isArray(data.sheets)) {
+          return {
+            type: fileType === 'csv' ? 'csv' : 'excel',
+            sheets: data.sheets as SheetContent[],
+          };
+        }
+
+        // Try to convert extractedData to sheet format
+        if (Object.keys(data).length > 0) {
+          const sheets = this.convertExtractedDataToSheets(data);
+          if (sheets.length > 0) {
+            return {
+              type: 'excel',
+              sheets,
+            };
+          }
         }
       }
 
-      // CSV files - csvData is stored in extractedData
-      if (filename.endsWith('.csv') || (extractedData && 'csvData' in extractedData)) {
-        const sheets = this.parseCSVFromExtractedData(extractedData);
-        if (sheets.length > 0) {
-          return { type: 'csv', sheets };
+      // If we have raw text, use that
+      if (doc.rawText) {
+        if (fileType === 'pdf') {
+          return {
+            type: 'pdf',
+            text: doc.rawText,
+          };
+        }
+
+        // Try to parse raw text as CSV
+        if (fileType === 'csv') {
+          const sheets = this.parseCSVText(doc.rawText);
+          return {
+            type: 'csv',
+            sheets,
+          };
         }
       }
 
-      // PDF files - rawText contains the extracted text
-      if (filename.endsWith('.pdf') && doc.rawText) {
-        return { type: 'pdf', text: doc.rawText };
-      }
-
-      // Fallback: if we have rawText, treat as text document
-      if (doc.rawText && doc.rawText.length > 0) {
-        return { type: 'pdf', text: doc.rawText };
-      }
-
+      // If neither, the document may not be ready for extraction
+      console.warn(`Document ${doc.filename} has no usable content`);
       return null;
     } catch (error) {
-      console.error(`Error parsing document content for ${doc.filename}:`, error);
+      console.error(`Error loading document ${doc.filename}:`, error);
       return null;
     }
   }
 
-  /**
-   * Parse Excel sheet data from extractedData JSONB field.
-   * Format: { sheets: { sheetName: [[row1], [row2], ...] }, sheetNames: [...] }
-   */
-  private parseExcelFromExtractedData(extractedData: Record<string, unknown> | null): SheetContent[] {
-    if (!extractedData || !('sheets' in extractedData)) {
-      return [];
+  private getFileType(filename: string): 'excel' | 'pdf' | 'csv' | 'unknown' {
+    const lower = filename.toLowerCase();
+    if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
+      return 'excel';
     }
+    if (lower.endsWith('.csv')) {
+      return 'csv';
+    }
+    if (lower.endsWith('.pdf')) {
+      return 'pdf';
+    }
+    return 'unknown';
+  }
 
+  private convertExtractedDataToSheets(data: Record<string, unknown>): SheetContent[] {
+    // Convert various extractedData formats into sheet format
     const sheets: SheetContent[] = [];
-    const sheetsData = extractedData.sheets as Record<string, (string | number | null)[][]>;
-    const sheetNames = (extractedData.sheetNames as string[]) || Object.keys(sheetsData);
 
-    for (const sheetName of sheetNames) {
-      const data = sheetsData[sheetName];
-      if (!data || data.length === 0) continue;
+    // If data has named sections that look like sheets
+    for (const [key, value] of Object.entries(data)) {
+      if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object') {
+        // Array of objects - convert to sheet
+        const firstRow = value[0] as Record<string, unknown>;
+        const headers = Object.keys(firstRow);
+        const rows = value.map((row) => {
+          const rowObj = row as Record<string, unknown>;
+          return headers.map((h) => {
+            const val = rowObj[h];
+            if (val === null || val === undefined) return null;
+            if (typeof val === 'number') return val;
+            return String(val);
+          });
+        });
 
-      const headers = (data[0] || []).map((h) => String(h ?? ''));
-      const rows = data.slice(1);
-
-      sheets.push({
-        name: sheetName,
-        headers,
-        rows,
-        rowCount: rows.length,
-        columnCount: headers.length,
-      });
+        sheets.push({
+          name: key,
+          headers,
+          rows,
+          rowCount: rows.length,
+          columnCount: headers.length,
+        });
+      }
     }
 
     return sheets;
   }
 
-  /**
-   * Parse CSV data from extractedData JSONB field.
-   * Format: { csvData: [[row1], [row2], ...], rowCount: number }
-   */
-  private parseCSVFromExtractedData(extractedData: Record<string, unknown> | null): SheetContent[] {
-    if (!extractedData || !('csvData' in extractedData)) {
-      return [];
-    }
+  private parseCSVText(text: string): SheetContent[] {
+    // Simple CSV parsing
+    const lines = text.split('\n').filter((l) => l.trim());
+    if (lines.length === 0) return [];
 
-    const data = extractedData.csvData as (string | number | null)[][];
-    if (!data || data.length === 0) {
-      return [];
-    }
-
-    const headers = (data[0] || []).map((h) => String(h ?? ''));
-    const rows = data.slice(1);
+    const headers = lines[0]?.split(',').map((h) => h.trim()) || [];
+    const rows = lines.slice(1).map((line) =>
+      line.split(',').map((cell) => {
+        const trimmed = cell.trim();
+        const num = parseFloat(trimmed);
+        return isNaN(num) ? trimmed : num;
+      })
+    );
 
     return [
       {

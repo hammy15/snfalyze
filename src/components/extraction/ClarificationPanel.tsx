@@ -1,347 +1,477 @@
-'use client';
-
 /**
- * ClarificationPanel Component
+ * Pipeline Clarification Panel
  *
- * Displays pending clarifications and allows users to resolve them.
+ * Panel for reviewing and resolving extraction clarifications
+ * during the AI extraction pipeline process.
  */
 
-import { useState, useEffect } from 'react';
-import type { Clarification } from '@/hooks/useExtractionPipeline';
+'use client';
+
+import { useState, useCallback } from 'react';
+import { cn } from '@/lib/utils';
+import { ConfidenceBadge, ClarificationTypeBadge, PriorityBadge } from './confidence-badge';
+import type { ClarificationType } from './confidence-badge';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-interface ClarificationPanelProps {
+export interface SuggestedValue {
+  value: number | string;
+  source: string;
+  confidence: number;
+  reasoning?: string;
+}
+
+export interface ClarificationContext {
+  documentName: string;
+  periodDescription?: string;
+  aiExplanation?: string;
+  relatedValues?: { label: string; value: number | string }[];
+}
+
+export interface Clarification {
+  id: string;
+  fieldPath: string;
+  fieldLabel: string;
+  clarificationType: ClarificationType;
+  priority: number;
+  extractedValue: number | string | null;
+  extractedConfidence: number;
+  suggestedValues: SuggestedValue[];
+  benchmarkRange?: { min: number; max: number; median: number };
+  context: ClarificationContext;
+  status: 'pending' | 'resolved' | 'skipped';
+}
+
+export interface ClarificationPanelProps {
   clarifications: Clarification[];
-  onResolve: (clarificationId: string, resolvedValue: number | string, note?: string) => void;
-  onBulkResolve?: (
-    resolutions: { clarificationId: string; resolvedValue: number | string; note?: string }[]
-  ) => void;
-  onContinue?: () => void;
+  onResolve: (
+    clarificationId: string,
+    resolvedValue: number | string,
+    note?: string
+  ) => Promise<void>;
+  onSkip?: (clarificationId: string) => void;
   isLoading?: boolean;
   className?: string;
 }
 
 // ============================================================================
-// COMPONENT
+// CLARIFICATION PANEL
 // ============================================================================
 
 export function ClarificationPanel({
   clarifications,
   onResolve,
-  onBulkResolve,
-  onContinue,
+  onSkip,
   isLoading = false,
-  className = '',
+  className,
 }: ClarificationPanelProps) {
-  const [selectedValues, setSelectedValues] = useState<Map<string, number | string>>(new Map());
-  const [notes, setNotes] = useState<Map<string, string>>(new Map());
-  const [customValues, setCustomValues] = useState<Map<string, string>>(new Map());
+  const [expandedId, setExpandedId] = useState<string | null>(
+    clarifications[0]?.id || null
+  );
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [customValues, setCustomValues] = useState<Record<string, string>>({});
+  const [notes, setNotes] = useState<Record<string, string>>({});
 
-  // Sort by priority (highest first)
-  const sortedClarifications = [...clarifications].sort((a, b) => b.priority - a.priority);
-  const highPriorityCount = clarifications.filter((c) => c.priority >= 8).length;
+  const handleResolve = useCallback(
+    async (clarificationId: string, value: number | string) => {
+      setResolvingId(clarificationId);
+      try {
+        await onResolve(clarificationId, value, notes[clarificationId]);
+      } finally {
+        setResolvingId(null);
+      }
+    },
+    [onResolve, notes]
+  );
 
-  const handleSelectValue = (clarificationId: string, value: number | string) => {
-    setSelectedValues((prev) => new Map(prev).set(clarificationId, value));
-  };
+  const handleCustomSubmit = useCallback(
+    async (clarificationId: string) => {
+      const customValue = customValues[clarificationId];
+      if (!customValue) return;
 
-  const handleCustomValueChange = (clarificationId: string, value: string) => {
-    setCustomValues((prev) => new Map(prev).set(clarificationId, value));
-    // Also set as selected
-    const numValue = parseFloat(value);
-    if (!isNaN(numValue)) {
-      setSelectedValues((prev) => new Map(prev).set(clarificationId, numValue));
-    }
-  };
-
-  const handleNoteChange = (clarificationId: string, note: string) => {
-    setNotes((prev) => new Map(prev).set(clarificationId, note));
-  };
-
-  const handleResolve = (clarificationId: string) => {
-    const value = selectedValues.get(clarificationId);
-    if (value === undefined) return;
-
-    const note = notes.get(clarificationId);
-    onResolve(clarificationId, value, note);
-
-    // Clear local state
-    setSelectedValues((prev) => {
-      const next = new Map(prev);
-      next.delete(clarificationId);
-      return next;
-    });
-    setNotes((prev) => {
-      const next = new Map(prev);
-      next.delete(clarificationId);
-      return next;
-    });
-    setCustomValues((prev) => {
-      const next = new Map(prev);
-      next.delete(clarificationId);
-      return next;
-    });
-  };
-
-  const handleResolveAll = () => {
-    if (!onBulkResolve) return;
-
-    const resolutions = Array.from(selectedValues.entries()).map(([id, value]) => ({
-      clarificationId: id,
-      resolvedValue: value,
-      note: notes.get(id),
-    }));
-
-    if (resolutions.length > 0) {
-      onBulkResolve(resolutions);
-    }
-  };
-
-  const getPriorityBadge = (priority: number) => {
-    if (priority >= 8) {
-      return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
-          Critical
-        </span>
+      const numValue = parseFloat(customValue);
+      await handleResolve(
+        clarificationId,
+        isNaN(numValue) ? customValue : numValue
       );
-    }
-    if (priority >= 6) {
-      return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-          High
-        </span>
-      );
-    }
+    },
+    [customValues, handleResolve]
+  );
+
+  const pendingClarifications = clarifications.filter(
+    (c) => c.status === 'pending'
+  );
+
+  if (pendingClarifications.length === 0) {
     return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-        Normal
-      </span>
-    );
-  };
-
-  const getTypeLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      low_confidence: 'Low Confidence',
-      out_of_range: 'Out of Range',
-      conflict: 'Conflict',
-      missing_critical: 'Missing Data',
-      revenue_mismatch: 'Revenue Mismatch',
-      validation_error: 'Validation Error',
-    };
-    return labels[type] || type;
-  };
-
-  const formatValue = (value: number | string | null): string => {
-    if (value === null) return 'N/A';
-    if (typeof value === 'number') {
-      return value.toLocaleString('en-US', { maximumFractionDigits: 2 });
-    }
-    return String(value);
-  };
-
-  if (clarifications.length === 0) {
-    return (
-      <div className={`p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 ${className}`}>
-        <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-          <span className="font-medium">All clarifications resolved</span>
-        </div>
-        {onContinue && (
-          <button
-            onClick={onContinue}
-            disabled={isLoading}
-            className="mt-3 w-full py-2 px-4 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:opacity-50"
-          >
-            {isLoading ? 'Processing...' : 'Continue Extraction'}
-          </button>
+      <div
+        className={cn(
+          'rounded-lg border border-green-200 bg-green-50 p-6 text-center dark:border-green-800 dark:bg-green-900/20',
+          className
         )}
+      >
+        <div className="text-green-600 dark:text-green-400">
+          <svg
+            className="mx-auto h-12 w-12"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+        </div>
+        <h3 className="mt-2 text-sm font-medium text-green-800 dark:text-green-300">
+          All Clarifications Resolved
+        </h3>
+        <p className="mt-1 text-sm text-green-700 dark:text-green-400">
+          No pending items require your attention.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className={`flex flex-col gap-4 ${className}`}>
+    <div className={cn('space-y-4', className)}>
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Clarifications Needed
-          </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {clarifications.length} items need your input
-            {highPriorityCount > 0 && (
-              <span className="text-red-600 dark:text-red-400 ml-2">
-                ({highPriorityCount} critical)
-              </span>
-            )}
-          </p>
-        </div>
-
-        {onBulkResolve && selectedValues.size > 0 && (
-          <button
-            onClick={handleResolveAll}
-            disabled={isLoading}
-            className="py-2 px-4 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg font-medium text-sm disabled:opacity-50"
-          >
-            Resolve All Selected ({selectedValues.size})
-          </button>
-        )}
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+          Clarifications Needed ({pendingClarifications.length})
+        </h3>
+        <span className="text-sm text-gray-500 dark:text-gray-400">
+          {pendingClarifications.filter((c) => c.priority >= 8).length} high
+          priority
+        </span>
       </div>
 
       {/* Clarification Cards */}
-      <div className="space-y-4">
-        {sortedClarifications.map((clarification) => (
-          <div
-            key={clarification.id}
-            className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
-          >
-            {/* Header */}
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  {getPriorityBadge(clarification.priority)}
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {getTypeLabel(clarification.clarificationType)}
-                  </span>
-                </div>
-                <h4 className="font-medium text-gray-900 dark:text-white">
-                  {clarification.fieldLabel}
-                </h4>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {clarification.context.documentName}
-                  {clarification.context.periodDescription && (
-                    <span> • {clarification.context.periodDescription}</span>
-                  )}
-                </p>
-              </div>
-            </div>
+      <div className="space-y-3">
+        {pendingClarifications
+          .sort((a, b) => b.priority - a.priority)
+          .map((clarification) => (
+            <ClarificationCard
+              key={clarification.id}
+              clarification={clarification}
+              isExpanded={expandedId === clarification.id}
+              isResolving={resolvingId === clarification.id}
+              customValue={customValues[clarification.id] || ''}
+              note={notes[clarification.id] || ''}
+              onToggle={() =>
+                setExpandedId(
+                  expandedId === clarification.id ? null : clarification.id
+                )
+              }
+              onSelectValue={(value) =>
+                handleResolve(clarification.id, value)
+              }
+              onCustomValueChange={(value) =>
+                setCustomValues((prev) => ({
+                  ...prev,
+                  [clarification.id]: value,
+                }))
+              }
+              onNoteChange={(note) =>
+                setNotes((prev) => ({
+                  ...prev,
+                  [clarification.id]: note,
+                }))
+              }
+              onCustomSubmit={() => handleCustomSubmit(clarification.id)}
+              onSkip={onSkip ? () => onSkip(clarification.id) : undefined}
+            />
+          ))}
+      </div>
+    </div>
+  );
+}
 
-            {/* Current Value */}
-            <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600 dark:text-gray-300">Extracted Value:</span>
-                <span className="font-mono font-medium text-gray-900 dark:text-white">
-                  {formatValue(clarification.extractedValue)}
-                </span>
-              </div>
-              <div className="flex justify-between items-center mt-1">
-                <span className="text-sm text-gray-600 dark:text-gray-300">Confidence:</span>
-                <span className={`font-medium ${clarification.extractedConfidence >= 70 ? 'text-green-600' : clarification.extractedConfidence >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
-                  {clarification.extractedConfidence}%
-                </span>
-              </div>
-              {clarification.benchmarkRange && (
-                <div className="flex justify-between items-center mt-1">
-                  <span className="text-sm text-gray-600 dark:text-gray-300">Benchmark Range:</span>
-                  <span className="font-mono text-sm text-gray-700 dark:text-gray-300">
-                    {formatValue(clarification.benchmarkRange.min)} - {formatValue(clarification.benchmarkRange.max)}
-                  </span>
-                </div>
-              )}
-            </div>
+// ============================================================================
+// CLARIFICATION CARD
+// ============================================================================
 
-            {/* AI Explanation */}
-            {clarification.context.aiExplanation && (
-              <p className="mb-3 text-sm text-gray-600 dark:text-gray-400 italic">
-                {clarification.context.aiExplanation}
-              </p>
+interface ClarificationCardProps {
+  clarification: Clarification;
+  isExpanded: boolean;
+  isResolving: boolean;
+  customValue: string;
+  note: string;
+  onToggle: () => void;
+  onSelectValue: (value: number | string) => void;
+  onCustomValueChange: (value: string) => void;
+  onNoteChange: (note: string) => void;
+  onCustomSubmit: () => void;
+  onSkip?: () => void;
+}
+
+function ClarificationCard({
+  clarification,
+  isExpanded,
+  isResolving,
+  customValue,
+  note,
+  onToggle,
+  onSelectValue,
+  onCustomValueChange,
+  onNoteChange,
+  onCustomSubmit,
+  onSkip,
+}: ClarificationCardProps) {
+  return (
+    <div
+      className={cn(
+        'rounded-lg border bg-white shadow-sm transition-all dark:bg-gray-800',
+        isExpanded
+          ? 'border-blue-300 ring-2 ring-blue-100 dark:border-blue-600 dark:ring-blue-900/30'
+          : 'border-gray-200 dark:border-gray-700'
+      )}
+    >
+      {/* Header - Always visible */}
+      <button
+        type="button"
+        className="flex w-full items-center justify-between px-4 py-3 text-left"
+        onClick={onToggle}
+      >
+        <div className="flex items-center gap-3">
+          <PriorityBadge priority={clarification.priority} />
+          <div>
+            <span className="font-medium text-gray-900 dark:text-white">
+              {clarification.fieldLabel}
+            </span>
+            <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">
+              {clarification.context.documentName}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <ClarificationTypeBadge type={clarification.clarificationType} />
+          <svg
+            className={cn(
+              'h-5 w-5 text-gray-400 transition-transform',
+              isExpanded && 'rotate-180'
             )}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 9l-7 7-7-7"
+            />
+          </svg>
+        </div>
+      </button>
 
-            {/* Suggested Values */}
-            <div className="mb-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Select a value:
-              </label>
-              <div className="space-y-2">
-                {clarification.suggestedValues.map((suggestion, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleSelectValue(clarification.id, suggestion.value)}
-                    className={`w-full p-2 text-left rounded border transition-colors ${
-                      selectedValues.get(clarification.id) === suggestion.value
-                        ? 'border-cyan-500 bg-cyan-50 dark:bg-cyan-900/30'
-                        : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
-                    }`}
-                  >
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <span className="font-mono font-medium text-gray-900 dark:text-white">
-                          {formatValue(suggestion.value)}
-                        </span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
-                          from {suggestion.source}
-                        </span>
-                      </div>
-                      <span className="text-xs text-gray-500">
-                        {suggestion.confidence}% confidence
-                      </span>
-                    </div>
-                    {suggestion.reasoning && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {suggestion.reasoning}
-                      </p>
-                    )}
-                  </button>
-                ))}
-
-                {/* Custom Value Input */}
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Enter custom value..."
-                    value={customValues.get(clarification.id) || ''}
-                    onChange={(e) => handleCustomValueChange(clarification.id, e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 text-sm"
-                  />
-                </div>
-              </div>
+      {/* Expanded Content */}
+      {isExpanded && (
+        <div className="border-t border-gray-100 px-4 pb-4 pt-3 dark:border-gray-700">
+          {/* AI Explanation */}
+          {clarification.context.aiExplanation && (
+            <div className="mb-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+              <span className="font-medium">AI Analysis:</span>{' '}
+              {clarification.context.aiExplanation}
             </div>
+          )}
 
-            {/* Note Input */}
-            <div className="mb-3">
-              <input
-                type="text"
-                placeholder="Add a note (optional)..."
-                value={notes.get(clarification.id) || ''}
-                onChange={(e) => handleNoteChange(clarification.id, e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 text-sm"
+          {/* Current Extracted Value */}
+          <div className="mb-4">
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              Extracted Value:
+            </span>
+            <div className="mt-1 flex items-center gap-2">
+              <span className="text-lg font-semibold text-gray-900 dark:text-white">
+                {formatValue(clarification.extractedValue)}
+              </span>
+              <ConfidenceBadge
+                confidence={clarification.extractedConfidence}
+                size="sm"
               />
             </div>
-
-            {/* Resolve Button */}
-            <button
-              onClick={() => handleResolve(clarification.id)}
-              disabled={!selectedValues.has(clarification.id) || isLoading}
-              className="w-full py-2 px-4 bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white rounded-lg font-medium text-sm disabled:cursor-not-allowed transition-colors"
-            >
-              {isLoading ? 'Processing...' : 'Resolve'}
-            </button>
           </div>
-        ))}
-      </div>
 
-      {/* Continue Button */}
-      {onContinue && highPriorityCount === 0 && (
-        <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-            All critical clarifications resolved. You can continue with remaining items pending or resolve them first.
-          </p>
-          <button
-            onClick={onContinue}
-            disabled={isLoading}
-            className="w-full py-3 px-4 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:opacity-50"
-          >
-            {isLoading ? 'Processing...' : 'Continue Extraction'}
-          </button>
+          {/* Benchmark Range */}
+          {clarification.benchmarkRange && (
+            <div className="mb-4 rounded-lg bg-gray-50 p-3 dark:bg-gray-700/50">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Industry Benchmark
+              </span>
+              <div className="mt-1 flex items-center gap-4 text-sm">
+                <span className="text-gray-500 dark:text-gray-400">
+                  Min: {formatValue(clarification.benchmarkRange.min)}
+                </span>
+                <span className="font-medium text-gray-900 dark:text-white">
+                  Median: {formatValue(clarification.benchmarkRange.median)}
+                </span>
+                <span className="text-gray-500 dark:text-gray-400">
+                  Max: {formatValue(clarification.benchmarkRange.max)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Related Values */}
+          {clarification.context.relatedValues &&
+            clarification.context.relatedValues.length > 0 && (
+              <div className="mb-4">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Related Values
+                </span>
+                <div className="mt-1 grid grid-cols-2 gap-2 text-sm">
+                  {clarification.context.relatedValues.map((rv, idx) => (
+                    <div
+                      key={idx}
+                      className="rounded bg-gray-100 px-2 py-1 dark:bg-gray-700"
+                    >
+                      <span className="text-gray-500 dark:text-gray-400">
+                        {rv.label}:
+                      </span>{' '}
+                      <span className="font-medium text-gray-900 dark:text-white">
+                        {formatValue(rv.value)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          {/* Suggested Values */}
+          <div className="mb-4">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Suggested Values
+            </span>
+            <div className="mt-2 space-y-2">
+              {clarification.suggestedValues.map((sv, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  disabled={isResolving}
+                  onClick={() => onSelectValue(sv.value)}
+                  className={cn(
+                    'flex w-full items-center justify-between rounded-lg border p-3 text-left transition-colors',
+                    'border-gray-200 hover:border-blue-300 hover:bg-blue-50',
+                    'dark:border-gray-600 dark:hover:border-blue-600 dark:hover:bg-blue-900/30',
+                    isResolving && 'cursor-not-allowed opacity-50'
+                  )}
+                >
+                  <div>
+                    <span className="font-medium text-gray-900 dark:text-white">
+                      {formatValue(sv.value)}
+                    </span>
+                    <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">
+                      from {sv.source}
+                    </span>
+                    {sv.reasoning && (
+                      <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                        {sv.reasoning}
+                      </p>
+                    )}
+                  </div>
+                  <ConfidenceBadge confidence={sv.confidence} size="sm" />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Custom Value Input */}
+          <div className="mb-4">
+            <label
+              htmlFor={`custom-${clarification.id}`}
+              className="text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              Enter Custom Value
+            </label>
+            <div className="mt-1 flex gap-2">
+              <input
+                id={`custom-${clarification.id}`}
+                type="text"
+                value={customValue}
+                onChange={(e) => onCustomValueChange(e.target.value)}
+                placeholder="Enter value..."
+                className={cn(
+                  'flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm',
+                  'focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20',
+                  'dark:border-gray-600 dark:bg-gray-700 dark:text-white'
+                )}
+              />
+              <button
+                type="button"
+                onClick={onCustomSubmit}
+                disabled={!customValue || isResolving}
+                className={cn(
+                  'rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white',
+                  'hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50'
+                )}
+              >
+                Use
+              </button>
+            </div>
+          </div>
+
+          {/* Note Input */}
+          <div className="mb-4">
+            <label
+              htmlFor={`note-${clarification.id}`}
+              className="text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              Note (optional)
+            </label>
+            <textarea
+              id={`note-${clarification.id}`}
+              value={note}
+              onChange={(e) => onNoteChange(e.target.value)}
+              placeholder="Add a note about this resolution..."
+              rows={2}
+              className={cn(
+                'mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm',
+                'focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20',
+                'dark:border-gray-600 dark:bg-gray-700 dark:text-white'
+              )}
+            />
+          </div>
+
+          {/* Skip Button */}
+          {onSkip && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={onSkip}
+                className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+              >
+                Skip for now
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
+}
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+function formatValue(value: number | string | null): string {
+  if (value === null || value === undefined) return 'N/A';
+  if (typeof value === 'number') {
+    // Format as currency if large enough
+    if (Math.abs(value) >= 1000) {
+      return `$${value.toLocaleString()}`;
+    }
+    // Format as percentage if between 0 and 1
+    if (value >= 0 && value <= 1) {
+      return `${(value * 100).toFixed(1)}%`;
+    }
+    return value.toLocaleString();
+  }
+  return String(value);
 }
 
 export default ClarificationPanel;

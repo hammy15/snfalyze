@@ -19,7 +19,6 @@ import type {
   NormalizedCensusPeriod,
   NormalizedPayerRate,
   PipelineClarification,
-  ClarificationType,
 } from '../types';
 import { ExtractionContextManager } from '../context/extraction-context';
 
@@ -140,7 +139,7 @@ async function resolveFacilityMappings(
           .values({
             dealId: context.dealId,
             name: profile.name,
-            assetType: profile.facilityType === 'SNF' ? 'SNF' : profile.facilityType === 'ALF' ? 'ALF' : profile.facilityType === 'ILF' ? 'ILF' : 'SNF',
+            assetType: 'SNF', // Default to SNF, could be inferred from context
             ccn: profile.ccn,
             licensedBeds: profile.licensedBeds,
             certifiedBeds: profile.certifiedBeds,
@@ -390,11 +389,11 @@ async function writePayerRates(
 // CLARIFICATIONS
 // ============================================================================
 
-// Database clarification types: 'low_confidence' | 'out_of_range' | 'conflict' | 'missing' | 'validation_error'
+// Map pipeline clarification types to database enum values
 type DbClarificationType = 'low_confidence' | 'out_of_range' | 'conflict' | 'missing' | 'validation_error';
 
-function mapClarificationTypeToDb(type: ClarificationType): DbClarificationType {
-  switch (type) {
+function mapClarificationType(pipelineType: PipelineClarification['clarificationType']): DbClarificationType {
+  switch (pipelineType) {
     case 'low_confidence':
       return 'low_confidence';
     case 'out_of_range':
@@ -405,10 +404,8 @@ function mapClarificationTypeToDb(type: ClarificationType): DbClarificationType 
       return 'missing';
     case 'revenue_mismatch':
       return 'validation_error';
-    case 'validation_error':
-      return 'validation_error';
     default:
-      return 'validation_error';
+      return 'low_confidence';
   }
 }
 
@@ -420,16 +417,25 @@ async function writeClarifications(
   for (const clarification of clarifications) {
     if (clarification.status !== 'pending') continue;
 
+    // Skip clarifications without a valid document ID
+    if (!clarification.documentId) {
+      result.warnings.push(
+        `Skipping clarification for ${clarification.fieldLabel}: no document ID`
+      );
+      continue;
+    }
+
     try {
       await db.insert(extractionClarifications).values({
-        documentId: clarification.context.documentName, // Note: might need proper doc ID
+        dealId,
+        documentId: clarification.documentId,
         fieldName: clarification.fieldPath.split('.').pop() || clarification.fieldPath,
         fieldPath: clarification.fieldPath,
         extractedValue: clarification.extractedValue?.toString() || null,
         suggestedValues: clarification.suggestedValues.map((s) => String(s.value)),
         benchmarkValue: clarification.benchmarkRange?.median.toString() || null,
         benchmarkRange: clarification.benchmarkRange || null,
-        clarificationType: mapClarificationTypeToDb(clarification.clarificationType),
+        clarificationType: mapClarificationType(clarification.clarificationType),
         status: 'pending',
         confidenceScore: clarification.extractedConfidence,
         priority: clarification.priority,

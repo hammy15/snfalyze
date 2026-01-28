@@ -69,9 +69,9 @@ export async function POST(
             .limit(1);
         }
 
-        // Calculate annualized values
-        const multiplier = financials?.periodType === 'monthly' ? 12 :
-                          financials?.periodType === 'quarterly' ? 4 : 1;
+        // Calculate annualized values - check if already annualized
+        const isAnnualized = financials?.isAnnualized === true;
+        const multiplier = isAnnualized ? 1 : 12;
 
         const ttmRevenue = financials?.totalRevenue
           ? Number(financials.totalRevenue) * multiplier
@@ -100,9 +100,11 @@ export async function POST(
           staffingRating: cmsData?.staffingRating || facility.staffingRating || undefined,
           qualityRating: cmsData?.qualityRating || facility.qualityRating || undefined,
 
-          occupancyRate: financials?.occupancyRate
-            ? Number(financials.occupancyRate) / 100
-            : 0.85,
+          // Occupancy may be stored as decimal (0.85) or percentage (85)
+          occupancyRate: (() => {
+            const raw = Number(financials?.occupancyRate || 0.85);
+            return raw > 1 ? raw / 100 : raw;
+          })(),
           medicarePercent: financials?.medicarePercent
             ? Number(financials.medicarePercent) / 100
             : undefined,

@@ -903,8 +903,4 @@ function calculateBuyVsLease(
   };
 }
 
-// =============================================================================
-// EXPORTS
-// =============================================================================
-
-export { calculateMasterLease };
+// Module exports all types and the main calculateMasterLease function above

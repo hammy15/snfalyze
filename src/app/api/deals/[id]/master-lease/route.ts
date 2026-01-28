@@ -107,19 +107,26 @@ export async function POST(
             .limit(1);
         }
 
-        // Calculate TTM values (simplified - would normally aggregate 12 months)
+        // Calculate TTM values - check if already annualized
+        const isAnnualized = financials?.isAnnualized === true;
+        const multiplier = isAnnualized ? 1 : 12;
+
         const ttmRevenue = financials?.totalRevenue
-          ? Number(financials.totalRevenue) * 12
+          ? Number(financials.totalRevenue) * multiplier
           : 0;
         const ttmExpenses = financials?.totalExpenses
-          ? Number(financials.totalExpenses) * 12
+          ? Number(financials.totalExpenses) * multiplier
           : 0;
         const ttmEbitdar = financials?.ebitdar
-          ? Number(financials.ebitdar) * 12
+          ? Number(financials.ebitdar) * multiplier
           : ttmRevenue - ttmExpenses;
         const ttmNoi = financials?.noi
-          ? Number(financials.noi) * 12
+          ? Number(financials.noi) * multiplier
           : ttmEbitdar * 0.95;
+
+        // Occupancy may be stored as decimal (0.85) or percentage (85)
+        const rawOccupancy = Number(financials?.occupancyRate || 0.85);
+        const occupancyRate = rawOccupancy > 1 ? rawOccupancy / 100 : rawOccupancy;
 
         return {
           id: facility.id,
@@ -131,9 +138,7 @@ export async function POST(
           ttmRevenue,
           ttmEbitdar,
           ttmNoi,
-          occupancyRate: financials?.occupancyRate
-            ? Number(financials.occupancyRate) / 100
-            : 0.85,
+          occupancyRate,
           medicarePercent: financials?.medicarePercent
             ? Number(financials.medicarePercent) / 100
             : undefined,

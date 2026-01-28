@@ -101,7 +101,9 @@ export async function POST(
         const ttmRevenue = Number(financials?.totalRevenue || 0) * multiplier;
         const ttmEbitdar = Number(financials?.ebitdar || 0) * multiplier;
         const ttmNoi = Number(financials?.noi || 0) * multiplier || ttmEbitdar * 0.95;
-        const occupancyRate = Number(financials?.occupancyRate || 85) / 100;
+        // Occupancy may be stored as decimal (0.85) or percentage (85)
+        const rawOccupancy = Number(financials?.occupancyRate || 0.85);
+        const occupancyRate = rawOccupancy > 1 ? rawOccupancy / 100 : rawOccupancy;
 
         return {
           facility,
@@ -271,7 +273,7 @@ export async function POST(
         totalFacilities: underwritingResults.length,
         avgScore: underwritingResults.reduce((sum, u) => sum + u.result.score, 0) / underwritingResults.length,
         blockers: underwritingResults.flatMap(u =>
-          u.result.issues.map(i => `${u.facilityName}: ${i}`)
+          u.result.issues.map(i => `${u.facilityName}: ${i.field} - ${i.requirement} (actual: ${i.actual})`)
         ),
       },
 

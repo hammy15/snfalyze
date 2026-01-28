@@ -9,6 +9,44 @@ import * as XLSX from 'xlsx';
 import { readFile } from 'fs/promises';
 
 // ============================================================================
+// ENCRYPTED FILE DETECTION
+// ============================================================================
+
+export class EncryptedFileError extends Error {
+  constructor(filename: string) {
+    super(
+      `The file "${filename}" is encrypted with Microsoft's Rights Management Service (RMS). ` +
+      `Please open the file in Microsoft Excel and save a copy without encryption/protection, ` +
+      `then try uploading again.`
+    );
+    this.name = 'EncryptedFileError';
+  }
+}
+
+/**
+ * Detect if an Excel file is encrypted with Microsoft RMS (MSMAMARPCRYPT)
+ */
+function isEncryptedExcel(buffer: Buffer): boolean {
+  // Check for MSMAMARPCRYPT encryption marker
+  const header = buffer.slice(0, 20).toString('utf8');
+  if (header.includes('MSMAMARPCRYPT')) {
+    return true;
+  }
+
+  // Also check for Office Document Cryptography (OLE-based encryption)
+  // OLE files start with D0 CF 11 E0 (little-endian DWORD)
+  if (buffer[0] === 0xD0 && buffer[1] === 0xCF && buffer[2] === 0x11 && buffer[3] === 0xE0) {
+    // Check for encryption indicators in the OLE structure
+    const headerStr = buffer.slice(0, 2000).toString('binary');
+    if (headerStr.includes('EncryptedPackage') || headerStr.includes('StrongEncryption')) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// ============================================================================
 // TYPE DEFINITIONS
 // ============================================================================
 
@@ -525,6 +563,12 @@ export async function extractFromExcel(
   periods: string[];
 }> {
   const buffer = await readFile(filePath);
+
+  // Check for encrypted files before attempting to parse
+  if (isEncryptedExcel(buffer)) {
+    throw new EncryptedFileError(filename);
+  }
+
   const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
 
   const facilities = new Map<string, Partial<FacilityProfile>>();

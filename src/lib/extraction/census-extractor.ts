@@ -69,12 +69,15 @@ const PAYER_PATTERNS: PayerPattern[] = [
       /snf\s+medicare/i,
       /^medicare$/i,
       /trad(itional)?\s+medicare/i,
+      // Avamere format: "Resident Care - SNF - Medicare"
+      /resident\s+care.*-\s*medicare$/i,
+      /snf\s*-\s*medicare$/i,
     ],
   },
   {
     type: 'medicareAdvantageDays',
     patterns: [
-      /medicare\s*(advantage|ma|hmo|ppo)/i,
+      /medicare\s*(advantage|ma)/i,
       /managed\s+medicare/i,
       /ma\s+days?/i,
       /medicare\s+managed/i,
@@ -85,10 +88,13 @@ const PAYER_PATTERNS: PayerPattern[] = [
     patterns: [
       /managed\s+care(?!\s+medicaid)/i,
       /commercial/i,
-      /^hmo$/i,
-      /^ppo$/i,
       /insurance\s+days/i,
       /private\s+insurance/i,
+      // Avamere format: "Resident Care - SNF - HMO"
+      /resident\s+care.*-\s*hmo$/i,
+      /snf\s*-\s*hmo$/i,
+      /resident\s+care.*-\s*ppo$/i,
+      /snf\s*-\s*ppo$/i,
     ],
   },
   {
@@ -100,6 +106,9 @@ const PAYER_PATTERNS: PayerPattern[] = [
       /trad\s+medicaid/i,
       /fee.?for.?service\s+medicaid/i,
       /ffs\s+medicaid/i,
+      // Avamere format: "Resident Care - SNF - Medicaid"
+      /resident\s+care.*-\s*medicaid$/i,
+      /snf\s*-\s*medicaid$/i,
     ],
   },
   {
@@ -117,9 +126,11 @@ const PAYER_PATTERNS: PayerPattern[] = [
     patterns: [
       /private\s+pay/i,
       /self.?pay/i,
-      /private(?!\s+insurance)/i,
       /out\s+of\s+pocket/i,
       /cash\s+pay/i,
+      // Avamere format: "Resident Care - SNF - Private"
+      /resident\s+care.*-\s*private$/i,
+      /snf\s*-\s*private$/i,
     ],
   },
   {
@@ -130,6 +141,9 @@ const PAYER_PATTERNS: PayerPattern[] = [
       /va\s+contract/i,
       /tricare/i,
       /military/i,
+      // Avamere format: "Resident Care - SNF - Veterans"
+      /resident\s+care.*-\s*veterans?$/i,
+      /snf\s*-\s*veterans?$/i,
     ],
   },
   {
@@ -138,6 +152,9 @@ const PAYER_PATTERNS: PayerPattern[] = [
       /hospice/i,
       /end\s+of\s+life/i,
       /palliative/i,
+      // Avamere format: "Resident Care - SNF - Hospice"
+      /resident\s+care.*-\s*hospice$/i,
+      /snf\s*-\s*hospice$/i,
     ],
   },
   {
@@ -157,6 +174,7 @@ const PAYER_PATTERNS: PayerPattern[] = [
       /^total$/i,
       /patient\s+days/i,
       /bed\s+days/i,
+      /^total\s+census$/i,
     ],
   },
 ];
@@ -265,8 +283,21 @@ function parsePeriodFromLabel(label: string): { start: Date; end: Date; label: s
     return { start, end, label: `${monthYearMatch[1].substring(0, 3)} ${year}` };
   }
 
+  // Format: "MM/DD/YYYY" - use month-end as period (common in census reports)
+  const fullDateMatch = label.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (fullDateMatch) {
+    const month = parseInt(fullDateMatch[1]) - 1;
+    const day = parseInt(fullDateMatch[2]);
+    const year = parseInt(fullDateMatch[3]);
+    // Use the date as period end, first of month as start
+    const start = new Date(year, month, 1);
+    const end = new Date(year, month, day);
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return { start, end, label: `${monthNames[month]} ${year}` };
+  }
+
   // Format: "01/2024" or "1/2024"
-  const slashMatch = label.match(/(\d{1,2})\/(\d{4})/);
+  const slashMatch = label.match(/^(\d{1,2})\/(\d{4})$/);
   if (slashMatch) {
     const month = parseInt(slashMatch[1]) - 1;
     const year = parseInt(slashMatch[2]);
@@ -594,6 +625,14 @@ function extractCensusFromRows(
         censusPeriod.vaContractDays +
         censusPeriod.hospiceDays +
         censusPeriod.otherDays;
+    }
+
+    // Calculate ADC if not already set
+    if (censusPeriod.avgDailyCensus === 0 && censusPeriod.totalPatientDays > 0) {
+      const daysInPeriod = Math.ceil(
+        (censusPeriod.periodEnd.getTime() - censusPeriod.periodStart.getTime()) / (1000 * 60 * 60 * 24)
+      ) + 1;
+      censusPeriod.avgDailyCensus = censusPeriod.totalPatientDays / daysInPeriod;
     }
 
     if (censusPeriod.totalPatientDays > 0 || censusPeriod.avgDailyCensus > 0) {

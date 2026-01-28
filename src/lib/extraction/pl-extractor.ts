@@ -422,6 +422,7 @@ interface DateColumn {
 function findDateColumns(data: (string | number | null)[][]): DateColumn[] {
   const columns: DateColumn[] = [];
   const foundCols = new Set<number>();
+  const foundDates = new Set<string>(); // Track unique dates to avoid duplicates
 
   // Scan first 20 rows for date patterns
   for (let rowIdx = 0; rowIdx < Math.min(20, data.length); rowIdx++) {
@@ -435,12 +436,19 @@ function findDateColumns(data: (string | number | null)[][]): DateColumn[] {
       const date = parseDateFromCell(cell);
 
       if (date && date.getFullYear() >= 2015 && date.getFullYear() <= 2030) {
-        columns.push({
-          colIdx,
-          date,
-          label: formatPeriodLabel(date),
-        });
-        foundCols.add(colIdx);
+        // Create unique date key to avoid duplicate periods
+        const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+        // Only add if we haven't seen this date yet
+        if (!foundDates.has(dateKey)) {
+          columns.push({
+            colIdx,
+            date,
+            label: formatPeriodLabel(date),
+          });
+          foundCols.add(colIdx);
+          foundDates.add(dateKey);
+        }
       }
     }
   }
@@ -460,12 +468,17 @@ function findDateColumns(data: (string | number | null)[][]): DateColumn[] {
         const date = parseDateFromCell(cell);
 
         if (date && date.getFullYear() >= 2015 && date.getFullYear() <= 2030) {
-          columns.push({
-            colIdx,
-            date,
-            label: formatPeriodLabel(date),
-          });
-          foundCols.add(colIdx);
+          const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+          if (!foundDates.has(dateKey)) {
+            columns.push({
+              colIdx,
+              date,
+              label: formatPeriodLabel(date),
+            });
+            foundCols.add(colIdx);
+            foundDates.add(dateKey);
+          }
         }
       }
     }

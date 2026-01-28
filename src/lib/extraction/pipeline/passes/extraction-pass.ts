@@ -81,12 +81,21 @@ export async function executeExtractionPass(params: {
   onProgress?.(60, 'Processing extracted data...');
 
   // Process extracted data
-  const results = processExtractionResults(
-    documentId,
-    filename,
-    aiResponse,
-    contextManager
-  );
+  console.log(`[Extraction] Processing AI response. Financial periods: ${aiResponse.extractedData.financialPeriods.length}, Census: ${aiResponse.extractedData.censusPeriods.length}`);
+
+  let results;
+  try {
+    results = processExtractionResults(
+      documentId,
+      filename,
+      aiResponse,
+      contextManager
+    );
+    console.log(`[Extraction] Processed results. Financial periods: ${results.financialPeriods.length}, Census: ${results.censusPeriods.length}`);
+  } catch (error) {
+    console.error(`[Extraction] Error processing results:`, error);
+    throw error;
+  }
 
   onProgress?.(80, 'Generating clarification requests...');
 

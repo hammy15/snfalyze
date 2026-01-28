@@ -37,7 +37,7 @@ import {
 // ============================================================================
 
 const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
-const MAX_TOKENS = 8192;
+const MAX_TOKENS = 16384; // Increased for complex documents
 const TEMPERATURE = 0.1; // Low temperature for extraction accuracy
 
 // ============================================================================
@@ -149,16 +149,29 @@ export class AIDocumentReader {
         ? structure.suggestedProcessingOrder
         : structure.sheets.map((_, i) => i);
 
+    console.log(`[AI] Processing ${processingOrder.length} sheets for extraction`);
+
     for (const sheetIndex of processingOrder) {
       const sheetStructure = structure.sheets[sheetIndex];
-      if (!sheetStructure || sheetStructure.sheetType === 'unknown') continue;
+      if (!sheetStructure || sheetStructure.sheetType === 'unknown') {
+        console.log(`[AI] Skipping sheet ${sheetIndex}: ${sheetStructure?.sheetName || 'unknown'} (type: ${sheetStructure?.sheetType || 'none'})`);
+        continue;
+      }
 
       const sheetContent = content.sheets?.[sheetIndex];
-      if (!sheetContent) continue;
+      if (!sheetContent) {
+        console.log(`[AI] Skipping sheet ${sheetIndex}: no content`);
+        continue;
+      }
 
       // Determine extraction focus based on sheet type
       const sheetFocus = this.getExtractionFocusForSheetType(sheetStructure.sheetType, extractionFocus);
-      if (sheetFocus.length === 0) continue;
+      if (sheetFocus.length === 0) {
+        console.log(`[AI] Skipping sheet ${sheetIndex}: ${sheetStructure.sheetName} (no focus)`);
+        continue;
+      }
+
+      console.log(`[AI] Extracting from sheet ${sheetIndex}: ${sheetStructure.sheetName} (type: ${sheetStructure.sheetType})`);
 
       // Prepare sheet data for extraction
       const sheetData = this.prepareSheetData(sheetContent, sheetStructure);
@@ -172,7 +185,9 @@ export class AIDocumentReader {
       });
 
       // Call Claude for extraction
+      console.log(`[AI] Calling Claude for sheet ${sheetStructure.sheetName}...`);
       const response = await this.callClaude(SYSTEM_PROMPT_DATA_EXTRACTION, prompt);
+      console.log(`[AI] Claude responded for sheet ${sheetStructure.sheetName}, response length: ${response.length}`);
 
       // Parse extraction response
       const extracted = this.parseExtractionResponse(response, sheetStructure.sheetName);
@@ -306,15 +321,31 @@ export class AIDocumentReader {
     analysisNotes: string[];
   } {
     try {
-      // Extract JSON from response
-      const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
-      if (!jsonMatch) {
-        // Try parsing entire response as JSON
-        return JSON.parse(response);
+      // Try multiple patterns to extract JSON
+      let jsonString = response;
+
+      // Try ```json block
+      const jsonBlockMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+      if (jsonBlockMatch) {
+        jsonString = jsonBlockMatch[1];
+      } else {
+        // Try ``` block without json tag
+        const codeBlockMatch = response.match(/```\s*([\s\S]*?)\s*```/);
+        if (codeBlockMatch) {
+          jsonString = codeBlockMatch[1];
+        } else {
+          // Try to find JSON object in response
+          const jsonObjectMatch = response.match(/\{[\s\S]*\}/);
+          if (jsonObjectMatch) {
+            jsonString = jsonObjectMatch[0];
+          }
+        }
       }
-      return JSON.parse(jsonMatch[1]);
+
+      return JSON.parse(jsonString.trim());
     } catch (error) {
       console.error('Failed to parse structure response:', error);
+      console.error('Raw response:', response.slice(0, 500));
       return {
         sheets: [],
         detectedFacilities: [],
@@ -337,9 +368,25 @@ export class AIDocumentReader {
     suggestedClarifications: AIRaisedQuestion[];
   } {
     try {
-      // Extract JSON from response
-      const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
-      const parsed = jsonMatch ? JSON.parse(jsonMatch[1]) : JSON.parse(response);
+      // Extract JSON from response with multiple fallback strategies
+      let jsonString = response;
+
+      const jsonBlockMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+      if (jsonBlockMatch) {
+        jsonString = jsonBlockMatch[1];
+      } else {
+        const codeBlockMatch = response.match(/```\s*([\s\S]*?)\s*```/);
+        if (codeBlockMatch) {
+          jsonString = codeBlockMatch[1];
+        } else {
+          const jsonObjectMatch = response.match(/\{[\s\S]*\}/);
+          if (jsonObjectMatch) {
+            jsonString = jsonObjectMatch[0];
+          }
+        }
+      }
+
+      const parsed = JSON.parse(jsonString.trim());
 
       // Ensure source sheet is set on all items
       const financialPeriods = (parsed.financialPeriods || []).map((p: PartialFinancialPeriod) => ({

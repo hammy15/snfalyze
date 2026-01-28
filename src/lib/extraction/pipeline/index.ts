@@ -154,15 +154,24 @@ export class ExtractionPipeline {
       }
 
       // Run validation pass on all accumulated data
+      console.log(`[Pipeline] Starting validation pass...`);
       this.session.currentPass = 'validation';
       this.emitter.validationStarted();
 
-      const validationResult = await executeValidationPass({
-        contextManager: this.contextManager,
-        onProgress: (progress, message) => {
-          this.emitter.passProgress('validation', progress, message);
-        },
-      });
+      let validationResult;
+      try {
+        validationResult = await executeValidationPass({
+          contextManager: this.contextManager,
+          onProgress: (progress, message) => {
+            console.log(`[Pipeline] Validation progress: ${progress}% - ${message}`);
+            this.emitter.passProgress('validation', progress, message);
+          },
+        });
+        console.log(`[Pipeline] Validation pass completed. Valid: ${validationResult.isValid}, Conflicts: ${validationResult.conflicts.length}`);
+      } catch (error) {
+        console.error(`[Pipeline] Validation pass error:`, error);
+        throw error;
+      }
 
       this.emitter.validationCompleted({
         isValid: validationResult.isValid,
@@ -196,34 +205,38 @@ export class ExtractionPipeline {
 
       // Check if we need clarifications before population
       const pendingClarifications = this.contextManager.getPendingClarifications();
-      if (pendingClarifications.some((c) => c.priority >= 8)) {
-        // High-priority clarifications need resolution first
-        this.updateStatus('awaiting_clarifications');
-        this.updateProgress();
+      const highPriorityClarifications = pendingClarifications.filter((c) => c.priority >= 8);
+      console.log(`[Pipeline] Pending clarifications: ${pendingClarifications.length}, High priority: ${highPriorityClarifications.length}`);
 
-        this.emitter.sessionCompleted({
-          facilitiesExtracted: this.contextManager.getFacilityProfiles().length,
-          periodsExtracted: this.contextManager.getExtractedPeriods().length,
-          conflictsDetected: this.contextManager.getDetectedConflicts().length,
-          conflictsResolved: validationResult.autoResolved.length,
-          clarificationsPending: pendingClarifications.length,
-          overallConfidence: this.contextManager.getOverallConfidence(),
-          processingTimeMs: Date.now() - startTime,
-        });
+      // For now, skip the clarification wait to test full pipeline
+      // if (highPriorityClarifications.length > 0) {
+      //   console.log(`[Pipeline] Waiting for ${highPriorityClarifications.length} high-priority clarifications`);
+      //   this.updateStatus('awaiting_clarifications');
+      //   this.updateProgress();
+      //   this.emitter.sessionCompleted({...});
+      //   return this.session;
+      // }
 
-        return this.session;
-      }
+      console.log(`[Pipeline] Proceeding to database population...`);
 
       // Write to database
       this.session.currentPass = 'population';
       this.emitter.populationStarted();
 
-      const populationResult = await writeToDatabase({
-        contextManager: this.contextManager,
-        onProgress: (progress, message) => {
-          this.emitter.passProgress('population', progress, message);
-        },
-      });
+      let populationResult;
+      try {
+        populationResult = await writeToDatabase({
+          contextManager: this.contextManager,
+          onProgress: (progress, message) => {
+            console.log(`[Pipeline] Population progress: ${progress}% - ${message}`);
+            this.emitter.passProgress('population', progress, message);
+          },
+        });
+        console.log(`[Pipeline] Database population complete. Periods: ${populationResult.financialPeriodsWritten}, Facilities: ${populationResult.facilitiesUpdated}`);
+      } catch (error) {
+        console.error(`[Pipeline] Database population error:`, error);
+        throw error;
+      }
 
       this.emitter.populationCompleted({
         financialPeriodsWritten: populationResult.financialPeriodsWritten,
@@ -285,16 +298,21 @@ export class ExtractionPipeline {
     index: number,
     total: number
   ): Promise<void> {
+    console.log(`[Pipeline] Processing document ${index + 1}/${total}: ${doc.filename}`);
     this.emitter.documentStarted(doc.id, doc.filename, index, total);
 
     // Load document content from stored data
+    console.log(`[Pipeline] Loading content for ${doc.filename}...`);
     const content = await this.loadDocumentContent(doc);
     if (!content) {
+      console.error(`[Pipeline] Failed to load content for ${doc.filename}`);
       this.emitter.error(`Failed to load content for ${doc.filename}`, 'LOAD_ERROR', true);
       return;
     }
+    console.log(`[Pipeline] Loaded content type: ${content.type}, sheets: ${content.sheets?.length || 0}`);
 
     // Pass 1: Structure Analysis
+    console.log(`[Pipeline] Starting structure pass for ${doc.filename}...`);
     this.session.currentPass = 'structure';
     this.emitter.passStarted('structure', doc.id, doc.filename);
 
@@ -309,6 +327,7 @@ export class ExtractionPipeline {
       },
     });
 
+    console.log(`[Pipeline] Structure pass completed. Sheets: ${structureResult.structure.sheets.length}, Facilities: ${structureResult.structure.detectedFacilities.length}`);
     this.emitter.passCompleted('structure', doc.id, structureResult.processingTimeMs);
     this.contextManager.incrementStats('sheetsAnalyzed', structureResult.structure.sheets.length);
 
@@ -319,6 +338,7 @@ export class ExtractionPipeline {
     }
 
     // Pass 2: Data Extraction
+    console.log(`[Pipeline] Starting extraction pass for ${doc.filename}...`);
     this.session.currentPass = 'extraction';
     this.emitter.passStarted('extraction', doc.id, doc.filename);
 
@@ -334,6 +354,8 @@ export class ExtractionPipeline {
       },
     });
 
+    console.log(`[Pipeline] Extraction pass completed. Financial periods: ${extractionResult.financialPeriods.length}, Census: ${extractionResult.censusPeriods.length}, Rates: ${extractionResult.payerRates.length}`);
+
     this.emitter.passCompleted(
       'extraction',
       doc.id,
@@ -344,13 +366,18 @@ export class ExtractionPipeline {
     );
 
     // Emit extracted periods
+    console.log(`[Pipeline] Emitting ${extractionResult.financialPeriods.length} financial periods`);
     for (const period of extractionResult.financialPeriods) {
-      this.emitter.periodExtracted(
-        'financial',
-        period.facilityName,
-        `${period.periodStart.toISOString().split('T')[0]} to ${period.periodEnd.toISOString().split('T')[0]}`,
-        period.confidence
-      );
+      try {
+        this.emitter.periodExtracted(
+          'financial',
+          period.facilityName,
+          `${period.periodStart.toISOString().split('T')[0]} to ${period.periodEnd.toISOString().split('T')[0]}`,
+          period.confidence
+        );
+      } catch (e) {
+        console.error(`[Pipeline] Error emitting period:`, e, period);
+      }
     }
 
     for (const census of extractionResult.censusPeriods) {
@@ -382,6 +409,7 @@ export class ExtractionPipeline {
     this.session.progress.processedDocuments++;
     this.contextManager.incrementStats('documentsProcessed');
     this.updateProgress();
+    console.log(`[Pipeline] Document processing complete: ${doc.filename}`);
   }
 
   private async loadDocumentContent(

@@ -96,7 +96,9 @@ export class ExtractionContextManager {
    * Find or create a facility profile by name (handles aliases)
    */
   findOrCreateFacility(name: string): { profile: FacilityFinancialProfile; isNew: boolean } {
-    const normalizedName = this.normalizeFacilityName(name);
+    // Handle undefined/null names with a fallback
+    const effectiveName = name || 'Unknown Facility';
+    const normalizedName = this.normalizeFacilityName(effectiveName);
 
     // Check if facility exists (by name or alias)
     for (const [id, profile] of this.context.facilityProfiles) {
@@ -105,8 +107,8 @@ export class ExtractionContextManager {
         profile.aliases.some((a) => this.normalizeFacilityName(a) === normalizedName)
       ) {
         // Add alias if not already present
-        if (!profile.aliases.includes(name) && profile.name !== name) {
-          profile.aliases.push(name);
+        if (!profile.aliases.includes(effectiveName) && profile.name !== effectiveName) {
+          profile.aliases.push(effectiveName);
         }
         return { profile, isNew: false };
       }
@@ -114,7 +116,7 @@ export class ExtractionContextManager {
 
     // Create new facility
     const id = nanoid();
-    const builder = new FacilityProfileBuilder(id, name);
+    const builder = new FacilityProfileBuilder(id, effectiveName);
     this.facilityBuilders.set(id, builder);
 
     const profile = builder.getProfile();
@@ -425,6 +427,7 @@ export class ExtractionContextManager {
   }
 
   private normalizeFacilityName(name: string): string {
+    if (!name) return '';
     return name
       .toLowerCase()
       .replace(/\s+/g, ' ')

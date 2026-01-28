@@ -12,6 +12,24 @@ import pdfParse from 'pdf-parse';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 
+/**
+ * Detect if an Excel file is encrypted with Microsoft RMS (MSMAMARPCRYPT)
+ */
+function isEncryptedExcel(buffer: Buffer): boolean {
+  const header = buffer.slice(0, 20).toString('utf8');
+  if (header.includes('MSMAMARPCRYPT')) {
+    return true;
+  }
+  // OLE-based encryption check
+  if (buffer[0] === 0xD0 && buffer[1] === 0xCF && buffer[2] === 0x11 && buffer[3] === 0xE0) {
+    const headerStr = buffer.slice(0, 2000).toString('binary');
+    if (headerStr.includes('EncryptedPackage') || headerStr.includes('StrongEncryption')) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
@@ -133,8 +151,20 @@ async function processDocument(documentId: string, file: File, dealId: string | 
       fileType.includes('spreadsheet') ||
       fileType.includes('excel') ||
       fileName.endsWith('.xlsx') ||
-      fileName.endsWith('.xls')
+      fileName.endsWith('.xls') ||
+      fileName.endsWith('.numbers')
     ) {
+      // Check for encrypted files first (only for Excel formats, not Numbers)
+      if (!fileName.endsWith('.numbers') && isEncryptedExcel(buffer)) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `The file "${fileName}" is encrypted with Microsoft's Rights Management Service (RMS). Please open the file in Microsoft Excel and save a copy without encryption/protection, then try uploading again.`,
+          },
+          { status: 400 }
+        );
+      }
+
       try {
         const workbook = XLSX.read(buffer, { type: 'buffer' });
         const sheets: Record<string, any[][]> = {};
@@ -169,15 +199,23 @@ async function processDocument(documentId: string, file: File, dealId: string | 
           skipEmptyLines: true,
         });
 
+        const csvData = parseResult.data as (string | number | null)[][];
+
         const textParts: string[] = [];
-        for (const row of parseResult.data as string[][]) {
-          textParts.push(row.join('\t'));
+        for (const row of csvData) {
+          textParts.push(row.map(c => c ?? '').join('\t'));
         }
 
         rawText = textParts.join('\n');
-        extractedData.csvData = parseResult.data;
-        extractedData.rowCount = parseResult.data.length;
-        console.log(`[Wizard] Extracted ${parseResult.data.length} rows from CSV`);
+
+        // Convert CSV data to sheets format for deep extraction
+        // Use filename (without extension) as sheet name
+        const sheetName = file.name.replace(/\.csv$/i, '');
+        extractedData.sheets = { [sheetName]: csvData };
+        extractedData.sheetNames = [sheetName];
+        extractedData.csvData = csvData;
+        extractedData.rowCount = csvData.length;
+        console.log(`[Wizard] Extracted ${csvData.length} rows from CSV, converted to sheet: ${sheetName}`);
       } catch (csvError) {
         console.error('CSV parsing error:', csvError);
         rawText = `[Error extracting CSV: ${csvError instanceof Error ? csvError.message : 'Unknown error'}]`;

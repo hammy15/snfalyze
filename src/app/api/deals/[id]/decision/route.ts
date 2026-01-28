@@ -76,15 +76,18 @@ export async function POST(
       );
     }
 
-    // Build comprehensive facility data
+    // Build comprehensive facility data with TTM calculations
     const facilityData = await Promise.all(
       facilityRows.map(async (facility) => {
-        const [financials] = await db
+        // Get last 12 periods to calculate TTM
+        const allPeriods = await db
           .select()
           .from(financialPeriods)
           .where(eq(financialPeriods.facilityId, facility.id))
           .orderBy(desc(financialPeriods.periodEnd))
-          .limit(1);
+          .limit(12);
+
+        const [financials] = allPeriods; // Latest period for metadata
 
         let cmsData = null;
         if (facility.ccn) {
@@ -95,12 +98,39 @@ export async function POST(
             .limit(1);
         }
 
-        const multiplier = financials?.periodType === 'monthly' ? 12 :
-                          financials?.periodType === 'quarterly' ? 4 : 1;
+        // Calculate TTM by summing last 12 periods (if monthly data)
+        // Detect if data is monthly by checking date ranges
+        let isMonthly = false;
+        if (allPeriods.length >= 2) {
+          const period1 = new Date(allPeriods[0].periodEnd);
+          const period2 = new Date(allPeriods[1].periodEnd);
+          const daysDiff = Math.abs((period1.getTime() - period2.getTime()) / (1000 * 60 * 60 * 24));
+          isMonthly = daysDiff >= 25 && daysDiff <= 35; // ~30 days = monthly
+        }
 
-        const ttmRevenue = Number(financials?.totalRevenue || 0) * multiplier;
-        const ttmEbitdar = Number(financials?.ebitdar || 0) * multiplier;
-        const ttmNoi = Number(financials?.noi || 0) * multiplier || ttmEbitdar * 0.95;
+        let ttmRevenue: number;
+        let ttmEbitdar: number;
+        let ttmNoi: number;
+
+        if (isMonthly && allPeriods.length >= 12) {
+          // Sum the last 12 months for TTM
+          ttmRevenue = allPeriods.reduce((sum, p) => sum + Number(p.totalRevenue || 0), 0);
+          ttmEbitdar = allPeriods.reduce((sum, p) => sum + Number(p.ebitdar || 0), 0);
+          ttmNoi = allPeriods.reduce((sum, p) => sum + Number(p.noi || 0), 0);
+        } else if (isMonthly) {
+          // Annualize available months
+          const monthsAvailable = allPeriods.length;
+          const annualFactor = 12 / monthsAvailable;
+          ttmRevenue = allPeriods.reduce((sum, p) => sum + Number(p.totalRevenue || 0), 0) * annualFactor;
+          ttmEbitdar = allPeriods.reduce((sum, p) => sum + Number(p.ebitdar || 0), 0) * annualFactor;
+          ttmNoi = allPeriods.reduce((sum, p) => sum + Number(p.noi || 0), 0) * annualFactor;
+        } else {
+          // Use latest period as-is (assumed annual)
+          ttmRevenue = Number(financials?.totalRevenue || 0);
+          ttmEbitdar = Number(financials?.ebitdar || 0);
+          ttmNoi = Number(financials?.noi || 0) || ttmEbitdar * 0.95;
+        }
+
         // Occupancy may be stored as decimal (0.85) or percentage (85)
         const rawOccupancy = Number(financials?.occupancyRate || 0.85);
         const occupancyRate = rawOccupancy > 1 ? rawOccupancy / 100 : rawOccupancy;
@@ -138,18 +168,18 @@ export async function POST(
       ttmNoi: f.ttmNoi,
       ttmEbitdar: f.ttmEbitdar,
       ttmRevenue: f.ttmRevenue,
-      cmsRating: f.cmsData?.overallRating || f.facility.cmsRating,
-      staffingRating: f.cmsData?.staffingRating || f.facility.staffingRating,
-      qualityRating: f.cmsData?.qualityRating || f.facility.qualityRating,
+      cmsRating: f.cmsData?.overallRating ?? f.facility.cmsRating ?? undefined,
+      staffingRating: f.cmsData?.staffingRating ?? f.facility.staffingRating ?? undefined,
+      qualityRating: f.cmsData?.qualityMeasureRating ?? f.facility.qualityRating ?? undefined,
       occupancyRate: f.occupancyRate,
       staffing: f.cmsData ? {
         totalHppd: Number(f.cmsData.totalNursingHppd) || 3.5,
-        rnHppd: Number(f.cmsData.rnHppd) || 0.5,
+        rnHppd: Number(f.cmsData.reportedRnHppd) || 0.5,
         agencyPercent: 0.10,
       } : undefined,
       survey: f.cmsData ? {
         totalDeficiencies: f.cmsData.totalDeficiencies || 0,
-        hasImmediateJeopardy: f.cmsData.hasImmediateJeopardy || false,
+        hasImmediateJeopardy: f.facility.hasImmediateJeopardy || false,
         isSff: f.cmsData.isSff || false,
         lastSurveyDate: '',
       } : undefined,
@@ -163,15 +193,15 @@ export async function POST(
       name: f.facility.name,
       beds: f.facility.licensedBeds || 100,
       state: f.facility.state || 'TX',
-      cmsRating: f.cmsData?.overallRating || f.facility.cmsRating,
-      yearBuilt: f.facility.yearBuilt,
+      cmsRating: f.cmsData?.overallRating ?? f.facility.cmsRating ?? undefined,
+      yearBuilt: f.facility.yearBuilt ?? undefined,
       ttmRevenue: f.ttmRevenue,
       ttmEbitdar: f.ttmEbitdar,
       ttmNoi: f.ttmNoi,
       occupancyRate: f.occupancyRate,
-      surveyDeficiencies: f.cmsData?.totalDeficiencies,
-      isSff: f.cmsData?.isSff || f.facility.isSff || false,
-      hasImmediateJeopardy: f.cmsData?.hasImmediateJeopardy || f.facility.hasImmediateJeopardy || false,
+      surveyDeficiencies: f.cmsData?.totalDeficiencies ?? undefined,
+      isSff: f.cmsData?.isSff ?? f.facility.isSff ?? false,
+      hasImmediateJeopardy: f.facility.hasImmediateJeopardy ?? false,
     }));
 
     const masterLease = calculateMasterLease({
@@ -200,15 +230,15 @@ export async function POST(
       facilityId: f.facility.id,
       facilityName: f.facility.name,
       result: checkUnderwritingCriteria(partner, {
-        cmsRating: f.cmsData?.overallRating || f.facility.cmsRating,
+        cmsRating: f.cmsData?.overallRating ?? f.facility.cmsRating ?? undefined,
         occupancyRate: f.occupancyRate,
         ebitdarMargin: f.ttmEbitdar / f.ttmRevenue,
-        surveyDeficiencies: f.cmsData?.totalDeficiencies,
-        isSff: f.cmsData?.isSff || f.facility.isSff,
-        hasImmediateJeopardy: f.cmsData?.hasImmediateJeopardy || f.facility.hasImmediateJeopardy,
-        beds: f.facility.licensedBeds,
-        yearBuilt: f.facility.yearBuilt,
-        state: f.facility.state,
+        surveyDeficiencies: f.cmsData?.totalDeficiencies ?? undefined,
+        isSff: f.cmsData?.isSff ?? f.facility.isSff ?? undefined,
+        hasImmediateJeopardy: f.facility.hasImmediateJeopardy ?? undefined,
+        beds: f.facility.licensedBeds ?? undefined,
+        yearBuilt: f.facility.yearBuilt ?? undefined,
+        state: f.facility.state ?? undefined,
       }),
     }));
 

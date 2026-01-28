@@ -133,22 +133,21 @@ export async function POST(
           name: facility.name,
           beds: facility.licensedBeds || 0,
           state: facility.state || '',
-          cmsRating: cmsData?.overallRating || facility.cmsRating || undefined,
-          yearBuilt: facility.yearBuilt || undefined,
+          cmsRating: cmsData?.overallRating ?? facility.cmsRating ?? undefined,
+          yearBuilt: facility.yearBuilt ?? undefined,
           ttmRevenue,
           ttmEbitdar,
           ttmNoi,
           occupancyRate,
-          medicarePercent: financials?.medicarePercent
-            ? Number(financials.medicarePercent) / 100
+          medicarePercent: financials?.medicareRevenue && financials?.totalRevenue
+            ? Number(financials.medicareRevenue) / Number(financials.totalRevenue)
             : undefined,
-          medicaidPercent: financials?.medicaidPercent
-            ? Number(financials.medicaidPercent) / 100
+          medicaidPercent: financials?.medicaidRevenue && financials?.totalRevenue
+            ? Number(financials.medicaidRevenue) / Number(financials.totalRevenue)
             : undefined,
-          surveyDeficiencies: cmsData?.totalDeficiencies || undefined,
-          isSff: cmsData?.isSff || facility.isSff || false,
-          hasImmediateJeopardy: cmsData?.hasImmediateJeopardy ||
-            facility.hasImmediateJeopardy || false,
+          surveyDeficiencies: cmsData?.totalDeficiencies ?? undefined,
+          isSff: cmsData?.isSff ?? facility.isSff ?? false,
+          hasImmediateJeopardy: facility.hasImmediateJeopardy ?? false,
         } satisfies PortfolioFacility;
       })
     );

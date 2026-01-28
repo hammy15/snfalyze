@@ -95,34 +95,35 @@ export async function POST(
           ttmEbitdar,
           ttmRevenue,
 
-          cmsRating: cmsData?.overallRating || facility.cmsRating || undefined,
-          healthRating: cmsData?.healthRating || facility.healthRating || undefined,
-          staffingRating: cmsData?.staffingRating || facility.staffingRating || undefined,
-          qualityRating: cmsData?.qualityRating || facility.qualityRating || undefined,
+          cmsRating: cmsData?.overallRating ?? facility.cmsRating ?? undefined,
+          healthRating: cmsData?.healthInspectionRating ?? facility.healthRating ?? undefined,
+          staffingRating: cmsData?.staffingRating ?? facility.staffingRating ?? undefined,
+          qualityRating: cmsData?.qualityMeasureRating ?? facility.qualityRating ?? undefined,
 
           // Occupancy may be stored as decimal (0.85) or percentage (85)
           occupancyRate: (() => {
             const raw = Number(financials?.occupancyRate || 0.85);
             return raw > 1 ? raw / 100 : raw;
           })(),
-          medicarePercent: financials?.medicarePercent
-            ? Number(financials.medicarePercent) / 100
+          // Calculate payer percentages from revenue if available
+          medicarePercent: financials?.medicareRevenue && financials?.totalRevenue
+            ? Number(financials.medicareRevenue) / Number(financials.totalRevenue)
             : undefined,
-          medicaidPercent: financials?.medicaidPercent
-            ? Number(financials.medicaidPercent) / 100
+          medicaidPercent: financials?.medicaidRevenue && financials?.totalRevenue
+            ? Number(financials.medicaidRevenue) / Number(financials.totalRevenue)
             : undefined,
 
           staffing: cmsData ? {
             totalHppd: Number(cmsData.totalNursingHppd) || 3.5,
-            rnHppd: Number(cmsData.rnHppd) || 0.5,
-            agencyPercent: Number(cmsData.agencyPercent) || 0.10,
+            rnHppd: Number(cmsData.reportedRnHppd) || 0.5,
+            agencyPercent: Number(financials?.agencyPercentage) || 0.10,
           } : undefined,
 
           survey: cmsData ? {
             totalDeficiencies: cmsData.totalDeficiencies || 0,
-            hasImmediateJeopardy: cmsData.hasImmediateJeopardy || false,
-            isSff: cmsData.isSff || false,
-            lastSurveyDate: cmsData.lastSurveyDate || '',
+            hasImmediateJeopardy: facility.hasImmediateJeopardy ?? false,
+            isSff: cmsData.isSff ?? false,
+            lastSurveyDate: cmsData.dataDate ? String(cmsData.dataDate) : '',
           } : undefined,
 
           capex: body.capexData?.[facility.id] ? {
@@ -130,7 +131,7 @@ export async function POST(
             totalNeeds: body.capexData[facility.id].total || 0,
           } : undefined,
 
-          market: body.marketData?.[facility.state] ? {
+          market: facility.state && body.marketData?.[facility.state] ? {
             medicaidRate: body.marketData[facility.state].medicaidRate || 200,
             competitorOccupancy: body.marketData[facility.state].occupancy || 0.85,
             supplyGrowthRate: body.marketData[facility.state].supplyGrowth || 0.02,

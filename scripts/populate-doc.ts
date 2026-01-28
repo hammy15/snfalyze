@@ -26,13 +26,41 @@ async function main() {
   const buffer = fs.readFileSync(FILE_PATH);
   const workbook = XLSX.read(buffer, { type: 'buffer' });
 
-  const sheets: Record<string, any[][]> = {};
+  // Convert to SheetContent[] format expected by the pipeline
+  const sheets: Array<{
+    name: string;
+    headers: string[];
+    rows: (string | number | null)[][];
+    rowCount: number;
+    columnCount: number;
+  }> = [];
   const textParts: string[] = [];
 
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
     const data = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
-    sheets[sheetName] = data;
+
+    // Find headers (first non-empty row with multiple cells)
+    let headerRow: string[] = [];
+    let dataStartIdx = 0;
+    for (let i = 0; i < Math.min(15, data.length); i++) {
+      const row = data[i];
+      if (row && row.filter(c => c != null && c !== '').length > 3) {
+        headerRow = row.map(c => c != null ? String(c) : '');
+        dataStartIdx = i + 1;
+        break;
+      }
+    }
+
+    const maxCols = Math.max(...data.map(r => r ? r.length : 0));
+
+    sheets.push({
+      name: sheetName,
+      headers: headerRow,
+      rows: data.slice(dataStartIdx),
+      rowCount: data.length,
+      columnCount: maxCols,
+    });
 
     textParts.push(`=== Sheet: ${sheetName} ===`);
     for (const row of data) {
@@ -44,7 +72,7 @@ async function main() {
 
   const rawText = textParts.join('\n');
   const extractedData = {
-    sheets,
+    sheets,  // Now an array of SheetContent
     sheetNames: workbook.SheetNames,
     documentType: 'financial_statement',
   };

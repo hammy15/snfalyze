@@ -1,7 +1,188 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { deals, facilities, capitalPartners, documents, financialPeriods, valuations } from '@/db/schema';
+import { deals, facilities, capitalPartners, documents, financialPeriods, valuations, facilityCensusPeriods, facilityPayerRates } from '@/db/schema';
 import { sql } from 'drizzle-orm';
+
+// ============================================================================
+// CENSUS AND PPD RATE GENERATORS
+// ============================================================================
+
+// Generate realistic census data for a facility based on asset type
+function generateCensusData(facilityId: string, beds: number, assetType: string): any[] {
+  const censusRecords = [];
+  const now = new Date();
+
+  // Generate 12 months of census data
+  for (let monthsAgo = 0; monthsAgo < 12; monthsAgo++) {
+    const periodEnd = new Date(now.getFullYear(), now.getMonth() - monthsAgo, 0);
+    const periodStart = new Date(periodEnd.getFullYear(), periodEnd.getMonth(), 1);
+    const daysInMonth = periodEnd.getDate();
+
+    // Base occupancy rate varies by asset type (85-95% for SNF, 90-97% for ALF/ILF)
+    const baseOccupancy = assetType === 'SNF' ? 0.87 : assetType === 'HOSPICE' ? 0.75 : 0.92;
+    const occupancyVariance = (Math.random() - 0.5) * 0.08;
+    const occupancy = Math.min(0.98, Math.max(0.70, baseOccupancy + occupancyVariance));
+
+    const totalPatientDays = Math.round(beds * daysInMonth * occupancy);
+
+    if (assetType === 'SNF') {
+      // SNF payer mix distribution
+      const medicarePartADays = Math.round(totalPatientDays * (0.15 + Math.random() * 0.08));
+      const medicareAdvantageDays = Math.round(totalPatientDays * (0.10 + Math.random() * 0.05));
+      const managedCareDays = Math.round(totalPatientDays * (0.05 + Math.random() * 0.03));
+      const medicaidDays = Math.round(totalPatientDays * (0.45 + Math.random() * 0.10));
+      const managedMedicaidDays = Math.round(totalPatientDays * (0.08 + Math.random() * 0.04));
+      const privateDays = Math.round(totalPatientDays * (0.05 + Math.random() * 0.03));
+      const vaContractDays = Math.round(totalPatientDays * (0.02 + Math.random() * 0.02));
+      const hospiceDays = Math.round(totalPatientDays * (0.03 + Math.random() * 0.02));
+      const otherDays = totalPatientDays - medicarePartADays - medicareAdvantageDays - managedCareDays - medicaidDays - managedMedicaidDays - privateDays - vaContractDays - hospiceDays;
+
+      censusRecords.push({
+        facilityId,
+        periodStart: periodStart.toISOString().split('T')[0],
+        periodEnd: periodEnd.toISOString().split('T')[0],
+        medicarePartADays: Math.max(0, medicarePartADays),
+        medicareAdvantageDays: Math.max(0, medicareAdvantageDays),
+        managedCareDays: Math.max(0, managedCareDays),
+        medicaidDays: Math.max(0, medicaidDays),
+        managedMedicaidDays: Math.max(0, managedMedicaidDays),
+        privateDays: Math.max(0, privateDays),
+        vaContractDays: Math.max(0, vaContractDays),
+        hospiceDays: Math.max(0, hospiceDays),
+        otherDays: Math.max(0, otherDays),
+        totalBeds: beds,
+        occupancyRate: (occupancy * 100).toFixed(2),
+        source: 'demo',
+      });
+    } else if (assetType === 'ALF' || assetType === 'ILF') {
+      // ALF/ILF is primarily private pay
+      const privateDays = Math.round(totalPatientDays * (0.75 + Math.random() * 0.10));
+      const medicaidDays = Math.round(totalPatientDays * (0.10 + Math.random() * 0.08));
+      const otherDays = totalPatientDays - privateDays - medicaidDays;
+
+      censusRecords.push({
+        facilityId,
+        periodStart: periodStart.toISOString().split('T')[0],
+        periodEnd: periodEnd.toISOString().split('T')[0],
+        medicarePartADays: 0,
+        medicareAdvantageDays: 0,
+        managedCareDays: 0,
+        medicaidDays: Math.max(0, medicaidDays),
+        managedMedicaidDays: 0,
+        privateDays: Math.max(0, privateDays),
+        vaContractDays: 0,
+        hospiceDays: 0,
+        otherDays: Math.max(0, otherDays),
+        totalBeds: beds,
+        occupancyRate: (occupancy * 100).toFixed(2),
+        source: 'demo',
+      });
+    } else {
+      // Hospice - mainly Medicare
+      const medicarePartADays = Math.round(totalPatientDays * (0.85 + Math.random() * 0.05));
+      const privateDays = Math.round(totalPatientDays * (0.05 + Math.random() * 0.03));
+      const medicaidDays = totalPatientDays - medicarePartADays - privateDays;
+
+      censusRecords.push({
+        facilityId,
+        periodStart: periodStart.toISOString().split('T')[0],
+        periodEnd: periodEnd.toISOString().split('T')[0],
+        medicarePartADays: Math.max(0, medicarePartADays),
+        medicareAdvantageDays: 0,
+        managedCareDays: 0,
+        medicaidDays: Math.max(0, medicaidDays),
+        managedMedicaidDays: 0,
+        privateDays: Math.max(0, privateDays),
+        vaContractDays: 0,
+        hospiceDays: 0,
+        otherDays: 0,
+        totalBeds: beds,
+        occupancyRate: (occupancy * 100).toFixed(2),
+        source: 'demo',
+      });
+    }
+  }
+
+  return censusRecords;
+}
+
+// Generate realistic PPD rates by state and asset type
+function generatePayerRates(facilityId: string, state: string, assetType: string): any {
+  // State-specific Medicaid rate adjustments
+  const stateRateMultiplier: Record<string, number> = {
+    TX: 1.05, FL: 0.95, OH: 0.90, CA: 1.20, AZ: 0.88, CO: 1.02,
+    GA: 0.92, WA: 1.08, NC: 0.94, IL: 0.98, NV: 1.00, MA: 1.15,
+    ID: 0.85, MT: 0.82, OR: 1.05, default: 1.00,
+  };
+  const multiplier = stateRateMultiplier[state] || stateRateMultiplier.default;
+
+  if (assetType === 'SNF') {
+    return {
+      facilityId,
+      effectiveDate: new Date().toISOString().split('T')[0],
+      medicarePartAPpd: (550 + Math.random() * 100).toFixed(2),
+      medicareAdvantagePpd: (420 + Math.random() * 80).toFixed(2),
+      managedCarePpd: (380 + Math.random() * 60).toFixed(2),
+      medicaidPpd: ((210 + Math.random() * 40) * multiplier).toFixed(2),
+      managedMedicaidPpd: ((235 + Math.random() * 35) * multiplier).toFixed(2),
+      privatePpd: (350 + Math.random() * 100).toFixed(2),
+      vaContractPpd: (380 + Math.random() * 50).toFixed(2),
+      hospicePpd: (200 + Math.random() * 30).toFixed(2),
+      ancillaryRevenuePpd: (25 + Math.random() * 15).toFixed(2),
+      therapyRevenuePpd: (45 + Math.random() * 25).toFixed(2),
+      source: 'demo',
+    };
+  } else if (assetType === 'ALF') {
+    return {
+      facilityId,
+      effectiveDate: new Date().toISOString().split('T')[0],
+      medicarePartAPpd: null,
+      medicareAdvantagePpd: null,
+      managedCarePpd: null,
+      medicaidPpd: ((120 + Math.random() * 30) * multiplier).toFixed(2),
+      managedMedicaidPpd: null,
+      privatePpd: (180 + Math.random() * 60).toFixed(2),
+      vaContractPpd: null,
+      hospicePpd: null,
+      ancillaryRevenuePpd: (10 + Math.random() * 10).toFixed(2),
+      therapyRevenuePpd: null,
+      source: 'demo',
+    };
+  } else if (assetType === 'ILF') {
+    return {
+      facilityId,
+      effectiveDate: new Date().toISOString().split('T')[0],
+      medicarePartAPpd: null,
+      medicareAdvantagePpd: null,
+      managedCarePpd: null,
+      medicaidPpd: null,
+      managedMedicaidPpd: null,
+      privatePpd: (120 + Math.random() * 50).toFixed(2),
+      vaContractPpd: null,
+      hospicePpd: null,
+      ancillaryRevenuePpd: (8 + Math.random() * 8).toFixed(2),
+      therapyRevenuePpd: null,
+      source: 'demo',
+    };
+  } else {
+    // Hospice
+    return {
+      facilityId,
+      effectiveDate: new Date().toISOString().split('T')[0],
+      medicarePartAPpd: (195 + Math.random() * 30).toFixed(2),
+      medicareAdvantagePpd: (180 + Math.random() * 25).toFixed(2),
+      managedCarePpd: null,
+      medicaidPpd: ((150 + Math.random() * 20) * multiplier).toFixed(2),
+      managedMedicaidPpd: null,
+      privatePpd: (250 + Math.random() * 50).toFixed(2),
+      vaContractPpd: null,
+      hospicePpd: null,
+      ancillaryRevenuePpd: null,
+      therapyRevenuePpd: null,
+      source: 'demo',
+    };
+  }
+}
 
 // ============================================================================
 // SNF DEALS (5 Complete Deals)
@@ -1447,11 +1628,27 @@ export async function POST() {
     await db.delete(documents);
     console.log('Cleared documents');
 
-    // Insert Cascadia facilities (standalone)
+    // Clear census and payer rate data
+    await db.delete(facilityCensusPeriods);
+    await db.delete(facilityPayerRates);
+    console.log('Cleared census and payer rate data');
+
+    // Insert Cascadia facilities (standalone) with census and payer rate data
     for (const facility of cascadiaFacilities) {
-      await db.insert(facilities).values(facility);
+      const [insertedFacility] = await db.insert(facilities).values(facility).returning({ id: facilities.id });
+
+      // Generate and insert census data (12 months)
+      const beds = facility.licensedBeds || 100;
+      const censusData = generateCensusData(insertedFacility.id, beds, facility.assetType);
+      for (const census of censusData) {
+        await db.insert(facilityCensusPeriods).values(census);
+      }
+
+      // Generate and insert payer rates
+      const payerRates = generatePayerRates(insertedFacility.id, facility.state, facility.assetType);
+      await db.insert(facilityPayerRates).values(payerRates);
     }
-    console.log(`Inserted ${cascadiaFacilities.length} Cascadia facilities`);
+    console.log(`Inserted ${cascadiaFacilities.length} Cascadia facilities with census & rates`);
 
     // Insert all deals and their associated facilities/documents
     const dealIdMap: Record<string, string> = {};
@@ -1461,16 +1658,27 @@ export async function POST() {
       dealIdMap[deal.name] = insertedDeal.id;
       console.log(`Inserted deal: ${deal.name} (${deal.assetType})`);
 
-      // Insert facilities for this deal
+      // Insert facilities for this deal with census and payer rate data
       const dealFacilities = demoFacilities[deal.name];
       if (dealFacilities) {
         for (const facility of dealFacilities) {
-          await db.insert(facilities).values({
+          const [insertedFacility] = await db.insert(facilities).values({
             ...facility,
             dealId: insertedDeal.id,
-          });
+          }).returning({ id: facilities.id });
+
+          // Generate and insert census data (12 months)
+          const beds = facility.licensedBeds || 100;
+          const censusData = generateCensusData(insertedFacility.id, beds, facility.assetType);
+          for (const census of censusData) {
+            await db.insert(facilityCensusPeriods).values(census);
+          }
+
+          // Generate and insert payer rates
+          const payerRates = generatePayerRates(insertedFacility.id, facility.state, facility.assetType);
+          await db.insert(facilityPayerRates).values(payerRates);
         }
-        console.log(`  - ${dealFacilities.length} facilities`);
+        console.log(`  - ${dealFacilities.length} facilities with census & rates`);
       }
 
       // Insert documents for this deal
@@ -1499,6 +1707,8 @@ export async function POST() {
     const dealCount = await db.select({ count: sql<number>`count(*)` }).from(deals);
     const partnerCount = await db.select({ count: sql<number>`count(*)` }).from(capitalPartners);
     const documentCount = await db.select({ count: sql<number>`count(*)` }).from(documents);
+    const censusCount = await db.select({ count: sql<number>`count(*)` }).from(facilityCensusPeriods);
+    const payerRateCount = await db.select({ count: sql<number>`count(*)` }).from(facilityPayerRates);
 
     // Count by asset type
     const snfCount = allDeals.filter(d => d.assetType === 'SNF').length;
@@ -1520,6 +1730,8 @@ export async function POST() {
         facilities: Number(facilityCount[0].count),
         documents: Number(documentCount[0].count),
         capitalPartners: Number(partnerCount[0].count),
+        censusPeriods: Number(censusCount[0].count),
+        payerRates: Number(payerRateCount[0].count),
       },
     });
   } catch (error) {

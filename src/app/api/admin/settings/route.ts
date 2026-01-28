@@ -15,12 +15,12 @@ let currentSettings: AlgorithmSettings = DEFAULT_ALGORITHM_SETTINGS;
 let currentAdminSettings: AdminSettings = { ...DEFAULT_ADMIN_SETTINGS };
 let settingsHistory: { settings: AlgorithmSettings; timestamp: string; changedBy: string }[] = [];
 
-// God mode password for super admin access
-const GOD_MODE_PASSWORD = 'jockibox26';
+// God mode password for super admin access (from environment variable)
+const GOD_MODE_PASSWORD = process.env.ADMIN_PASSWORD || '';
 
 function validateAuth(request: NextRequest): boolean {
   const authHeader = request.headers.get('x-admin-password');
-  return authHeader === GOD_MODE_PASSWORD;
+  return authHeader === GOD_MODE_PASSWORD && GOD_MODE_PASSWORD !== '';
 }
 
 export async function GET(request: NextRequest) {

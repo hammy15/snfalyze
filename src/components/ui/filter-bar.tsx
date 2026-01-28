@@ -175,27 +175,32 @@ export function FilterBar({
   return (
     <div className={cn('space-y-3', className)} ref={dropdownRef}>
       {/* Main Filter Row */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-3 flex-wrap">
         {/* Search Input */}
         {onSearch && (
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <div className="relative flex-1 min-w-[280px] max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-disabled)]" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => handleSearch(e.target.value)}
               placeholder={searchPlaceholder}
-              className="input pl-9 pr-4 w-full"
+              className="input pl-10 pr-4 py-2.5 w-full text-sm"
             />
             {searchQuery && (
               <button
                 onClick={() => handleSearch('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-[var(--gray-100)] rounded"
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-[var(--gray-100)] rounded"
               >
-                <X className="w-3 h-3 text-[var(--color-text-tertiary)]" />
+                <X className="w-3.5 h-3.5 text-[var(--color-text-tertiary)]" />
               </button>
             )}
           </div>
+        )}
+
+        {/* Divider */}
+        {onSearch && filters.length > 0 && (
+          <div className="h-6 w-px bg-surface-200 dark:bg-surface-700 hidden sm:block" />
         )}
 
         {/* Filter Dropdowns */}
@@ -204,13 +209,15 @@ export function FilterBar({
             <button
               onClick={() => setOpenDropdown(openDropdown === filter.id ? null : filter.id)}
               className={cn(
-                'btn btn-secondary btn-sm',
-                getFilterValue(filter.id) && 'bg-[var(--accent-light)] border-[var(--accent-solid)] text-[var(--accent-solid)]'
+                'inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors',
+                getFilterValue(filter.id)
+                  ? 'bg-[var(--accent-light)] border-[var(--accent-solid)] text-[var(--accent-solid)]'
+                  : 'bg-white dark:bg-surface-800 border-surface-200 dark:border-surface-700 text-surface-700 dark:text-surface-300 hover:bg-surface-50 dark:hover:bg-surface-700'
               )}
             >
               {filter.icon}
-              {filter.label}
-              <ChevronDown className="w-3 h-3" />
+              <span>{filter.label}</span>
+              <ChevronDown className="w-3.5 h-3.5 opacity-60" />
             </button>
 
             {openDropdown === filter.id && (

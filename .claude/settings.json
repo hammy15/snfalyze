@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(git:*)",
+      "Bash(node:*)",
+      "Bash(tsx:*)",
+      "mcp__Neon__*",
+      "mcp__playwright__*"
+    ]
+  }
+}

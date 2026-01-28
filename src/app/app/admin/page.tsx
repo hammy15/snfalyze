@@ -417,8 +417,8 @@ function AdjustmentsGrid<T extends Record<string, number>>({
 // MAIN ADMIN PAGE
 // =============================================================================
 
-// God Mode Password
-const GOD_MODE_PASSWORD = 'jockibox26';
+// God Mode Password (from environment variable)
+const GOD_MODE_PASSWORD = process.env.NEXT_PUBLIC_APP_PASSWORD || '';
 
 export default function AdminPage() {
   // Authentication state

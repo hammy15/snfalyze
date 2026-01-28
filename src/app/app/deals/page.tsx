@@ -24,7 +24,59 @@ import {
   Target,
   BookOpen,
   FileText,
+  Flame,
+  Clock,
+  Calendar,
+  CheckCircle2,
+  Zap,
 } from 'lucide-react';
+
+// Quick filter presets
+interface QuickFilter {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  color: string;
+  filters: ActiveFilter[];
+}
+
+const quickFilterPresets: QuickFilter[] = [
+  {
+    id: 'hot-leads',
+    label: 'Hot Leads',
+    icon: <Flame className="w-3.5 h-3.5" />,
+    color: 'text-orange-600 bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-800',
+    filters: [{ id: 'stage', value: ['loi', 'diligence'], label: '2 selected' }],
+  },
+  {
+    id: 'due-diligence',
+    label: 'Due Diligence',
+    icon: <Clock className="w-3.5 h-3.5" />,
+    color: 'text-blue-600 bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800',
+    filters: [{ id: 'stage', value: ['diligence'], label: 'Diligence' }],
+  },
+  {
+    id: 'closing-soon',
+    label: 'Closing Soon',
+    icon: <Calendar className="w-3.5 h-3.5" />,
+    color: 'text-emerald-600 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800',
+    filters: [{ id: 'stage', value: ['psa'], label: 'PSA' }],
+  },
+  {
+    id: 'new-targets',
+    label: 'New Targets',
+    icon: <Zap className="w-3.5 h-3.5" />,
+    color: 'text-purple-600 bg-purple-50 border-purple-200 dark:bg-purple-900/20 dark:border-purple-800',
+    filters: [{ id: 'stage', value: ['target'], label: 'Target' }],
+  },
+  {
+    id: 'closed-won',
+    label: 'Closed Won',
+    icon: <CheckCircle2 className="w-3.5 h-3.5" />,
+    color: 'text-teal-600 bg-teal-50 border-teal-200 dark:bg-teal-900/20 dark:border-teal-800',
+    filters: [{ id: 'stage', value: ['closed'], label: 'Closed' }],
+  },
+];
 
 type DealStage = 'target' | 'contacted' | 'loi' | 'diligence' | 'psa' | 'closed' | 'dead';
 
@@ -80,6 +132,29 @@ export default function DealsPage() {
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [activeQuickFilter, setActiveQuickFilter] = useState<string | null>(null);
+
+  // Handle quick filter selection
+  const handleQuickFilter = (preset: QuickFilter) => {
+    if (activeQuickFilter === preset.id) {
+      // Deselect if already active
+      setActiveQuickFilter(null);
+      setActiveFilters([]);
+    } else {
+      setActiveQuickFilter(preset.id);
+      setActiveFilters(preset.filters);
+    }
+  };
+
+  // Clear quick filter when manual filters change
+  const handleFilterChange = (filters: ActiveFilter[]) => {
+    setActiveFilters(filters);
+    // Check if current filters match any preset
+    const matchingPreset = quickFilterPresets.find(
+      (preset) => JSON.stringify(preset.filters) === JSON.stringify(filters)
+    );
+    setActiveQuickFilter(matchingPreset?.id || null);
+  };
 
   // Fetch deals from API with facilities
   useEffect(() => {
@@ -464,12 +539,35 @@ export default function DealsPage() {
         </div>
       </div>
 
+      {/* Quick Filter Presets */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-medium text-surface-500 dark:text-surface-400">Quick filters:</span>
+        {quickFilterPresets.map((preset) => (
+          <button
+            key={preset.id}
+            onClick={() => handleQuickFilter(preset)}
+            className={cn(
+              'inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border transition-all',
+              activeQuickFilter === preset.id
+                ? `${preset.color} ring-2 ring-offset-1 ring-current`
+                : 'text-surface-600 bg-surface-50 border-surface-200 hover:bg-surface-100 dark:text-surface-300 dark:bg-surface-800 dark:border-surface-700 dark:hover:bg-surface-700'
+            )}
+          >
+            {preset.icon}
+            {preset.label}
+            {activeQuickFilter === preset.id && (
+              <span className="ml-0.5 text-[10px]">✓</span>
+            )}
+          </button>
+        ))}
+      </div>
+
       {/* Filter Bar */}
-      <div className="neu-card p-3">
+      <div className="neu-card p-4">
         <FilterBar
           filters={dealFilters}
           activeFilters={activeFilters}
-          onFilterChange={setActiveFilters}
+          onFilterChange={handleFilterChange}
           onSearch={setSearchQuery}
           searchPlaceholder="Search deals..."
         />

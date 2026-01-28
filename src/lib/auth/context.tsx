@@ -17,7 +17,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const SHARED_PASSWORD = 'jockibox26';
+// Use environment variable for password (fallback for safety)
+const SHARED_PASSWORD = process.env.NEXT_PUBLIC_APP_PASSWORD || '';
 const AUTH_STORAGE_KEY = 'snfalyze_auth';
 
 export function AuthProvider({ children }: { children: ReactNode }) {

@@ -60,6 +60,7 @@ import {
   PortfolioFinancialView,
   type FacilityTab,
 } from '@/components/financials';
+import { DecisionDashboard } from '@/components/decision';
 import { DealScoreCard } from '@/components/scoring';
 import { PortfolioFacilitiesOverview } from '@/components/deals/portfolio-facilities-overview';
 import { RentSuggestionCard } from '@/components/slb/rent-suggestion-card';
@@ -760,6 +761,12 @@ export default function DealDetailPage() {
           {cmsSyncMessage && (
             <span className="text-sm text-muted-foreground ml-2">{cmsSyncMessage}</span>
           )}
+          <Link href={`/app/deals/${deal.id}/options`}>
+            <Button variant="outline">
+              <ListChecks className="h-4 w-4 mr-1" />
+              Financing Options
+            </Button>
+          </Link>
           {deal.dealStructure === 'sale_leaseback' && (
             <Link href={`/app/deals/${deal.id}/sale-leaseback`}>
               <Button variant="outline">
@@ -896,6 +903,10 @@ export default function DealDetailPage() {
               <TabsTrigger value="financials" className="flex items-center gap-1">
                 <DollarSign className="h-4 w-4" />
                 Financials
+              </TabsTrigger>
+              <TabsTrigger value="analysis" className="flex items-center gap-1">
+                <ListChecks className="h-4 w-4" />
+                Analysis
               </TabsTrigger>
               {deal.dealStructure === 'sale_leaseback' && (
                 <TabsTrigger value="sale-leaseback" className="flex items-center gap-1">
@@ -1325,6 +1336,11 @@ export default function DealDetailPage() {
                   dealId={deal.id}
                 />
               )}
+            </TabsContent>
+
+            {/* Analysis Tab */}
+            <TabsContent value="analysis" className="mt-4">
+              <DecisionDashboard dealId={deal.id} />
             </TabsContent>
 
             {/* Sale-Leaseback Tab */}

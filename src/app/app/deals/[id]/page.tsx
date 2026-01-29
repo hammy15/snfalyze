@@ -52,6 +52,7 @@ import {
   RefreshCw,
   BookOpen,
   ListChecks,
+  Activity,
 } from 'lucide-react';
 import { SaleLeasebackDashboard } from '@/components/sale-leaseback/SaleLeasebackDashboard';
 import {
@@ -61,6 +62,7 @@ import {
   type FacilityTab,
 } from '@/components/financials';
 import { DecisionDashboard } from '@/components/decision';
+import { QualityDashboard } from '@/components/quality';
 import { DealScoreCard } from '@/components/scoring';
 import { PortfolioFacilitiesOverview } from '@/components/deals/portfolio-facilities-overview';
 import { RentSuggestionCard } from '@/components/slb/rent-suggestion-card';
@@ -908,6 +910,10 @@ export default function DealDetailPage() {
                 <ListChecks className="h-4 w-4" />
                 Analysis
               </TabsTrigger>
+              <TabsTrigger value="quality" className="flex items-center gap-1">
+                <Activity className="h-4 w-4" />
+                Quality
+              </TabsTrigger>
               {deal.dealStructure === 'sale_leaseback' && (
                 <TabsTrigger value="sale-leaseback" className="flex items-center gap-1">
                   <ArrowLeftRight className="h-4 w-4" />
@@ -1341,6 +1347,11 @@ export default function DealDetailPage() {
             {/* Analysis Tab */}
             <TabsContent value="analysis" className="mt-4">
               <DecisionDashboard dealId={deal.id} />
+            </TabsContent>
+
+            {/* Quality Tab */}
+            <TabsContent value="quality" className="mt-4">
+              <QualityDashboard dealId={deal.id} />
             </TabsContent>
 
             {/* Sale-Leaseback Tab */}

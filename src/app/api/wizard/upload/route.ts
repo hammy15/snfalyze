@@ -60,10 +60,25 @@ export async function POST(request: NextRequest) {
     // Generate unique ID
     const fileId = randomUUID();
 
+    // Check for encrypted Excel files BEFORE processing
+    const lowerName = file.name.toLowerCase();
+    if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) {
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      if (isEncryptedExcel(buffer)) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `The file "${file.name}" is encrypted with Microsoft's Rights Management Service (RMS). Please open the file in Microsoft Excel and save a copy without encryption/protection, then try uploading again.`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // Determine file type based on extension
     type DocumentType = 'financial_statement' | 'rent_roll' | 'census_report' | 'staffing_report' | 'survey_report' | 'cost_report' | 'om_package' | 'lease_agreement' | 'appraisal' | 'environmental' | 'other';
     let fileType: DocumentType = 'other';
-    const lowerName = file.name.toLowerCase();
     if (lowerName.includes('financial') || lowerName.includes('income') || lowerName.includes('p&l') || lowerName.includes('pnl')) {
       fileType = 'financial_statement';
     } else if (lowerName.includes('census') || lowerName.includes('occupancy')) {

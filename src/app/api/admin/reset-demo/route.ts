@@ -1612,7 +1612,18 @@ export async function POST() {
   try {
     console.log('Starting database reset with comprehensive demo data...');
 
-    // Clear all deals (cascades to related tables)
+    // Clear all data in correct order (respecting foreign key constraints)
+    // First clear tables that reference facilities
+    await db.delete(financialPeriods);
+    await db.delete(facilityCensusPeriods);
+    await db.delete(facilityPayerRates);
+    console.log('Cleared financial data');
+
+    // Clear documents
+    await db.delete(documents);
+    console.log('Cleared documents');
+
+    // Clear deals (cascades to related tables)
     await db.delete(deals);
     console.log('Cleared deals');
 
@@ -1623,15 +1634,6 @@ export async function POST() {
     // Clear capital partners
     await db.delete(capitalPartners);
     console.log('Cleared capital partners');
-
-    // Clear documents
-    await db.delete(documents);
-    console.log('Cleared documents');
-
-    // Clear census and payer rate data
-    await db.delete(facilityCensusPeriods);
-    await db.delete(facilityPayerRates);
-    console.log('Cleared census and payer rate data');
 
     // Insert Cascadia facilities (standalone) with census and payer rate data
     for (const facility of cascadiaFacilities) {

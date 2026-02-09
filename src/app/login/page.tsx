@@ -32,7 +32,7 @@ export default function LoginPage() {
     const success = login(name, password);
 
     if (!success) {
-      setError('Invalid name or password');
+      setError('Invalid password');
       setIsLoading(false);
     }
   };

@@ -5,7 +5,6 @@ import { useRouter, usePathname } from 'next/navigation';
 
 interface AuthUser {
   name: string;
-  role: 'admin' | 'user';
   loginTime: Date;
 }
 
@@ -18,13 +17,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Individual user accounts (username -> { password, role })
-const USER_ACCOUNTS: Record<string, { password: string; role: 'admin' | 'user' }> = {
-  will: { password: process.env.NEXT_PUBLIC_WILL_PASSWORD || '', role: 'user' },
-  dustin: { password: process.env.NEXT_PUBLIC_DUSTIN_PASSWORD || '', role: 'user' },
-};
-
-// Shared password fallback (admin access)
+// Single shared password — any name works
 const SHARED_PASSWORD = process.env.NEXT_PUBLIC_APP_PASSWORD || '';
 const AUTH_STORAGE_KEY = 'snfalyze_auth';
 
@@ -42,7 +35,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const parsed = JSON.parse(stored);
         setUser({
           name: parsed.name,
-          role: parsed.role || 'admin',
           loginTime: new Date(parsed.loginTime),
         });
       } catch {
@@ -63,23 +55,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, isLoading, pathname, router]);
 
   const login = (name: string, password: string): boolean => {
-    const nameLower = name.trim().toLowerCase();
-    let role: 'admin' | 'user' = 'admin';
-
-    // Check individual user accounts first
-    const userAccount = USER_ACCOUNTS[nameLower];
-    if (userAccount && userAccount.password && password === userAccount.password) {
-      role = userAccount.role;
-    } else if (password === SHARED_PASSWORD && SHARED_PASSWORD !== '') {
-      // Fallback to shared password (admin)
-      role = 'admin';
-    } else {
+    if (password !== SHARED_PASSWORD) {
       return false;
     }
 
     const newUser: AuthUser = {
       name: name.trim(),
-      role,
       loginTime: new Date(),
     };
 
@@ -88,7 +69,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       AUTH_STORAGE_KEY,
       JSON.stringify({
         name: newUser.name,
-        role: newUser.role,
         loginTime: newUser.loginTime.toISOString(),
       })
     );

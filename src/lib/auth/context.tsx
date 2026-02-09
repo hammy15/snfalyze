@@ -18,7 +18,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Single shared password — any name works
-const SHARED_PASSWORD = process.env.NEXT_PUBLIC_APP_PASSWORD || '';
+const SHARED_PASSWORD = (process.env.NEXT_PUBLIC_APP_PASSWORD || '').trim();
 const AUTH_STORAGE_KEY = 'snfalyze_auth';
 
 export function AuthProvider({ children }: { children: ReactNode }) {

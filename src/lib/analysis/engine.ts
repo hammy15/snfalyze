@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { CASCADIA_SYSTEM_PROMPT, ANALYSIS_PROMPT_TEMPLATE } from './prompts';
+import { CASCADIA_SYSTEM_PROMPT, ANALYSIS_PROMPT_TEMPLATE, getStateMarketData } from './prompts';
 import { calculateConfidenceDecay } from '@/lib/utils';
 
 const anthropic = new Anthropic({
@@ -24,11 +24,23 @@ export interface AnalysisResult {
   confidenceScore: number;
   narrative: string;
   thesis: string;
+  marketContext?: {
+    marketTier: string;
+    regionalCapRateRange: string;
+    regionalPerBedRange: string;
+    comparableDeals: string;
+  };
   financials: any[];
   valuations: any[];
   assumptions: any[];
   riskFactors: any[];
   partnerMatches: any[];
+  selfValidation?: {
+    weakestAssumption: string;
+    sellerManipulationRisk: string;
+    recessionStressTest: string;
+    coverageUnderStress: string;
+  };
   criticalQuestions: {
     whatMustGoRightFirst: string[];
     whatCannotGoWrong: string[];
@@ -38,11 +50,9 @@ export interface AnalysisResult {
 }
 
 export async function analyzeDeal(deal: AnalysisInput): Promise<AnalysisResult> {
-  // Build the analysis prompt with deal data
   const prompt = buildAnalysisPrompt(deal);
 
   try {
-    // Call Claude API
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 8000,
@@ -55,15 +65,12 @@ export async function analyzeDeal(deal: AnalysisInput): Promise<AnalysisResult> 
       ],
     });
 
-    // Extract text content from response
     const textContent = response.content.find((c) => c.type === 'text');
     if (!textContent || textContent.type !== 'text') {
       throw new Error('No text content in response');
     }
 
-    // Parse the structured response
     const analysisResult = parseAnalysisResponse(textContent.text);
-
     return analysisResult;
   } catch (error) {
     console.error('AI Analysis Error:', error);
@@ -72,7 +79,6 @@ export async function analyzeDeal(deal: AnalysisInput): Promise<AnalysisResult> 
 }
 
 function buildAnalysisPrompt(deal: AnalysisInput): string {
-  // Build a comprehensive prompt with all deal data
   const docs = deal.documents || [];
   const documentSummary = docs.length > 0
     ? docs.map((d) => `- ${d.filename} (${d.type || 'unclassified'}): ${d.status}`).join('\n')
@@ -108,11 +114,8 @@ Occupancy: ${fp.occupancyRate ? (fp.occupancyRate * 100).toFixed(1) + '%' : 'Unk
 }
 
 function parseAnalysisResponse(responseText: string): AnalysisResult {
-  // Parse the JSON response from Claude
-  // The response should be structured JSON based on our prompt
-
   try {
-    // Try to extract JSON from the response
+    // Try to extract JSON from markdown code blocks
     const jsonMatch = responseText.match(/```json\n?([\s\S]*?)\n?```/);
     if (jsonMatch) {
       return JSON.parse(jsonMatch[1]);
@@ -121,7 +124,6 @@ function parseAnalysisResponse(responseText: string): AnalysisResult {
     // Try parsing the whole response as JSON
     return JSON.parse(responseText);
   } catch {
-    // If parsing fails, construct a basic result from the text
     console.warn('Failed to parse JSON response, constructing basic result');
 
     return {
@@ -160,13 +162,49 @@ function parseAnalysisResponse(responseText: string): AnalysisResult {
   }
 }
 
-// Function to run valuation models
+// National cap rate lookup by asset type (flat across geography)
+export function getMarketCapRates(
+  assetType: string,
+  state: string,
+  view: 'external' | 'cascadia'
+): { low: number; base: number; high: number } {
+  // Cap rates are consistent nationally by asset type, not geography
+  // External = conservative lender/REIT view
+  // Cascadia = execution view with operational upside priced in
+  const capRates: Record<string, { external: { low: number; base: number; high: number }; cascadia: { low: number; base: number; high: number } }> = {
+    SNF: {
+      external: { low: 0.12, base: 0.125, high: 0.13 },
+      cascadia: { low: 0.105, base: 0.115, high: 0.125 },
+    },
+    ALF: {
+      external: { low: 0.065, base: 0.07, high: 0.075 },
+      cascadia: { low: 0.06, base: 0.065, high: 0.07 },
+    },
+    ILF: {
+      external: { low: 0.055, base: 0.06, high: 0.065 },
+      cascadia: { low: 0.05, base: 0.055, high: 0.06 },
+    },
+    HOSPICE: {
+      external: { low: 0.10, base: 0.105, high: 0.11 },
+      cascadia: { low: 0.09, base: 0.095, high: 0.10 },
+    },
+  };
+
+  const type = assetType?.toUpperCase() || 'SNF';
+  const assetData = capRates[type] || capRates['SNF'];
+
+  return view === 'external' ? assetData.external : assetData.cascadia;
+}
+
+// Dual valuation with geography awareness
 export function runDualValuation(
   financials: any,
   assetType: string,
   state: string,
   beds: number
 ): { external: any; cascadia: any } {
+  const marketData = getStateMarketData(state);
+
   // External / Lender View - Conservative
   const externalCapRates = getMarketCapRates(assetType, state, 'external');
   const externalNoi = financials.noi || 0;
@@ -174,13 +212,15 @@ export function runDualValuation(
   const external = {
     viewType: 'external',
     noiUsed: externalNoi,
-    capRateLow: externalCapRates.high,
+    capRateLow: externalCapRates.high,    // higher cap = lower value
     capRateBase: externalCapRates.base,
-    capRateHigh: externalCapRates.low,
-    valueLow: externalNoi / externalCapRates.high,
-    valueBase: externalNoi / externalCapRates.base,
-    valueHigh: externalNoi / externalCapRates.low,
-    pricePerBed: (externalNoi / externalCapRates.base) / beds,
+    capRateHigh: externalCapRates.low,    // lower cap = higher value
+    valueLow: externalCapRates.high > 0 ? externalNoi / externalCapRates.high : 0,
+    valueBase: externalCapRates.base > 0 ? externalNoi / externalCapRates.base : 0,
+    valueHigh: externalCapRates.low > 0 ? externalNoi / externalCapRates.low : 0,
+    pricePerBed: beds > 0 && externalCapRates.base > 0 ? (externalNoi / externalCapRates.base) / beds : 0,
+    marketTier: marketData.tier,
+    regionalPerBedRange: marketData.perBedRange,
   };
 
   // Cascadia Execution View - Opportunity-aware
@@ -193,42 +233,18 @@ export function runDualValuation(
     capRateLow: cascadiaCapRates.high,
     capRateBase: cascadiaCapRates.base,
     capRateHigh: cascadiaCapRates.low,
-    valueLow: cascadiaNoi / cascadiaCapRates.high,
-    valueBase: cascadiaNoi / cascadiaCapRates.base,
-    valueHigh: cascadiaNoi / cascadiaCapRates.low,
-    pricePerBed: (cascadiaNoi / cascadiaCapRates.base) / beds,
+    valueLow: cascadiaCapRates.high > 0 ? cascadiaNoi / cascadiaCapRates.high : 0,
+    valueBase: cascadiaCapRates.base > 0 ? cascadiaNoi / cascadiaCapRates.base : 0,
+    valueHigh: cascadiaCapRates.low > 0 ? cascadiaNoi / cascadiaCapRates.low : 0,
+    pricePerBed: beds > 0 && cascadiaCapRates.base > 0 ? (cascadiaNoi / cascadiaCapRates.base) / beds : 0,
+    marketTier: marketData.tier,
+    regionalPerBedRange: marketData.perBedRange,
   };
 
   return { external, cascadia };
 }
 
-function getMarketCapRates(
-  assetType: string,
-  state: string,
-  view: 'external' | 'cascadia'
-): { low: number; base: number; high: number } {
-  // SNF cap rates from Artifact A
-  const snfExternal = { low: 0.12, base: 0.125, high: 0.14 };
-  const snfCascadia = { low: 0.105, base: 0.11, high: 0.12 };
-
-  // ALF cap rates (generally tighter)
-  const alfExternal = { low: 0.08, base: 0.085, high: 0.10 };
-  const alfCascadia = { low: 0.07, base: 0.075, high: 0.085 };
-
-  // ILF cap rates (hospitality-forward)
-  const ilfExternal = { low: 0.065, base: 0.07, high: 0.08 };
-  const ilfCascadia = { low: 0.055, base: 0.06, high: 0.07 };
-
-  if (assetType === 'SNF') {
-    return view === 'external' ? snfExternal : snfCascadia;
-  } else if (assetType === 'ALF') {
-    return view === 'external' ? alfExternal : alfCascadia;
-  } else {
-    return view === 'external' ? ilfExternal : ilfCascadia;
-  }
-}
-
-// Function to calculate CapEx requirements
+// CapEx calculation with regional awareness
 export function calculateCapEx(
   assetType: string,
   beds: number,
@@ -239,7 +255,6 @@ export function calculateCapEx(
   const buildingAge = currentYear - yearBuilt;
   const yearsSinceReno = lastRenovation ? currentYear - lastRenovation : buildingAge;
 
-  // Per-bed benchmarks from Artifact A
   let immediatePerBed = 0;
   let deferredPerBed = 0;
   let competitivePerBed = 0;
@@ -262,23 +277,23 @@ export function calculateCapEx(
 
   // Competitive CapEx (market positioning)
   if (assetType === 'SNF') {
-    competitivePerBed = 5000; // Private room conversions, etc.
+    competitivePerBed = 5000;
   } else if (assetType === 'ALF') {
     competitivePerBed = 4000;
   } else {
-    competitivePerBed = 6000; // ILF requires more hospitality upgrades
+    competitivePerBed = 6000;
   }
 
   const immediate = immediatePerBed * beds;
   const deferred = deferredPerBed * beds;
   const competitive = competitivePerBed * beds;
   const total = immediate + deferred + competitive;
-  const perBed = total / beds;
+  const perBed = beds > 0 ? total / beds : 0;
 
   return { immediate, deferred, competitive, total, perBed };
 }
 
-// Function to simulate capital partner matches
+// Partner matching with real buyer intelligence
 export function simulatePartnerMatches(
   deal: any,
   partners: any[]
@@ -316,7 +331,7 @@ export function simulatePartnerMatches(
       concerns.push('Above typical deal size');
     }
 
-    // Risk tolerance assessment
+    // Risk tolerance
     const dealRisk = assessDealRisk(deal);
     if (partner.riskTolerance === 'aggressive' ||
         (partner.riskTolerance === 'moderate' && dealRisk !== 'high') ||
@@ -327,7 +342,6 @@ export function simulatePartnerMatches(
       concerns.push('Risk profile mismatch');
     }
 
-    // Calculate probability of close
     const probabilityOfClose = Math.min(matchScore / 100, 0.95);
 
     return {
@@ -342,13 +356,11 @@ export function simulatePartnerMatches(
 }
 
 function assessDealRisk(deal: any): 'low' | 'medium' | 'high' {
-  // Simple risk assessment based on available data
   let riskScore = 0;
 
   if (deal.assetType === 'SNF') riskScore += 2;
   if (!deal.financialPeriods?.length) riskScore += 3;
 
-  // Check for regulatory issues
   const facilities = deal.facilities || [];
   for (const facility of facilities) {
     if (facility.isSff) riskScore += 5;

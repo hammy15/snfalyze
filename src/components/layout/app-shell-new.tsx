@@ -2,7 +2,9 @@
 
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
-import { TopBar } from './topbar';
+import { FocusRail } from './focus-rail';
+import { CommandBar } from './command-bar';
+import { ContextBreadcrumb } from './context-breadcrumb';
 
 interface AppShellNewProps {
   children: React.ReactNode;
@@ -22,13 +24,15 @@ export function AppShellNew({ children }: AppShellNewProps) {
     return <>{children}</>;
   }
 
-  // App pages - top nav only (no sidebar)
+  // App pages - Focus Rail + Context Breadcrumb + Command Bar
   if (isAppPage) {
     return (
       <div className="min-h-screen bg-[var(--color-bg-page)]">
-        <TopBar sidebarCollapsed={true} />
+        <FocusRail />
+        <ContextBreadcrumb />
+        <CommandBar />
 
-        <main className="pt-14 min-h-screen">
+        <main className="pl-14 pt-12 min-h-screen">
           <div className="p-6">
             {children}
           </div>

@@ -73,6 +73,8 @@ import { AnalysisProgressCard } from '@/components/deal-command/AnalysisProgress
 import { ValuationHero } from '@/components/deal-command/ValuationHero';
 import { DealNotifications } from '@/components/deal-command/DealNotifications';
 import { ValuationBreakdownWrapper } from '@/components/valuation/ValuationBreakdownWrapper';
+import { DocOverviewCard } from '@/components/documents/DocOverviewCard';
+import { DocUploadWithAnalysis } from '@/components/documents/DocUploadWithAnalysis';
 import type { PortfolioRentSuggestion, SLBAssumptions } from '@/lib/sale-leaseback/types';
 
 // Default deal data (used as fallback)
@@ -123,6 +125,9 @@ interface ApiDocument {
   } | null;
   processedAt: string | null;
   createdAt: string;
+  aiSummary?: string | null;
+  aiKeyFindings?: string[] | null;
+  pendingClarifications?: number;
 }
 
 export default function DealDetailPage() {
@@ -1105,134 +1110,54 @@ export default function DealDetailPage() {
             </TabsContent>
 
             {/* Documents Tab */}
-            <TabsContent value="documents" className="mt-4">
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle>Documents</CardTitle>
-                      <CardDescription>
-                        Uploaded deal materials and AI-extracted data
-                      </CardDescription>
-                    </div>
-                    <Link href="/upload">
-                      <Button>
-                        <Upload className="h-4 w-4 mr-1" />
-                        Upload Document
-                      </Button>
-                    </Link>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {documents.length === 0 ? (
-                    <div className="text-center py-8">
-                      <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                      <p className="text-muted-foreground">No documents uploaded yet</p>
-                      <Link href="/upload">
-                        <Button variant="outline" className="mt-4">
-                          <Upload className="h-4 w-4 mr-1" />
-                          Upload Documents
-                        </Button>
-                      </Link>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {apiDocuments.map((doc) => {
-                        const aiAnalysis = doc.extractedData?.aiAnalysis;
-                        const fields = doc.extractedData?.fields;
+            <TabsContent value="documents" className="mt-4 space-y-4">
+              {/* Inline Upload with AI Analysis */}
+              <DocUploadWithAnalysis
+                dealId={deal.id}
+                onDocumentUploaded={() => {
+                  // Refresh documents list
+                  fetch(`/api/deals/${deal.id}/documents`)
+                    .then(r => r.json())
+                    .then(data => {
+                      if (data.documents) setApiDocuments(data.documents);
+                    })
+                    .catch(() => {});
+                }}
+              />
 
-                        return (
-                          <div
-                            key={doc.id}
-                            className="border rounded-lg overflow-hidden"
-                          >
-                            {/* Document Header */}
-                            <div className="flex items-center justify-between p-3 bg-muted/30">
-                              <div className="flex items-center gap-3">
-                                <FileText className="h-8 w-8 text-muted-foreground" />
-                                <div>
-                                  <p className="font-medium">{doc.filename}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {doc.type || 'Unknown type'} · Status: {doc.status} ·{' '}
-                                    Uploaded {new Date(doc.createdAt).toLocaleDateString()}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {doc.status === 'complete' && aiAnalysis ? (
-                                  <Badge className="bg-green-100 text-green-800">
-                                    AI Analyzed ({Math.round((aiAnalysis.confidence || 0) * 100)}%)
-                                  </Badge>
-                                ) : doc.status === 'analyzing' ? (
-                                  <Badge className="bg-blue-100 text-blue-800">
-                                    Analyzing...
-                                  </Badge>
-                                ) : doc.status === 'error' ? (
-                                  <Badge variant="destructive">
-                                    Error
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline">{doc.status}</Badge>
-                                )}
-                              </div>
-                            </div>
+              {/* Document List with AI Summaries */}
+              {apiDocuments.length > 0 ? (
+                <div className="space-y-2">
+                  {apiDocuments.map((doc) => {
+                    const aiAnalysis = (doc.extractedData as any)?.aiAnalysis;
+                    const fields = (doc.extractedData as any)?.fields;
 
-                            {/* AI Analysis Results */}
-                            {doc.status === 'complete' && aiAnalysis && (
-                              <div className="p-4 border-t space-y-4">
-                                {/* Summary */}
-                                <div>
-                                  <h4 className="text-sm font-medium mb-1">AI Summary</h4>
-                                  <p className="text-sm text-muted-foreground">{aiAnalysis.summary}</p>
-                                </div>
-
-                                {/* Key Findings */}
-                                {aiAnalysis.keyFindings && aiAnalysis.keyFindings.length > 0 && (
-                                  <div>
-                                    <h4 className="text-sm font-medium mb-2">Key Findings</h4>
-                                    <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
-                                      {aiAnalysis.keyFindings.map((finding, i) => (
-                                        <li key={i}>{finding}</li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                )}
-
-                                {/* Extracted Fields */}
-                                {fields && Object.keys(fields).length > 0 && (
-                                  <div>
-                                    <h4 className="text-sm font-medium mb-2">Extracted Data</h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                      {Object.entries(fields).slice(0, 12).map(([key, data]) => (
-                                        <div key={key} className="bg-muted/30 rounded p-2">
-                                          <p className="text-xs text-muted-foreground truncate">{key.replace(/_/g, ' ')}</p>
-                                          <p className="text-sm font-medium truncate">
-                                            {typeof data.value === 'number'
-                                              ? data.value.toLocaleString()
-                                              : String(data.value || '—')}
-                                          </p>
-                                          <p className="text-xs text-muted-foreground">
-                                            {Math.round((data.confidence || 0) * 100)}% confidence
-                                          </p>
-                                        </div>
-                                      ))}
-                                    </div>
-                                    {Object.keys(fields).length > 12 && (
-                                      <p className="text-xs text-muted-foreground mt-2">
-                                        +{Object.keys(fields).length - 12} more fields extracted
-                                      </p>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                    return (
+                      <DocOverviewCard
+                        key={doc.id}
+                        documentId={doc.id}
+                        filename={doc.filename}
+                        docType={doc.type || 'other'}
+                        status={doc.status || 'uploaded'}
+                        uploadedAt={doc.createdAt || new Date().toISOString()}
+                        summary={doc.aiSummary || aiAnalysis?.summary}
+                        keyFindings={(doc.aiKeyFindings as string[]) || aiAnalysis?.keyFindings}
+                        confidence={aiAnalysis?.confidence}
+                        extractedFields={fields}
+                        pendingClarifications={doc.pendingClarifications}
+                      />
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="neu-card p-8 text-center">
+                  <FileText className="h-10 w-10 mx-auto text-surface-300 dark:text-surface-600 mb-3" />
+                  <p className="text-sm text-surface-500">No documents uploaded yet</p>
+                  <p className="text-xs text-surface-400 mt-1">
+                    Drop files above to start AI-powered analysis
+                  </p>
+                </div>
+              )}
             </TabsContent>
 
             {/* Assumptions Tab */}

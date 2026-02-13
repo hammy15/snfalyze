@@ -291,7 +291,7 @@ async function processDocument(documentId: string, file: File) {
       rawText
     );
 
-    // Update with deep extraction results
+    // Update with deep extraction results + AI summary columns
     await db
       .update(documents)
       .set({
@@ -300,6 +300,8 @@ async function processDocument(documentId: string, file: File) {
           ...extractedData,
           deepExtraction: deepExtractionResult,
         },
+        aiSummary: aiAnalysis?.summary || null,
+        aiKeyFindings: aiAnalysis?.keyFindings || null,
       })
       .where(eq(documents.id, documentId));
 

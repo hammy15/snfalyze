@@ -291,6 +291,9 @@ export const documents = pgTable(
     userConfirmedType: boolean('user_confirmed_type').default(false),
     extractionStage: extractionStageEnum('extraction_stage'),
     ocrQualityScore: integer('ocr_quality_score'),
+    // Document Intelligence Fields (Phase 4)
+    aiSummary: text('ai_summary'),
+    aiKeyFindings: jsonb('ai_key_findings'),
   },
   (table) => ({
     dealIdIdx: index('idx_documents_deal_id').on(table.dealId),

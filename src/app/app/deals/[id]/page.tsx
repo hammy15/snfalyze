@@ -55,6 +55,7 @@ import {
   Activity,
   Download,
 } from 'lucide-react';
+import { WorkbenchLayout } from '@/components/deal-workbench/WorkbenchLayout';
 import { SaleLeasebackDashboard } from '@/components/sale-leaseback/SaleLeasebackDashboard';
 import {
   BuildingTabs,
@@ -736,274 +737,59 @@ export default function DealDetailPage() {
     );
   }
 
+  // Compute stage info for workbench
+  const currentStageKey = deal.current_stage || 'document_understanding';
+  const stageLabels: Record<string, { label: string; position: number }> = {
+    document_understanding: { label: 'Doc Review', position: 1 },
+    financial_reconstruction: { label: 'Financial', position: 2 },
+    operating_reality: { label: 'Operations', position: 3 },
+    risk_constraints: { label: 'Risk', position: 4 },
+    valuation: { label: 'Valuation', position: 5 },
+    synthesis: { label: 'Synthesis', position: 6 },
+  };
+  const currentStageInfo = stageLabels[currentStageKey] || { label: 'Review', position: 1 };
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-start gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold">{deal.name}</h1>
-              <Badge variant="outline">{deal.deal_id}</Badge>
-              <Badge
-                className={
-                  deal.status === 'active'
-                    ? 'bg-green-100 text-green-800'
-                    : deal.status === 'under_loi'
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'bg-gray-100 text-gray-800'
-                }
-              >
-                {deal.status.replace('_', ' ').toUpperCase()}
-              </Badge>
-            </div>
-            <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Building2 className="h-4 w-4" />
-                {deal.asset_types.map((t) => t.toUpperCase()).join(', ')} ·{' '}
-                {deal.facility_count} {deal.facility_count === 1 ? 'facility' : 'facilities'} ·{' '}
-                {deal.total_beds} beds
-              </span>
-              <span>|</span>
-              <span>{deal.states?.join(', ')}</span>
-              <span>|</span>
-              <span>
-                Source: {deal.source_name || deal.source}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap justify-end">
-          <Button variant="outline">
-            <Edit className="h-4 w-4 mr-1" />
-            Edit Deal
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleSyncCMS}
-            disabled={cmsSyncing}
-          >
-            <RefreshCw className={`h-4 w-4 mr-1 ${cmsSyncing ? 'animate-spin' : ''}`} />
-            {cmsSyncing ? 'Syncing...' : 'Sync CMS'}
-          </Button>
-          {cmsSyncMessage && (
-            <span className="text-sm text-muted-foreground ml-2">{cmsSyncMessage}</span>
-          )}
-          <Link href={`/app/deals/${deal.id}/options`}>
-            <Button variant="outline">
-              <ListChecks className="h-4 w-4 mr-1" />
-              Financing Options
-            </Button>
-          </Link>
+    <WorkbenchLayout
+      dealId={deal.id}
+      name={deal.name}
+      assetType={deal.asset_types?.[0] || 'SNF'}
+      askingPrice={deal.asking_price || 0}
+      totalBeds={deal.total_beds || 0}
+      stage={currentStageKey}
+      stageLabel={currentStageInfo.label}
+      stagePosition={currentStageInfo.position}
+      status={deal.status || 'active'}
+      score={dealScore?.score}
+      currentStage={currentStageKey}
+      stageProgress={stageProgress.map(s => ({ stage: s.stage, status: s.status }))}
+      onStageClick={(stage) => handleNavigateToStage(stage as AnalysisStage)}
+      documentCount={documents.length}
+      riskCount={risks.length}
+      hasFinancials={documents.some(d => d.category === 'financials')}
+    >
+      {/* Tabs Content (now inside workbench canvas) */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="w-full justify-start mb-4 bg-surface-800/30 border border-surface-700/50">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="documents">
+            Docs ({documents.length})
+          </TabsTrigger>
+          <TabsTrigger value="financials">
+            Financials
+          </TabsTrigger>
+          <TabsTrigger value="risks">
+            Risks ({risks.length})
+          </TabsTrigger>
+          <TabsTrigger value="synthesis">Synthesis</TabsTrigger>
+          <TabsTrigger value="analysis">Analysis</TabsTrigger>
+          <TabsTrigger value="quality">Quality</TabsTrigger>
           {deal.dealStructure === 'sale_leaseback' && (
-            <Link href={`/app/deals/${deal.id}/sale-leaseback`}>
-              <Button variant="outline">
-                <ArrowLeftRight className="h-4 w-4 mr-1" />
-                Full SLB Analysis
-              </Button>
-            </Link>
+            <TabsTrigger value="sale-leaseback">SLB</TabsTrigger>
           )}
-          <Link href={`/app/deals/compare?deals=${deal.id}`}>
-            <Button variant="outline">
-              <ArrowLeftRight className="h-4 w-4 mr-1" />
-              Compare
-            </Button>
-          </Link>
-          <a href={`/api/deals/${deal.id}/export/one-pager`} target="_blank" rel="noopener">
-            <Button variant="outline">
-              <Download className="h-4 w-4 mr-1" />
-              One-Pager
-            </Button>
-          </a>
-          <a href={`/api/deals/${deal.id}/export/full-deck`} target="_blank" rel="noopener">
-            <Button variant="outline">
-              <FileText className="h-4 w-4 mr-1" />
-              Full Deck
-            </Button>
-          </a>
-          <Link href="/app/sandbox">
-            <Button>
-              <ExternalLink className="h-4 w-4 mr-1" />
-              Open Proforma
-            </Button>
-          </Link>
-        </div>
-      </div>
+        </TabsList>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-sm text-muted-foreground">Asking Price</div>
-            <div className="text-2xl font-bold">
-              {deal.asking_price ? formatCurrency(deal.asking_price) : '—'}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-sm text-muted-foreground">Hypothesis</div>
-            <div className="text-lg font-medium mt-1">
-              {DEAL_HYPOTHESES[deal.current_hypothesis || deal.initial_hypothesis].label}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-sm text-muted-foreground">Current Stage</div>
-            <div className="text-lg font-medium mt-1">
-              {ANALYSIS_STAGES[deal.current_stage || 'document_understanding']?.label || 'Document Understanding'}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-sm text-muted-foreground">Response Deadline</div>
-            <div className="text-lg font-medium mt-1 flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              {deal.response_deadline
-                ? deal.response_deadline.toLocaleDateString()
-                : 'Not set'}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* AI Metrics Bar */}
-      <DealMetricsBar
-        score={dealScore?.score}
-        confidence={dealScore?.confidence}
-        askingPrice={deal.asking_price || undefined}
-        valuationLow={rentSuggestions?.portfolioTotal?.purchasePriceRange?.low}
-        valuationMid={rentSuggestions?.portfolioTotal?.purchasePriceRange?.mid}
-        valuationHigh={rentSuggestions?.portfolioTotal?.purchasePriceRange?.high}
-        topRisks={dealScore?.risks || []}
-        completeness={Math.round((stageProgress.filter(s => s.status === 'completed').length / 6) * 100)}
-      />
-
-      {/* Smart Notifications */}
-      <DealNotifications
-        dealId={deal.id}
-        documentCount={documents.length}
-        riskCount={risks.length}
-        completedStages={stageProgress.filter(s => s.status === 'completed').length}
-        totalStages={6}
-        hasFinancials={documents.some(d => d.category === 'financials')}
-        onNavigate={setActiveTab}
-      />
-
-      {/* Main Content */}
-      <div className={showWalkthrough ? 'space-y-6' : 'grid grid-cols-3 gap-6'}>
-        {/* Left Column - Stage Tracker or Full Walkthrough */}
-        {showWalkthrough ? (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <BookOpen className="h-5 w-5" />
-                Analysis Walkthrough
-              </h2>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowWalkthrough(false)}
-              >
-                <ListChecks className="h-4 w-4 mr-1" />
-                Compact View
-              </Button>
-            </div>
-            <StageWalkthrough
-              dealId={deal.id}
-              currentStage={deal.current_stage || 'document_understanding'}
-              completedTasks={completedTasks}
-              onTaskComplete={handleTaskComplete}
-              onStageComplete={(stage) => handleStageComplete(stage)}
-              onNavigateToStage={handleNavigateToStage}
-              onToolAction={handleToolAction}
-              documentCount={documents.length}
-              hasFinancials={documents.some((d) => d.category === 'financials')}
-              hasCensusData={facilityTabs.some((f) => f.occupancy && f.occupancy > 0)}
-              agencyPercentage={walkthroughMetrics.agencyPercentage}
-              isSff={facilityTabs.some((f: any) => f.isSff)}
-              occupancyTrend={walkthroughMetrics.occupancyTrend}
-              coverageRatio={walkthroughMetrics.coverageRatio}
-              unmappedItemCount={walkthroughMetrics.unmappedItemCount}
-            />
-          </div>
-        ) : (
-          <div className="col-span-1 space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Stage Progress</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowWalkthrough(true)}
-              >
-                <BookOpen className="h-4 w-4 mr-1" />
-                Full Guide
-              </Button>
-            </div>
-            <AnalysisProgressCard
-              currentStage={(deal.current_stage || 'document_understanding') as any}
-              stageProgress={stageProgress.map(s => ({
-                stage: s.stage as any,
-                status: s.status as any,
-                started_at: s.started_at,
-                completed_at: s.completed_at,
-                blockers: s.blockers,
-              }))}
-              onStageStart={(stage) => handleStageStart(stage as any)}
-              onStageClick={(stage) => handleNavigateToStage(stage as any)}
-              onAIAnalyze={(stage) => {
-                // Start the stage and navigate to it
-                handleStageStart(stage as any);
-                handleNavigateToStage(stage as any);
-              }}
-              documentCount={documents.length}
-              hasFinancials={documents.some(d => d.category === 'financials')}
-            />
-          </div>
-        )}
-
-        {/* Right Column - Tabbed Content */}
-        <div className={showWalkthrough ? '' : 'col-span-2'}>
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="w-full justify-start">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="documents">
-                Documents ({documents.length})
-              </TabsTrigger>
-              <TabsTrigger value="assumptions">
-                Assumptions ({assumptions.length})
-              </TabsTrigger>
-              <TabsTrigger value="risks">
-                Risks ({risks.length})
-              </TabsTrigger>
-              <TabsTrigger value="synthesis">Synthesis</TabsTrigger>
-              <TabsTrigger value="financials" className="flex items-center gap-1">
-                <DollarSign className="h-4 w-4" />
-                Financials
-              </TabsTrigger>
-              <TabsTrigger value="analysis" className="flex items-center gap-1">
-                <ListChecks className="h-4 w-4" />
-                Analysis
-              </TabsTrigger>
-              <TabsTrigger value="quality" className="flex items-center gap-1">
-                <Activity className="h-4 w-4" />
-                Quality
-              </TabsTrigger>
-              {deal.dealStructure === 'sale_leaseback' && (
-                <TabsTrigger value="sale-leaseback" className="flex items-center gap-1">
-                  <ArrowLeftRight className="h-4 w-4" />
-                  Sale-Leaseback
-                </TabsTrigger>
-              )}
-            </TabsList>
-
-            {/* Overview Tab */}
+        {/* Overview Tab */}
             <TabsContent value="overview" className="mt-4 space-y-4">
               {/* Valuation Hero */}
               <ValuationHero
@@ -1375,12 +1161,7 @@ export default function DealDetailPage() {
                 <SaleLeasebackDashboard dealId={deal.id} />
               </TabsContent>
             )}
-          </Tabs>
-        </div>
-      </div>
-
-      {/* AI Chat Panel */}
-      <DealChatPanel dealId={deal.id} dealName={deal.name} />
-    </div>
+      </Tabs>
+    </WorkbenchLayout>
   );
 }

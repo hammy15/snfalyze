@@ -212,8 +212,8 @@ export function TopBar({ sidebarCollapsed }: TopBarProps) {
                   <div className="text-sm font-medium text-surface-900 dark:text-surface-100">
                     {user?.name}
                   </div>
-                  <div className="text-xs text-surface-500">
-                    Analyst
+                  <div className="text-xs text-surface-500 capitalize">
+                    {user?.role || 'Analyst'}
                   </div>
                 </div>
                 <div className="py-1">
@@ -225,6 +225,7 @@ export function TopBar({ sidebarCollapsed }: TopBarProps) {
                     <Settings className="w-4 h-4" />
                     Settings
                   </button>
+                  {(user?.role === 'admin' || user?.role === 'vp') && (
                   <Link
                     href="/app/admin"
                     onClick={() => setShowUserMenu(false)}
@@ -233,6 +234,7 @@ export function TopBar({ sidebarCollapsed }: TopBarProps) {
                     <Crown className="w-4 h-4" />
                     Super Admin
                   </Link>
+                  )}
                 </div>
                 <div className="border-t border-surface-200 dark:border-surface-700 py-1">
                   <button

@@ -1781,3 +1781,40 @@ export const proformaScenarioAssumptionsRelations = relations(proformaScenarioAs
     references: [facilities.id],
   }),
 }));
+
+// ============================================================
+// RBAC: Users, Assignments, Activity Log
+// ============================================================
+
+export const userRoleEnum = pgEnum('user_role', ['admin', 'vp', 'analyst', 'viewer']);
+
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 255 }).notNull(),
+  email: varchar('email', { length: 255 }).notNull().unique(),
+  passwordHash: text('password_hash').notNull(),
+  role: userRoleEnum('role').notNull().default('analyst'),
+  avatarUrl: text('avatar_url'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  lastLoginAt: timestamp('last_login_at'),
+});
+
+export const dealAssignments = pgTable('deal_assignments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  dealId: uuid('deal_id').references(() => deals.id),
+  userId: uuid('user_id').references(() => users.id),
+  role: varchar('role', { length: 50 }).default('analyst'),
+  assignedAt: timestamp('assigned_at').defaultNow(),
+  assignedBy: uuid('assigned_by').references(() => users.id),
+});
+
+export const userActivityLog = pgTable('user_activity_log', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id),
+  dealId: uuid('deal_id').references(() => deals.id),
+  action: varchar('action', { length: 100 }).notNull(),
+  description: text('description'),
+  metadata: jsonb('metadata').default({}),
+  createdAt: timestamp('created_at').defaultNow(),
+});

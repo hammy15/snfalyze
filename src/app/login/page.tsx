@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useAuth } from '@/lib/auth/context';
 
 export default function LoginPage() {
-  const [name, setName] = useState('');
+  const [emailOrName, setEmailOrName] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -14,8 +14,8 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
 
-    if (!name.trim()) {
-      setError('Please enter your name');
+    if (!emailOrName.trim()) {
+      setError('Please enter your email or name');
       return;
     }
 
@@ -26,13 +26,10 @@ export default function LoginPage() {
 
     setIsLoading(true);
 
-    // Small delay for UX
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    const success = login(name, password);
+    const success = await login(emailOrName, password);
 
     if (!success) {
-      setError('Invalid password');
+      setError('Invalid credentials');
       setIsLoading(false);
     }
   };
@@ -66,19 +63,19 @@ export default function LoginPage() {
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Sign In</h2>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Name Input */}
+            {/* Email/Name Input */}
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                Your Name
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                Email or Name
               </label>
               <input
-                id="name"
+                id="email"
                 type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={emailOrName}
+                onChange={(e) => setEmailOrName(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                placeholder="Enter your name"
-                autoComplete="name"
+                placeholder="you@cascadia.com or your name"
+                autoComplete="email"
                 autoFocus
               />
             </div>

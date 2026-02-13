@@ -1146,6 +1146,25 @@ export const aiAdjustmentSuggestions = pgTable(
   })
 );
 
+// Document Activity (Phase 5)
+export const documentActivity = pgTable(
+  'document_activity',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    dealId: uuid('deal_id').references(() => deals.id, { onDelete: 'cascade' }),
+    documentId: uuid('document_id').references(() => documents.id, { onDelete: 'set null' }),
+    userName: varchar('user_name', { length: 255 }),
+    action: varchar('action', { length: 50 }).notNull(),
+    description: text('description'),
+    metadata: jsonb('metadata'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    dealIdIdx: index('idx_doc_activity_deal_id').on(table.dealId),
+    createdAtIdx: index('idx_doc_activity_created_at').on(table.createdAt),
+  })
+);
+
 // Relations
 export const dealsRelations = relations(deals, ({ one, many }) => ({
   facilities: many(facilities),

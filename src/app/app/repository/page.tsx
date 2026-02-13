@@ -44,6 +44,8 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { formatDate, cn } from '@/lib/utils';
+import { DealWorkspace } from '@/components/repository/DealWorkspace';
+import { ActivityFeed } from '@/components/repository/ActivityFeed';
 
 interface Deal {
   id: string;
@@ -156,6 +158,7 @@ export default function RepositoryPage() {
   const [showActivity, setShowActivity] = useState(false);
   const [activityLog, setActivityLog] = useState<ActivityItem[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [repoView, setRepoView] = useState<'files' | 'workspace'>('workspace');
 
   // Fetch deals
   useEffect(() => {
@@ -546,8 +549,8 @@ export default function RepositoryPage() {
 
   return (
     <div className="flex h-[calc(100vh-120px)]">
-      {/* Sidebar */}
-      <div className={cn(
+      {/* Sidebar - only in files view */}
+      {repoView === 'files' && (<div className={cn(
         'border-r border-surface-200 dark:border-surface-700 transition-all duration-200 flex-shrink-0',
         sidebarCollapsed ? 'w-12' : 'w-56'
       )}>
@@ -606,6 +609,7 @@ export default function RepositoryPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -620,6 +624,29 @@ export default function RepositoryPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {/* View Toggle: Files vs Workspace */}
+            <div className="flex items-center border border-surface-200 dark:border-surface-700 rounded-lg overflow-hidden mr-2">
+              <button
+                onClick={() => setRepoView('workspace')}
+                className={cn(
+                  'px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5',
+                  repoView === 'workspace' ? 'bg-teal-500 text-white' : 'text-surface-500 hover:bg-surface-100 dark:hover:bg-surface-700'
+                )}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Workspace
+              </button>
+              <button
+                onClick={() => setRepoView('files')}
+                className={cn(
+                  'px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5',
+                  repoView === 'files' ? 'bg-teal-500 text-white' : 'text-surface-500 hover:bg-surface-100 dark:hover:bg-surface-700'
+                )}
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+                Files
+              </button>
+            </div>
             <button
               onClick={() => setShowActivity(!showActivity)}
               className={cn(
@@ -653,6 +680,23 @@ export default function RepositoryPage() {
           </div>
         </div>
 
+        {/* Workspace View */}
+        {repoView === 'workspace' && (
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2">
+                <DealWorkspace />
+              </div>
+              <div>
+                <ActivityFeed />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Files View */}
+        {repoView === 'files' && (
+        <>
         {/* Toolbar */}
         <div className="p-3 border-b border-surface-200 dark:border-surface-700 flex items-center gap-3 flex-wrap">
           {/* Search */}
@@ -1069,6 +1113,8 @@ export default function RepositoryPage() {
             )}
           </div>
         </div>
+        </>
+        )}
       </div>
 
       {/* Preview Modal */}

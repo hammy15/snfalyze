@@ -461,6 +461,27 @@ export default function DealsPage() {
         </span>
       ),
     },
+    {
+      id: 'nextAction',
+      header: 'AI Next Action',
+      accessor: 'stage',
+      width: 180,
+      cell: (value, row) => {
+        const actions: Record<string, string> = {
+          new: 'Upload broker package',
+          analyzing: 'Review AI analysis',
+          reviewed: 'Prepare LOI terms',
+          under_loi: 'Start due diligence',
+          due_diligence: 'Complete site visit',
+          closed: 'Post-closing integration',
+        };
+        return (
+          <span className="text-xs px-2 py-1 rounded-full bg-primary-500/10 text-primary-600 dark:text-primary-400 whitespace-nowrap">
+            {actions[value] || 'Review deal'}
+          </span>
+        );
+      },
+    },
   ];
 
   function formatRelativeDate(date: Date): string {
@@ -490,7 +511,9 @@ export default function DealsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-surface-900 dark:text-white">Deal Pipeline</h1>
-          <p className="text-sm text-surface-500">Track and manage your acquisition pipeline</p>
+          <p className="text-sm text-surface-500">
+            {stats.total} deal{stats.total !== 1 ? 's' : ''} · ${(stats.totalValue / 1000000).toFixed(1)}M pipeline · ${(stats.weightedValue / 1000000).toFixed(1)}M weighted
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/app/deals/memory">
@@ -601,6 +624,29 @@ export default function DealsPage() {
           </button>
         </div>
       </div>
+
+      {/* Gravity Pipeline Bar — weighted stage visualization */}
+      {!loading && deals.length > 0 && (
+        <div className="flex items-center gap-0.5 h-2 rounded-full overflow-hidden">
+          {(['target', 'contacted', 'loi', 'diligence', 'psa', 'closed'] as const).map((stage) => {
+            const count = dealsByStage[stage]?.length || 0;
+            if (count === 0) return null;
+            const pct = Math.max((count / deals.length) * 100, 5);
+            const colors: Record<string, string> = {
+              target: '#14b8a6', contacted: '#f97316', loi: '#8b5cf6',
+              diligence: '#0ea5e9', psa: '#f59e0b', closed: '#10b981',
+            };
+            return (
+              <div
+                key={stage}
+                className="h-full rounded-full transition-all duration-500"
+                style={{ width: `${pct}%`, backgroundColor: colors[stage] }}
+                title={`${stage}: ${count} deals`}
+              />
+            );
+          })}
+        </div>
+      )}
 
       {/* Content */}
       {loading ? (

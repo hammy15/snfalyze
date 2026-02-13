@@ -1,29 +1,23 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { cn } from '@/lib/utils';
 import {
   TrendingUp,
   MapPin,
   Building2,
   DollarSign,
-  Target,
-  Activity,
-  BarChart3,
   PieChart,
   ArrowUpRight,
-  ArrowDownRight,
   Briefcase,
-  Users,
-  Calendar,
-  Layers,
   Map,
-  Filter,
-  Download,
+  X,
+  Activity,
+  Target,
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { DonutChart } from '@/components/charts/donut-chart';
 import { USMapChart } from '@/components/charts/us-map-chart';
-import { Sparkline, SparklineCard } from '@/components/charts/sparkline';
 import { HorizontalFunnel } from '@/components/charts/funnel-chart';
 
 interface Deal {
@@ -107,6 +101,9 @@ export default function MacroPage() {
   const [stats, setStats] = useState<MacroStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedState, setSelectedState] = useState<string | undefined>();
+  const [showPipeline, setShowPipeline] = useState(true);
+  const [showAssetMix, setShowAssetMix] = useState(true);
+  const [showMarkets, setShowMarkets] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -135,7 +132,6 @@ export default function MacroPage() {
           const value = parseFloat(deal.askingPrice) || 0;
           totalValue += value;
 
-          // By stage
           const stage = deal.status || 'unknown';
           if (!dealsByStage[stage]) {
             dealsByStage[stage] = { count: 0, value: 0 };
@@ -143,7 +139,6 @@ export default function MacroPage() {
           dealsByStage[stage].count++;
           dealsByStage[stage].value += value;
 
-          // Count by status category
           if (['closed'].includes(stage.toLowerCase())) {
             closedCount++;
           } else if (['passed'].includes(stage.toLowerCase())) {
@@ -152,11 +147,9 @@ export default function MacroPage() {
             activeCount++;
           }
 
-          // By type
           const type = deal.assetType || 'Unknown';
           dealsByType[type] = (dealsByType[type] || 0) + 1;
 
-          // By state
           const state = deal.primaryState || 'Unknown';
           dealsByState[state] = (dealsByState[state] || 0) + 1;
         });
@@ -170,7 +163,6 @@ export default function MacroPage() {
           const beds = facility.licensedBeds || 0;
           totalBeds += beds;
 
-          // By state
           const state = facility.state || 'Unknown';
           if (!facilityByState[state]) {
             facilityByState[state] = { count: 0, beds: 0 };
@@ -178,12 +170,10 @@ export default function MacroPage() {
           facilityByState[state].count++;
           facilityByState[state].beds += beds;
 
-          // By type
           const type = facility.assetType || 'Unknown';
           facilityByType[type] = (facilityByType[type] || 0) + 1;
         });
 
-        // Generate mock trend data (would come from real data)
         const weeklyDeals = [3, 5, 4, 7, 6, 8, deals.length > 0 ? Math.min(deals.length, 10) : 9];
         const weeklyValue = weeklyDeals.map(d => d * (totalValue / deals.length || 1000000));
 
@@ -256,10 +246,10 @@ export default function MacroPage() {
 
   if (loading) {
     return (
-      <div className="p-6 flex items-center justify-center min-h-[60vh]">
+      <div className="flex items-center justify-center h-[calc(100vh-3rem)] -m-6">
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-surface-500">Loading macro view...</p>
+          <p className="text-surface-500">Loading radar view...</p>
         </div>
       </div>
     );
@@ -273,352 +263,328 @@ export default function MacroPage() {
     );
   }
 
+  const winRate = stats.deals.total > 0 ? Math.round((stats.deals.closed / stats.deals.total) * 100) : 0;
+
   return (
-    <div className="p-4 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-surface-900 dark:text-white">
-            Macro Overview
-          </h1>
-          <p className="text-surface-500 text-sm">
-            30,000 foot view of deal flow and market activity
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button className="neu-button-sm flex items-center gap-1.5 text-xs">
-            <Filter className="w-3.5 h-3.5" />
-            Filter
-          </button>
-          <button className="neu-button-sm flex items-center gap-1.5 text-xs">
-            <Download className="w-3.5 h-3.5" />
-            Export
-          </button>
-          <div className="flex items-center gap-2 text-xs text-surface-500 ml-2">
-            <Calendar className="w-3.5 h-3.5" />
-            <span>Updated: {new Date().toLocaleDateString()}</span>
-          </div>
-        </div>
+    <div className="relative h-[calc(100vh-3rem)] -m-6 overflow-hidden bg-surface-950">
+      {/* === FULL-VIEWPORT MAP CANVAS === */}
+      <div className="absolute inset-0">
+        <USMapChart
+          data={mapData}
+          colorScale={['#134e4a', '#14b8a6']}
+          selectedState={selectedState}
+          onStateClick={(state) => setSelectedState(state === selectedState ? undefined : state)}
+          className="w-full h-full"
+        />
       </div>
 
-      {/* Top KPIs with Sparklines */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <div className="neu-card p-3">
-          <SparklineCard
-            data={stats.trends.weeklyDeals}
-            value={stats.deals.total}
-            label="Total Deals"
-            change={stats.trends.pipelineGrowth}
-            changeLabel="vs last month"
-            width={60}
-            height={20}
-          />
-        </div>
-        <div className="neu-card p-3">
-          <SparklineCard
-            data={[stats.deals.active * 0.7, stats.deals.active * 0.8, stats.deals.active * 0.9, stats.deals.active]}
-            value={stats.deals.active}
-            label="Active Deals"
-            width={60}
-            height={20}
-            color="#14B8A6"
-          />
-        </div>
-        <div className="neu-card p-3">
-          <SparklineCard
-            data={stats.trends.weeklyValue.map(v => v / 1000000)}
-            value={formatCurrency(stats.deals.totalValue, true)}
-            label="Pipeline Value"
-            change={12.5}
-            width={60}
-            height={20}
-          />
-        </div>
-        <div className="neu-card p-3">
-          <SparklineCard
-            data={[stats.deals.avgDealSize * 0.9, stats.deals.avgDealSize * 0.95, stats.deals.avgDealSize]}
-            value={formatCurrency(stats.deals.avgDealSize, true)}
-            label="Avg Deal Size"
-            width={60}
-            height={20}
-          />
-        </div>
-        <div className="neu-card p-3">
-          <SparklineCard
-            data={[stats.facilities.total * 0.85, stats.facilities.total * 0.9, stats.facilities.total]}
-            value={stats.facilities.total}
-            label="Facilities"
-            width={60}
-            height={20}
-            color="#8B5CF6"
-          />
-        </div>
-        <div className="neu-card p-3">
-          <SparklineCard
-            data={[stats.facilities.totalBeds * 0.85, stats.facilities.totalBeds * 0.9, stats.facilities.totalBeds]}
-            value={stats.facilities.totalBeds.toLocaleString()}
-            label="Total Beds"
-            width={60}
-            height={20}
-            color="#F59E0B"
-          />
-        </div>
-      </div>
+      {/* === FLOATING OVERLAYS === */}
 
-      {/* Main Grid - Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Deal Flow Funnel */}
-        <div className="lg:col-span-2 neu-card p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-surface-900 dark:text-white flex items-center gap-2 text-sm">
-              <TrendingUp className="w-4 h-4 text-primary-500" />
-              Deal Flow Pipeline
-            </h3>
-            <div className="flex items-center gap-3 text-xs">
-              <div className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="text-surface-500">Active</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-primary-500" />
-                <span className="text-surface-500">Closed</span>
-              </div>
-            </div>
+      {/* Top: KPI Strip */}
+      <div className="absolute top-3 left-3 right-3 z-10">
+        <div className="flex items-center gap-3">
+          {/* Title Chip */}
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-900/80 backdrop-blur-xl border border-surface-700/50">
+            <Map className="w-4 h-4 text-primary-400" />
+            <span className="text-sm font-semibold text-white">Portfolio Radar</span>
           </div>
 
-          <HorizontalFunnel data={funnelData} />
-
-          {/* Conversion metrics */}
-          <div className="mt-4 pt-3 border-t border-surface-200 dark:border-surface-700">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-6">
-                <div className="text-center">
-                  <span className="text-xl font-bold text-emerald-600">{stats.deals.closed}</span>
-                  <span className="text-xs text-surface-500 ml-1">Closed</span>
-                </div>
-                <div className="text-center">
-                  <span className="text-xl font-bold text-primary-600">{stats.deals.active}</span>
-                  <span className="text-xs text-surface-500 ml-1">Active</span>
-                </div>
-                <div className="text-center">
-                  <span className="text-xl font-bold text-surface-400">{stats.deals.passed}</span>
-                  <span className="text-xs text-surface-500 ml-1">Passed</span>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-xs text-surface-500">Win Rate</div>
-                <div className="text-xl font-bold text-emerald-600">
-                  {stats.deals.total > 0 ? Math.round((stats.deals.closed / stats.deals.total) * 100) : 0}%
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Asset Type Donut */}
-        <div className="neu-card p-4">
-          <h3 className="font-semibold text-surface-900 dark:text-white flex items-center gap-2 mb-4 text-sm">
-            <PieChart className="w-4 h-4 text-primary-500" />
-            Asset Type Mix
-          </h3>
-
-          <div className="flex justify-center">
-            <DonutChart
-              data={donutData}
-              size={140}
-              strokeWidth={24}
-              centerValue={stats.deals.total}
-              centerLabel="DEALS"
+          {/* KPI Chips */}
+          <div className="flex items-center gap-2 flex-1 overflow-x-auto">
+            <KPIChip
+              icon={<Briefcase className="w-3.5 h-3.5" />}
+              value={stats.deals.total}
+              label="Deals"
+              color="primary"
+            />
+            <KPIChip
+              icon={<DollarSign className="w-3.5 h-3.5" />}
+              value={formatCurrency(stats.deals.totalValue, true)}
+              label="Pipeline"
+              color="primary"
+            />
+            <KPIChip
+              icon={<Target className="w-3.5 h-3.5" />}
+              value={stats.deals.active}
+              label="Active"
+              color="emerald"
+            />
+            <KPIChip
+              icon={<ArrowUpRight className="w-3.5 h-3.5" />}
+              value={`${winRate}%`}
+              label="Win Rate"
+              color="emerald"
+            />
+            <KPIChip
+              icon={<Building2 className="w-3.5 h-3.5" />}
+              value={stats.facilities.total}
+              label="Facilities"
+              color="violet"
+            />
+            <KPIChip
+              icon={<Activity className="w-3.5 h-3.5" />}
+              value={`+${stats.trends.pipelineGrowth}%`}
+              label="Growth"
+              color="amber"
             />
           </div>
 
-          {/* Facility breakdown */}
-          <div className="mt-4 pt-3 border-t border-surface-200 dark:border-surface-700">
-            <h4 className="text-xs font-medium text-surface-500 uppercase tracking-wide mb-2">
-              Portfolio Breakdown
-            </h4>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(stats.facilities.byType).map(([type, count]) => (
-                <div
-                  key={type}
-                  className="flex items-center gap-1.5 px-2 py-1 bg-surface-50 dark:bg-surface-800 rounded"
-                >
-                  <div
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: assetTypeColors[type] || '#9CA3AF' }}
-                  />
-                  <span className="text-xs font-medium">{count}</span>
-                  <span className="text-xs text-surface-500">{type}</span>
-                </div>
-              ))}
-            </div>
+          {/* Panel Toggles */}
+          <div className="flex items-center gap-1 px-2 py-1.5 rounded-xl bg-surface-900/80 backdrop-blur-xl border border-surface-700/50">
+            <ToggleButton active={showPipeline} onClick={() => setShowPipeline(!showPipeline)} label="Pipeline">
+              <TrendingUp className="w-3.5 h-3.5" />
+            </ToggleButton>
+            <ToggleButton active={showAssetMix} onClick={() => setShowAssetMix(!showAssetMix)} label="Mix">
+              <PieChart className="w-3.5 h-3.5" />
+            </ToggleButton>
+            <ToggleButton active={showMarkets} onClick={() => setShowMarkets(!showMarkets)} label="Markets">
+              <MapPin className="w-3.5 h-3.5" />
+            </ToggleButton>
           </div>
         </div>
       </div>
 
-      {/* Geographic Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* US Map */}
-        <div className="neu-card p-4">
-          <h3 className="font-semibold text-surface-900 dark:text-white flex items-center gap-2 mb-3 text-sm">
-            <Map className="w-4 h-4 text-primary-500" />
-            Deal Concentration by State
-          </h3>
-          <USMapChart
-            data={mapData}
-            colorScale={['#93C5FD', '#1E40AF']}
-            selectedState={selectedState}
-            onStateClick={(state) => setSelectedState(state === selectedState ? undefined : state)}
-            className="w-full aspect-[16/10]"
-          />
-          {selectedState && stats.deals.byState[selectedState] && (
-            <div className="mt-2 p-2 bg-primary-50 dark:bg-primary-900/20 rounded text-xs">
-              <span className="font-medium text-primary-700 dark:text-primary-300">
-                {selectedState}: {stats.deals.byState[selectedState]} deal{stats.deals.byState[selectedState] !== 1 ? 's' : ''}
-              </span>
+      {/* Bottom-Left: Deal Flow Pipeline (Floating) */}
+      {showPipeline && (
+        <div className="absolute bottom-3 left-3 z-10 w-[420px] animate-fade-in">
+          <FloatingCard
+            title="Deal Flow Pipeline"
+            icon={<TrendingUp className="w-3.5 h-3.5 text-primary-400" />}
+            onClose={() => setShowPipeline(false)}
+          >
+            <HorizontalFunnel data={funnelData} />
+            <div className="mt-3 pt-2 border-t border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <span className="text-xs">
+                  <span className="font-bold text-emerald-400">{stats.deals.closed}</span>
+                  <span className="text-surface-400 ml-1">Closed</span>
+                </span>
+                <span className="text-xs">
+                  <span className="font-bold text-primary-400">{stats.deals.active}</span>
+                  <span className="text-surface-400 ml-1">Active</span>
+                </span>
+                <span className="text-xs">
+                  <span className="font-bold text-surface-500">{stats.deals.passed}</span>
+                  <span className="text-surface-400 ml-1">Passed</span>
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-xs text-surface-400">Win Rate </span>
+                <span className="text-sm font-bold text-emerald-400">{winRate}%</span>
+              </div>
             </div>
-          )}
+          </FloatingCard>
         </div>
+      )}
 
-        {/* State Rankings */}
-        <div className="space-y-4">
-          {/* Deal Geography */}
-          <div className="neu-card p-4">
-            <h3 className="font-semibold text-surface-900 dark:text-white flex items-center gap-2 mb-3 text-sm">
-              <MapPin className="w-4 h-4 text-primary-500" />
-              Top Deal Markets
-            </h3>
+      {/* Bottom-Right: Asset Mix (Floating) */}
+      {showAssetMix && (
+        <div className="absolute bottom-3 right-3 z-10 w-[280px] animate-fade-in">
+          <FloatingCard
+            title="Asset Mix"
+            icon={<PieChart className="w-3.5 h-3.5 text-primary-400" />}
+            onClose={() => setShowAssetMix(false)}
+          >
+            <div className="flex justify-center">
+              <DonutChart
+                data={donutData}
+                size={120}
+                strokeWidth={20}
+                centerValue={stats.deals.total}
+                centerLabel="DEALS"
+              />
+            </div>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {Object.entries(stats.facilities.byType).map(([type, count]) => (
+                <div
+                  key={type}
+                  className="flex items-center gap-1 px-2 py-0.5 bg-white/5 rounded text-xs"
+                >
+                  <div
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ backgroundColor: assetTypeColors[type] || '#9CA3AF' }}
+                  />
+                  <span className="text-surface-300">{count} {type}</span>
+                </div>
+              ))}
+            </div>
+          </FloatingCard>
+        </div>
+      )}
 
+      {/* Top-Right: Market Rankings (Floating) */}
+      {showMarkets && (
+        <div className="absolute top-16 right-3 z-10 w-[300px] animate-fade-in">
+          <FloatingCard
+            title="Top Markets"
+            icon={<MapPin className="w-3.5 h-3.5 text-primary-400" />}
+            onClose={() => setShowMarkets(false)}
+          >
             <div className="space-y-2">
+              <p className="text-[10px] uppercase tracking-wider text-surface-500">Deal Concentration</p>
               {Object.entries(stats.deals.byState)
                 .sort((a, b) => b[1] - a[1])
                 .slice(0, 5)
                 .map(([state, count], i) => {
                   const percentage = (count / stats.deals.total) * 100;
                   return (
-                    <div key={state} className="flex items-center gap-2">
-                      <div className="w-5 text-xs font-bold text-surface-400">#{i + 1}</div>
-                      <div className="w-8 text-xs font-medium text-surface-700 dark:text-surface-300">
-                        {state}
-                      </div>
-                      <div className="flex-1 h-3 bg-surface-100 dark:bg-surface-800 rounded overflow-hidden">
+                    <button
+                      key={state}
+                      onClick={() => setSelectedState(state === selectedState ? undefined : state)}
+                      className={cn(
+                        'flex items-center gap-2 w-full text-left rounded-lg px-2 py-1.5 transition-colors',
+                        selectedState === state ? 'bg-primary-500/20' : 'hover:bg-white/5'
+                      )}
+                    >
+                      <div className="w-5 text-xs font-bold text-surface-500">#{i + 1}</div>
+                      <div className="w-8 text-xs font-medium text-surface-200">{state}</div>
+                      <div className="flex-1 h-2 bg-white/5 rounded overflow-hidden">
                         <div
                           className="h-full bg-gradient-to-r from-primary-400 to-primary-600 rounded"
                           style={{ width: `${percentage}%` }}
                         />
                       </div>
-                      <div className="w-8 text-xs font-semibold text-surface-900 dark:text-white text-right">
-                        {count}
-                      </div>
-                    </div>
+                      <div className="w-8 text-xs font-semibold text-white text-right">{count}</div>
+                    </button>
                   );
                 })}
             </div>
-          </div>
 
-          {/* Facility Geography */}
-          <div className="neu-card p-4">
-            <h3 className="font-semibold text-surface-900 dark:text-white flex items-center gap-2 mb-3 text-sm">
-              <Building2 className="w-4 h-4 text-primary-500" />
-              Top Facility Markets
-            </h3>
-
-            <div className="space-y-2">
-              {Object.entries(stats.facilities.byState)
-                .sort((a, b) => b[1].count - a[1].count)
-                .slice(0, 5)
-                .map(([state, data], i) => {
-                  const maxCount = Object.values(stats.facilities.byState).reduce((max, s) => Math.max(max, s.count), 1);
-                  const percentage = (data.count / maxCount) * 100;
-                  return (
-                    <div key={state} className="flex items-center gap-2">
-                      <div className="w-5 text-xs font-bold text-surface-400">#{i + 1}</div>
-                      <div className="w-8 text-xs font-medium text-surface-700 dark:text-surface-300">
-                        {state}
-                      </div>
-                      <div className="flex-1 h-3 bg-surface-100 dark:bg-surface-800 rounded overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 rounded"
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                      <div className="w-20 text-xs text-surface-500 text-right">
-                        {data.count} / {data.beds.toLocaleString()} beds
-                      </div>
+            {Object.keys(stats.facilities.byState).length > 0 && (
+              <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
+                <p className="text-[10px] uppercase tracking-wider text-surface-500">Facility Beds</p>
+                {Object.entries(stats.facilities.byState)
+                  .sort((a, b) => b[1].beds - a[1].beds)
+                  .slice(0, 3)
+                  .map(([state, data]) => (
+                    <div key={state} className="flex items-center justify-between text-xs">
+                      <span className="text-surface-300">{state}</span>
+                      <span className="text-surface-400">
+                        {data.count} facilities · {data.beds.toLocaleString()} beds
+                      </span>
                     </div>
-                  );
-                })}
+                  ))}
+              </div>
+            )}
+          </FloatingCard>
+        </div>
+      )}
+
+      {/* State Detail Slide-Out */}
+      {selectedState && stats.deals.byState[selectedState] && (
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 animate-fade-in">
+          <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-surface-900/90 backdrop-blur-xl border border-primary-500/30 shadow-glow-primary">
+            <MapPin className="w-4 h-4 text-primary-400" />
+            <div>
+              <span className="text-sm font-semibold text-white">{selectedState}</span>
+              <span className="text-xs text-surface-400 ml-2">
+                {stats.deals.byState[selectedState]} deal{stats.deals.byState[selectedState] !== 1 ? 's' : ''}
+              </span>
+              {stats.facilities.byState[selectedState] && (
+                <span className="text-xs text-surface-400 ml-2">
+                  · {stats.facilities.byState[selectedState].count} facilities
+                  · {stats.facilities.byState[selectedState].beds.toLocaleString()} beds
+                </span>
+              )}
             </div>
+            <button
+              onClick={() => setSelectedState(undefined)}
+              className="ml-2 w-5 h-5 rounded flex items-center justify-center text-surface-500 hover:text-white transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// === Floating Card Component ===
+function FloatingCard({
+  title,
+  icon,
+  onClose,
+  children,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl bg-surface-900/85 backdrop-blur-xl border border-surface-700/50 shadow-xl">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
+        <div className="flex items-center gap-2">
+          {icon}
+          <span className="text-xs font-medium text-surface-200">{title}</span>
+        </div>
+        <button
+          onClick={onClose}
+          className="w-5 h-5 rounded flex items-center justify-center text-surface-500 hover:text-white transition-colors"
+        >
+          <X className="w-3 h-3" />
+        </button>
       </div>
-
-      {/* Quick Insights - Compact inline */}
-      <div className="neu-card p-3">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
-            <ArrowUpRight className="w-4 h-4 text-emerald-600" />
-            <div>
-              <div className="text-lg font-bold text-emerald-700 dark:text-emerald-300">
-                {stats.deals.total > 0 ? Math.round((stats.deals.closed / stats.deals.total) * 100) : 0}%
-              </div>
-              <div className="text-xs text-emerald-600">Win Rate</div>
-            </div>
-            <Sparkline
-              data={[65, 68, 72, 75, stats.deals.total > 0 ? Math.round((stats.deals.closed / stats.deals.total) * 100) : 70]}
-              width={50}
-              height={20}
-              color="#10B981"
-            />
-          </div>
-
-          <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-            <Building2 className="w-4 h-4 text-blue-600" />
-            <div>
-              <div className="text-lg font-bold text-blue-700 dark:text-blue-300">
-                {stats.facilities.total > 0 ? Math.round(stats.facilities.totalBeds / stats.facilities.total) : 0}
-              </div>
-              <div className="text-xs text-blue-600">Avg Beds/Facility</div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 px-3 py-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-            <MapPin className="w-4 h-4 text-purple-600" />
-            <div>
-              <div className="text-lg font-bold text-purple-700 dark:text-purple-300">
-                {Object.keys(stats.facilities.byState).length}
-              </div>
-              <div className="text-xs text-purple-600">States</div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-            <TrendingUp className="w-4 h-4 text-amber-600" />
-            <div>
-              <div className="text-lg font-bold text-amber-700 dark:text-amber-300">
-                +{stats.trends.pipelineGrowth}%
-              </div>
-              <div className="text-xs text-amber-600">Pipeline Growth</div>
-            </div>
-            <Sparkline
-              data={stats.trends.weeklyDeals}
-              width={50}
-              height={20}
-              color="#F59E0B"
-            />
-          </div>
-
-          <div className="flex items-center gap-2 px-3 py-2 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
-            <DollarSign className="w-4 h-4 text-primary-600" />
-            <div>
-              <div className="text-lg font-bold text-primary-700 dark:text-primary-300">
-                {formatCurrency(stats.deals.totalValue / (stats.facilities.totalBeds || 1), false)}
-              </div>
-              <div className="text-xs text-primary-600">Value/Bed</div>
-            </div>
-          </div>
-        </div>
+      <div className="px-3 py-3">
+        {children}
       </div>
     </div>
+  );
+}
+
+// === KPI Chip Component ===
+function KPIChip({
+  icon,
+  value,
+  label,
+  color,
+}: {
+  icon: React.ReactNode;
+  value: string | number;
+  label: string;
+  color: 'primary' | 'emerald' | 'violet' | 'amber';
+}) {
+  const colorMap = {
+    primary: 'text-primary-400',
+    emerald: 'text-emerald-400',
+    violet: 'text-violet-400',
+    amber: 'text-amber-400',
+  };
+
+  return (
+    <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface-900/80 backdrop-blur-xl border border-surface-700/50 flex-shrink-0">
+      <span className={colorMap[color]}>{icon}</span>
+      <span className="text-xs font-bold text-white">{value}</span>
+      <span className="text-[10px] text-surface-400">{label}</span>
+    </div>
+  );
+}
+
+// === Toggle Button Component ===
+function ToggleButton({
+  active,
+  onClick,
+  label,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={`${active ? 'Hide' : 'Show'} ${label}`}
+      className={cn(
+        'w-7 h-7 rounded-lg flex items-center justify-center transition-colors',
+        active
+          ? 'bg-primary-500/20 text-primary-400'
+          : 'text-surface-500 hover:text-surface-300 hover:bg-white/5'
+      )}
+    >
+      {children}
+    </button>
   );
 }

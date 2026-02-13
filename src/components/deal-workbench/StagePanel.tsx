@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import {
   FileText,
@@ -10,8 +11,16 @@ import {
   Sparkles,
   Check,
   Play,
-  Lock,
   CircleDot,
+  Percent,
+  Calculator,
+  BarChart3,
+  Coins,
+  Users,
+  Shield,
+  Award,
+  Heart,
+  ArrowUpRight,
 } from 'lucide-react';
 
 interface StageInfo {
@@ -30,6 +39,32 @@ const STAGES: StageInfo[] = [
   { key: 'synthesis', label: 'Synthesis', icon: Sparkles, status: 'not_started' },
 ];
 
+// Stage → relevant tools mapping
+const STAGE_TOOLS: Record<string, Array<{ name: string; href: string; icon: typeof Percent }>> = {
+  document_understanding: [],
+  financial_reconstruction: [
+    { name: 'Pro Forma', href: '/app/tools/pro-forma', icon: Calculator },
+    { name: 'Debt Service', href: '/app/tools/debt-service', icon: Coins },
+  ],
+  operating_reality: [
+    { name: 'Staffing Calc', href: '/app/tools/staffing-calculator', icon: Users },
+    { name: 'CMS Analyzer', href: '/app/tools/cms-analyzer', icon: Award },
+  ],
+  risk_constraints: [
+    { name: 'Survey Tracker', href: '/app/tools/survey-tracker', icon: Shield },
+    { name: 'Sensitivity', href: '/app/tools/sensitivity', icon: BarChart3 },
+  ],
+  valuation: [
+    { name: 'Cap Rate', href: '/app/tools/cap-rate', icon: Percent },
+    { name: 'IRR/NPV', href: '/app/tools/irr-npv', icon: TrendingUp },
+    { name: 'Sensitivity', href: '/app/tools/sensitivity', icon: BarChart3 },
+  ],
+  synthesis: [
+    { name: 'Cap Rate', href: '/app/tools/cap-rate', icon: Percent },
+    { name: 'Exit Strategy', href: '/app/tools/exit-strategy', icon: ArrowUpRight },
+  ],
+};
+
 interface StagePanelProps {
   currentStage: string;
   stageProgress: Array<{
@@ -39,6 +74,7 @@ interface StagePanelProps {
   onStageClick: (stage: string) => void;
   documentCount: number;
   riskCount: number;
+  dealParams?: string;
 }
 
 export function StagePanel({
@@ -47,6 +83,7 @@ export function StagePanel({
   onStageClick,
   documentCount,
   riskCount,
+  dealParams,
 }: StagePanelProps) {
   const getStatus = (key: string): StageInfo['status'] => {
     const progress = stageProgress.find(p => p.stage === key);
@@ -73,10 +110,12 @@ export function StagePanel({
     not_started: 'border-surface-700/50 bg-surface-800/30',
   };
 
+  const stageTools = STAGE_TOOLS[currentStage] || [];
+
   return (
     <div className="w-60 flex-shrink-0 flex flex-col h-full">
       {/* Stage List */}
-      <div className="flex-1 space-y-1 py-3">
+      <div className="flex-1 space-y-1 py-3 overflow-y-auto">
         <p className="text-[10px] uppercase tracking-wider text-surface-500 px-3 mb-2">Analysis Stages</p>
         {STAGES.map((stage) => {
           const status = getStatus(stage.key);
@@ -109,6 +148,28 @@ export function StagePanel({
             </button>
           );
         })}
+
+        {/* Contextual Quick Tools */}
+        {stageTools.length > 0 && (
+          <div className="pt-3 mt-2 border-t border-surface-800/50 px-3 space-y-1.5">
+            <p className="text-[10px] uppercase tracking-wider text-surface-500 mb-1">Quick Tools</p>
+            {stageTools.map((tool) => {
+              const Icon = tool.icon;
+              const href = dealParams ? `${tool.href}?${dealParams}` : tool.href;
+              return (
+                <Link
+                  key={tool.href + tool.name}
+                  href={href}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-surface-400 hover:text-primary-300 hover:bg-primary-500/10 transition-colors group"
+                >
+                  <Icon className="w-3.5 h-3.5 text-surface-500 group-hover:text-primary-400" />
+                  <span>{tool.name}</span>
+                  <ArrowUpRight className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Quick Stats */}

@@ -1,9 +1,9 @@
 'use client';
 
-import { cn } from '@/lib/utils';
 import { DealIdentityBar } from './DealIdentityBar';
 import { StagePanel } from './StagePanel';
 import { AIAdvisorPanel } from './AIAdvisorPanel';
+import { buildDealParams } from '@/hooks/use-deal-context';
 
 interface WorkbenchLayoutProps {
   // Identity bar props
@@ -47,6 +47,15 @@ export function WorkbenchLayout({
   hasFinancials,
   children,
 }: WorkbenchLayoutProps) {
+  const dealParams = buildDealParams({
+    id: dealId,
+    name,
+    askingPrice,
+    beds: totalBeds,
+    assetType,
+    stage: currentStage,
+  });
+
   return (
     <div className="flex flex-col h-[calc(100vh-3rem)] -m-6">
       {/* Deal Identity Bar */}
@@ -75,6 +84,7 @@ export function WorkbenchLayout({
           onStageClick={onStageClick}
           documentCount={documentCount}
           riskCount={riskCount}
+          dealParams={dealParams}
         />
 
         {/* Center: Workspace Canvas */}
@@ -90,6 +100,7 @@ export function WorkbenchLayout({
           stageLabel={stageLabel}
           documentCount={documentCount}
           hasFinancials={hasFinancials}
+          dealParams={dealParams}
         />
       </div>
     </div>

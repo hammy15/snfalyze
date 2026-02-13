@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Calculator, TrendingUp, Building2, DollarSign, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useDealContext } from '@/hooks/use-deal-context';
 
 interface CapRateScenario {
   id: string;
@@ -14,10 +15,12 @@ interface CapRateScenario {
 }
 
 export default function CapRateCalculatorPage() {
+  const dealCtx = useDealContext();
+
   const [mode, setMode] = useState<'cap-rate' | 'value' | 'noi'>('cap-rate');
-  const [noi, setNoi] = useState<number>(1500000);
-  const [propertyValue, setPropertyValue] = useState<number>(20000000);
-  const [capRate, setCapRate] = useState<number>(7.5);
+  const [noi, setNoi] = useState<number>(dealCtx.noi || 1500000);
+  const [propertyValue, setPropertyValue] = useState<number>(dealCtx.askingPrice || 20000000);
+  const [capRate, setCapRate] = useState<number>(dealCtx.capRate || 7.5);
   const [scenarios, setScenarios] = useState<CapRateScenario[]>([]);
 
   // Calculate based on mode
@@ -66,7 +69,7 @@ export default function CapRateCalculatorPage() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link href="/app/tools" className="neu-button p-2">
+        <Link href={dealCtx.dealId ? `/app/deals/${dealCtx.dealId}` : '/app/tools'} className="neu-button p-2">
           <ArrowLeft className="w-4 h-4" />
         </Link>
         <div>
@@ -74,6 +77,26 @@ export default function CapRateCalculatorPage() {
           <p className="text-sm text-surface-500">Calculate cap rates, values, or NOI from the other two</p>
         </div>
       </div>
+
+      {/* Deal Context Banner */}
+      {dealCtx.dealName && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800/50 text-xs">
+          <Building2 className="w-3.5 h-3.5 text-primary-500" />
+          <span className="text-primary-700 dark:text-primary-300">
+            Pre-filled from deal: <strong>{dealCtx.dealName}</strong>
+          </span>
+          {dealCtx.askingPrice && (
+            <span className="text-primary-600 dark:text-primary-400 ml-2">
+              Value: ${(dealCtx.askingPrice / 1000000).toFixed(1)}M
+            </span>
+          )}
+          {dealCtx.beds && (
+            <span className="text-primary-600 dark:text-primary-400">
+              · {dealCtx.beds} beds
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Calculator */}

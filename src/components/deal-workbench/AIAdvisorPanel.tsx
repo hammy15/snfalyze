@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import {
   Sparkles,
@@ -11,7 +12,30 @@ import {
   AlertTriangle,
   TrendingUp,
   Loader2,
+  Wrench,
+  ArrowUpRight,
 } from 'lucide-react';
+
+// Stage → AI tool suggestions
+const STAGE_TOOL_SUGGESTIONS: Record<string, Array<{ text: string; href: string }>> = {
+  financial_reconstruction: [
+    { text: 'Run Pro Forma projections', href: '/app/tools/pro-forma' },
+    { text: 'Calculate debt service coverage', href: '/app/tools/debt-service' },
+  ],
+  operating_reality: [
+    { text: 'Analyze CMS star ratings', href: '/app/tools/cms-analyzer' },
+  ],
+  risk_constraints: [
+    { text: 'Run sensitivity analysis on key variables', href: '/app/tools/sensitivity' },
+  ],
+  valuation: [
+    { text: 'Calculate cap rate from financials', href: '/app/tools/cap-rate' },
+    { text: 'Model IRR/NPV for investment returns', href: '/app/tools/irr-npv' },
+  ],
+  synthesis: [
+    { text: 'Compare exit strategies', href: '/app/tools/exit-strategy' },
+  ],
+};
 
 interface AIAdvisorPanelProps {
   dealId: string;
@@ -20,6 +44,7 @@ interface AIAdvisorPanelProps {
   stageLabel: string;
   documentCount: number;
   hasFinancials: boolean;
+  dealParams?: string;
 }
 
 interface AIMessage {
@@ -34,6 +59,7 @@ export function AIAdvisorPanel({
   stageLabel,
   documentCount,
   hasFinancials,
+  dealParams,
 }: AIAdvisorPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [query, setQuery] = useState('');
@@ -213,6 +239,30 @@ export function AIAdvisorPanel({
           );
         })}
       </div>
+
+      {/* AI Tool Suggestions */}
+      {(STAGE_TOOL_SUGGESTIONS[currentStage] || []).length > 0 && (
+        <div className="px-3 py-2 border-b border-surface-800/50">
+          <p className="text-[10px] uppercase tracking-wider text-surface-500 mb-1.5">
+            <Wrench className="w-3 h-3 inline mr-1" />
+            Suggested Tools
+          </p>
+          {(STAGE_TOOL_SUGGESTIONS[currentStage] || []).map((suggestion) => {
+            const href = dealParams ? `${suggestion.href}?${dealParams}` : suggestion.href;
+            return (
+              <Link
+                key={suggestion.href}
+                href={href}
+                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-primary-300 hover:bg-primary-500/10 transition-colors group"
+              >
+                <Sparkles className="w-3 h-3 text-primary-400" />
+                <span className="flex-1">{suggestion.text}</span>
+                <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </Link>
+            );
+          })}
+        </div>
+      )}
 
       {/* Chat Messages */}
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">

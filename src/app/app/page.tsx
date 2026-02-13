@@ -267,10 +267,10 @@ export default function DashboardPage() {
               Upload deal documents to get started. Our AI will analyze them and help you make better investment decisions.
             </p>
             <div className="flex items-center justify-center gap-4">
-              <Link href="/app/deals/new/wizard">
+              <Link href="/app/deals/new">
                 <Button size="lg">
                   <Sparkles className="w-5 h-5" />
-                  Start Guided Wizard
+                  New Deal
                 </Button>
               </Link>
               <Link href="/upload">
@@ -296,7 +296,7 @@ export default function DashboardPage() {
             Track your deal pipeline and investment opportunities
           </p>
         </div>
-        <Link href="/app/deals/new/wizard">
+        <Link href="/app/deals/new">
           <Button size="sm">
             <Plus className="w-4 h-4" />
             New Deal
@@ -430,14 +430,14 @@ export default function DashboardPage() {
             <CardTitle className="text-base">Quick Actions</CardTitle>
           </CardHeader>
           <CardContent className="p-3 space-y-2">
-            <Link href="/app/deals/new/wizard" className="block">
+            <Link href="/app/deals/new" className="block">
               <div className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors">
                 <div className="w-8 h-8 rounded-lg bg-primary-500 flex items-center justify-center">
                   <Sparkles className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-medium text-sm text-surface-900 dark:text-surface-50">New Deal Wizard</h3>
-                  <p className="text-xs text-surface-500">AI-guided setup</p>
+                  <h3 className="font-medium text-sm text-surface-900 dark:text-surface-50">New Deal</h3>
+                  <p className="text-xs text-surface-500">Drop files or start fresh</p>
                 </div>
               </div>
             </Link>

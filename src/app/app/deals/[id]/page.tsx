@@ -53,6 +53,7 @@ import {
   BookOpen,
   ListChecks,
   Activity,
+  Download,
 } from 'lucide-react';
 import { SaleLeasebackDashboard } from '@/components/sale-leaseback/SaleLeasebackDashboard';
 import {
@@ -71,6 +72,7 @@ import { DealMetricsBar } from '@/components/deal-command/DealMetricsBar';
 import { AnalysisProgressCard } from '@/components/deal-command/AnalysisProgressCard';
 import { ValuationHero } from '@/components/deal-command/ValuationHero';
 import { DealNotifications } from '@/components/deal-command/DealNotifications';
+import { ValuationBreakdownWrapper } from '@/components/valuation/ValuationBreakdownWrapper';
 import type { PortfolioRentSuggestion, SLBAssumptions } from '@/lib/sale-leaseback/types';
 
 // Default deal data (used as fallback)
@@ -770,7 +772,7 @@ export default function DealDetailPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           <Button variant="outline">
             <Edit className="h-4 w-4 mr-1" />
             Edit Deal
@@ -800,6 +802,24 @@ export default function DealDetailPage() {
               </Button>
             </Link>
           )}
+          <Link href={`/app/deals/compare?deals=${deal.id}`}>
+            <Button variant="outline">
+              <ArrowLeftRight className="h-4 w-4 mr-1" />
+              Compare
+            </Button>
+          </Link>
+          <a href={`/api/deals/${deal.id}/export/one-pager`} target="_blank" rel="noopener">
+            <Button variant="outline">
+              <Download className="h-4 w-4 mr-1" />
+              One-Pager
+            </Button>
+          </a>
+          <a href={`/api/deals/${deal.id}/export/full-deck`} target="_blank" rel="noopener">
+            <Button variant="outline">
+              <FileText className="h-4 w-4 mr-1" />
+              Full Deck
+            </Button>
+          </a>
           <Link href="/app/sandbox">
             <Button>
               <ExternalLink className="h-4 w-4 mr-1" />
@@ -1414,7 +1434,8 @@ export default function DealDetailPage() {
             </TabsContent>
 
             {/* Analysis Tab */}
-            <TabsContent value="analysis" className="mt-4">
+            <TabsContent value="analysis" className="mt-4 space-y-4">
+              <ValuationBreakdownWrapper dealId={deal.id} />
               <DecisionDashboard dealId={deal.id} />
             </TabsContent>
 

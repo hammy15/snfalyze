@@ -1165,6 +1165,55 @@ export const documentActivity = pgTable(
   })
 );
 
+// ============================================================================
+// Smart Intake Pipeline
+// ============================================================================
+
+export const pipelineStatusEnum = pgEnum('pipeline_status', [
+  'idle',
+  'running',
+  'paused_for_clarification',
+  'completed',
+  'failed',
+]);
+
+export const pipelineSessions = pgTable(
+  'pipeline_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    dealId: uuid('deal_id').references(() => deals.id, { onDelete: 'set null' }),
+    status: pipelineStatusEnum('status').default('running').notNull(),
+    currentPhase: varchar('current_phase', { length: 50 }).default('ingest').notNull(),
+    phaseResults: jsonb('phase_results').default('{}'),
+    filesMetadata: jsonb('files_metadata').default('[]'),
+    extractedData: jsonb('extracted_data').default('{}'),
+    clarifications: jsonb('clarifications').default('[]'),
+    clarificationAnswers: jsonb('clarification_answers').default('[]'),
+    toolResults: jsonb('tool_results').default('[]'),
+    redFlags: jsonb('red_flags').default('[]'),
+    synthesis: jsonb('synthesis'),
+    completenessScore: integer('completeness_score').default(0),
+    missingDocuments: jsonb('missing_documents').default('[]'),
+    error: text('error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (table) => ({
+    dealIdIdx: index('idx_pipeline_sessions_deal_id').on(table.dealId),
+    statusIdx: index('idx_pipeline_sessions_status').on(table.status),
+    createdAtIdx: index('idx_pipeline_sessions_created_at').on(table.createdAt),
+  })
+);
+
+// Relations
+export const pipelineSessionsRelations = relations(pipelineSessions, ({ one }) => ({
+  deal: one(deals, {
+    fields: [pipelineSessions.dealId],
+    references: [deals.id],
+  }),
+}));
+
 // Relations
 export const dealsRelations = relations(deals, ({ one, many }) => ({
   facilities: many(facilities),

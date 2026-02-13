@@ -66,6 +66,11 @@ import { QualityDashboard } from '@/components/quality';
 import { DealScoreCard } from '@/components/scoring';
 import { PortfolioFacilitiesOverview } from '@/components/deals/portfolio-facilities-overview';
 import { RentSuggestionCard } from '@/components/slb/rent-suggestion-card';
+import { DealChatPanel } from '@/components/deal-command/DealChatPanel';
+import { DealMetricsBar } from '@/components/deal-command/DealMetricsBar';
+import { AnalysisProgressCard } from '@/components/deal-command/AnalysisProgressCard';
+import { ValuationHero } from '@/components/deal-command/ValuationHero';
+import { DealNotifications } from '@/components/deal-command/DealNotifications';
 import type { PortfolioRentSuggestion, SLBAssumptions } from '@/lib/sale-leaseback/types';
 
 // Default deal data (used as fallback)
@@ -153,6 +158,7 @@ export default function DealDetailPage() {
   });
   const [rentSuggestions, setRentSuggestions] = useState<PortfolioRentSuggestion | null>(null);
   const [rentSuggestionsLoading, setRentSuggestionsLoading] = useState(false);
+  const [dealScore, setDealScore] = useState<{ score: number; confidence: number; risks: string[] } | null>(null);
 
   // Fetch deal data from API
   useEffect(() => {
@@ -330,6 +336,23 @@ export default function DealDetailPage() {
           }
         }
         setRentSuggestionsLoading(false);
+
+        // Fetch deal score for metrics bar
+        try {
+          const scoreResponse = await fetch(`/api/deals/${dealId}/score`);
+          if (scoreResponse.ok) {
+            const scoreData = await scoreResponse.json();
+            if (scoreData.success && scoreData.data) {
+              setDealScore({
+                score: scoreData.data.portfolioScore || 0,
+                confidence: scoreData.data.confidenceScore || 0,
+                risks: scoreData.data.riskFactors || [],
+              });
+            }
+          }
+        } catch {
+          // Score is optional, non-blocking
+        }
 
       } catch (error) {
         console.error('Failed to fetch deal data:', error);
@@ -825,6 +848,29 @@ export default function DealDetailPage() {
         </Card>
       </div>
 
+      {/* AI Metrics Bar */}
+      <DealMetricsBar
+        score={dealScore?.score}
+        confidence={dealScore?.confidence}
+        askingPrice={deal.asking_price || undefined}
+        valuationLow={rentSuggestions?.portfolioTotal?.purchasePriceRange?.low}
+        valuationMid={rentSuggestions?.portfolioTotal?.purchasePriceRange?.mid}
+        valuationHigh={rentSuggestions?.portfolioTotal?.purchasePriceRange?.high}
+        topRisks={dealScore?.risks || []}
+        completeness={Math.round((stageProgress.filter(s => s.status === 'completed').length / 6) * 100)}
+      />
+
+      {/* Smart Notifications */}
+      <DealNotifications
+        dealId={deal.id}
+        documentCount={documents.length}
+        riskCount={risks.length}
+        completedStages={stageProgress.filter(s => s.status === 'completed').length}
+        totalStages={6}
+        hasFinancials={documents.some(d => d.category === 'financials')}
+        onNavigate={setActiveTab}
+      />
+
       {/* Main Content */}
       <div className={showWalkthrough ? 'space-y-6' : 'grid grid-cols-3 gap-6'}>
         {/* Left Column - Stage Tracker or Full Walkthrough */}
@@ -875,14 +921,24 @@ export default function DealDetailPage() {
                 Full Guide
               </Button>
             </div>
-            <StageTracker
-              dealId={deal.id}
-              currentStage={deal.current_stage || 'document_understanding'}
-              stageProgress={stageProgress}
-              onStageStart={handleStageStart}
-              onStageComplete={handleStageComplete}
-              onStageBlock={handleStageBlock}
-              onNavigateToStage={handleNavigateToStage}
+            <AnalysisProgressCard
+              currentStage={(deal.current_stage || 'document_understanding') as any}
+              stageProgress={stageProgress.map(s => ({
+                stage: s.stage as any,
+                status: s.status as any,
+                started_at: s.started_at,
+                completed_at: s.completed_at,
+                blockers: s.blockers,
+              }))}
+              onStageStart={(stage) => handleStageStart(stage as any)}
+              onStageClick={(stage) => handleNavigateToStage(stage as any)}
+              onAIAnalyze={(stage) => {
+                // Start the stage and navigate to it
+                handleStageStart(stage as any);
+                handleNavigateToStage(stage as any);
+              }}
+              documentCount={documents.length}
+              hasFinancials={documents.some(d => d.category === 'financials')}
             />
           </div>
         )}
@@ -924,6 +980,19 @@ export default function DealDetailPage() {
 
             {/* Overview Tab */}
             <TabsContent value="overview" className="mt-4 space-y-4">
+              {/* Valuation Hero */}
+              <ValuationHero
+                askingPrice={deal.asking_price || undefined}
+                valuationLow={rentSuggestions?.portfolioTotal?.purchasePriceRange?.low}
+                valuationMid={rentSuggestions?.portfolioTotal?.purchasePriceRange?.mid}
+                valuationHigh={rentSuggestions?.portfolioTotal?.purchasePriceRange?.high}
+                confidence={dealScore?.confidence}
+                totalBeds={deal.total_beds}
+                perBedLow={rentSuggestions?.portfolioTotal?.purchasePriceRange?.low && deal.total_beds ? rentSuggestions.portfolioTotal.purchasePriceRange.low / deal.total_beds : undefined}
+                perBedMid={rentSuggestions?.portfolioTotal?.purchasePriceRange?.mid && deal.total_beds ? rentSuggestions.portfolioTotal.purchasePriceRange.mid / deal.total_beds : undefined}
+                perBedHigh={rentSuggestions?.portfolioTotal?.purchasePriceRange?.high && deal.total_beds ? rentSuggestions.portfolioTotal.purchasePriceRange.high / deal.total_beds : undefined}
+              />
+
               {/* Deal Score Card */}
               <DealScoreCard dealId={deal.id} />
 
@@ -1363,6 +1432,9 @@ export default function DealDetailPage() {
           </Tabs>
         </div>
       </div>
+
+      {/* AI Chat Panel */}
+      <DealChatPanel dealId={deal.id} dealName={deal.name} />
     </div>
   );
 }

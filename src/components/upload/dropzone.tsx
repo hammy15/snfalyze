@@ -126,6 +126,18 @@ export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, disable
 
   return (
     <div className={cn('space-y-6', className)}>
+      {/* Hidden file input — outside the dropzone to prevent click event bubbling */}
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept={Object.values(acceptedTypes).flat().join(',')}
+        onChange={handleChange}
+        disabled={disabled}
+        className="sr-only"
+        tabIndex={-1}
+      />
+
       {/* Dropzone Area */}
       <div
         onDragEnter={handleDrag}
@@ -133,6 +145,9 @@ export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, disable
         onDragOver={handleDrag}
         onDrop={handleDrop}
         onClick={handleClick}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleClick(); }}
         className={cn(
           'relative block border-2 border-dashed rounded-xl p-12 text-center transition-all',
           disabled
@@ -142,16 +157,6 @@ export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, disable
               : 'border-surface-300 hover:border-accent/50 hover:bg-surface-50 cursor-pointer'
         )}
       >
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept={Object.values(acceptedTypes).flat().join(',')}
-          onChange={handleChange}
-          disabled={disabled}
-          className="hidden"
-        />
-
         <div className="flex flex-col items-center gap-4">
           <div
             className={cn(

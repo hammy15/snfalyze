@@ -95,6 +95,10 @@ export async function POST(request: NextRequest) {
       fileType = 'om_package';
     }
 
+    // Read file buffer upfront (must happen before response is sent on Vercel)
+    const arrayBuffer = await file.arrayBuffer();
+    const fileBuffer = Buffer.from(arrayBuffer);
+
     // Create document record
     const [doc] = await db
       .insert(documents)
@@ -109,7 +113,7 @@ export async function POST(request: NextRequest) {
       .returning();
 
     // Process document in background (like main upload route)
-    processDocument(doc.id, file, dealId).catch(console.error);
+    processDocument(doc.id, file.name, file.type, fileBuffer, dealId).catch(console.error);
 
     return NextResponse.json({
       success: true,
@@ -132,7 +136,7 @@ export async function POST(request: NextRequest) {
 /**
  * Process uploaded document - parse, analyze, extract data
  */
-async function processDocument(documentId: string, file: File, dealId: string | null) {
+async function processDocument(documentId: string, fileName: string, fileType: string, buffer: Buffer, dealId: string | null) {
   try {
     // Update status to parsing
     await db
@@ -140,18 +144,13 @@ async function processDocument(documentId: string, file: File, dealId: string | 
       .set({ status: 'parsing' })
       .where(eq(documents.id, documentId));
 
-    // Read file content
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
     let rawText = '';
     let extractedData: Record<string, any> = {};
 
     // Process based on file type
-    const fileType = file.type;
-    const fileName = file.name.toLowerCase();
+    const lowerFileName = fileName.toLowerCase();
 
-    if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
+    if (fileType === 'application/pdf' || lowerFileName.endsWith('.pdf')) {
       try {
         const pdfData = await pdfParse(buffer);
         rawText = pdfData.text;
@@ -165,17 +164,17 @@ async function processDocument(documentId: string, file: File, dealId: string | 
     } else if (
       fileType.includes('spreadsheet') ||
       fileType.includes('excel') ||
-      fileName.endsWith('.xlsx') ||
-      fileName.endsWith('.xls') ||
-      fileName.endsWith('.numbers')
+      lowerFileName.endsWith('.xlsx') ||
+      lowerFileName.endsWith('.xls') ||
+      lowerFileName.endsWith('.numbers')
     ) {
       // Check for encrypted files first (only for Excel formats, not Numbers)
-      if (!fileName.endsWith('.numbers') && isEncryptedExcel(buffer)) {
+      if (!lowerFileName.endsWith('.numbers') && isEncryptedExcel(buffer)) {
         await db
           .update(documents)
           .set({
             status: 'error',
-            errors: [`The file "${fileName}" is encrypted with Microsoft RMS. Please save a copy without encryption and re-upload.`],
+            errors: [`The file "${lowerFileName}" is encrypted with Microsoft RMS. Please save a copy without encryption and re-upload.`],
           })
           .where(eq(documents.id, documentId));
         return;
@@ -207,7 +206,7 @@ async function processDocument(documentId: string, file: File, dealId: string | 
         console.error('Excel parsing error:', xlsxError);
         rawText = `[Error extracting Excel: ${xlsxError instanceof Error ? xlsxError.message : 'Unknown error'}]`;
       }
-    } else if (fileName.endsWith('.csv')) {
+    } else if (lowerFileName.endsWith('.csv')) {
       try {
         const csvText = buffer.toString('utf-8');
         const parseResult = Papa.parse(csvText, {
@@ -226,7 +225,7 @@ async function processDocument(documentId: string, file: File, dealId: string | 
 
         // Convert CSV data to sheets format for deep extraction
         // Use filename (without extension) as sheet name
-        const sheetName = file.name.replace(/\.csv$/i, '');
+        const sheetName = fileName.replace(/\.csv$/i, '');
         extractedData.sheets = { [sheetName]: csvData };
         extractedData.sheetNames = [sheetName];
         extractedData.csvData = csvData;
@@ -240,17 +239,17 @@ async function processDocument(documentId: string, file: File, dealId: string | 
       // Store base64 for later vision extraction (done in /api/extraction/vision)
       // Don't run AI vision here — it causes Vercel serverless timeout (504)
       const base64Data = buffer.toString('base64');
-      rawText = `[Image: ${file.name}]`;
+      rawText = `[Image: ${fileName}]`;
       extractedData.imageBase64 = base64Data;
       extractedData.imageMimeType = fileType;
       extractedData.requiresVision = true;
-      console.log(`[Wizard] Image stored for vision extraction: ${file.name} (${(base64Data.length / 1024).toFixed(0)}KB base64)`);
+      console.log(`[Wizard] Image stored for vision extraction: ${fileName} (${(base64Data.length / 1024).toFixed(0)}KB base64)`);
     } else {
       rawText = buffer.toString('utf-8');
     }
 
     // Classify document
-    const documentType = classifyDocument(rawText, file.name);
+    const documentType = classifyDocument(rawText, fileName);
 
     // Update status to normalizing
     await db
@@ -279,7 +278,7 @@ async function processDocument(documentId: string, file: File, dealId: string | 
         console.log(`[Wizard] Starting AI analysis for document ${documentId}...`);
         aiAnalysis = await analyzeDocument({
           documentId,
-          filename: file.name,
+          filename: fileName,
           documentType,
           rawText,
           spreadsheetData: extractedData.sheets,

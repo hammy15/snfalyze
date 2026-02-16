@@ -146,6 +146,15 @@ function splitIntoSheets(rawText: string): { name: string; content: string }[] {
   return sheets;
 }
 
+/** Compress text by removing empty/whitespace-only rows and collapsing excessive spacing */
+function compressText(text: string): string {
+  return text
+    .split('\n')
+    .filter(line => line.trim().length > 0) // Remove empty lines
+    .map(line => line.replace(/\t+/g, '\t').replace(/ {3,}/g, '  ')) // Collapse tabs and spaces
+    .join('\n');
+}
+
 /** Chunk a large sheet into segments that fit within MAX_CHUNK_SIZE */
 function chunkSheet(sheet: { name: string; content: string }): SheetChunk[] {
   if (sheet.content.length <= MAX_CHUNK_SIZE) {
@@ -369,12 +378,14 @@ export async function POST(request: NextRequest) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         console.error(`  ERROR [${doc.filename}]: ${errorMsg}`);
         processingErrors.push(`${doc.filename}: ${errorMsg}`);
+        // Preserve existing extractedData (e.g. imageBase64) — only add error field
+        const existingData = (doc.extractedData as Record<string, any>) || {};
         await db
           .update(documents)
           .set({
             status: 'error',
             processedAt: new Date(),
-            extractedData: { error: errorMsg },
+            extractedData: { ...existingData, error: errorMsg },
           })
           .where(eq(documents.id, doc.id));
       }
@@ -493,7 +504,14 @@ async function extractFromText(
 
   for (let sheetIdx = 0; sheetIdx < sheets.length; sheetIdx++) {
     const sheet = sheets[sheetIdx];
-    console.log(`  [${doc.filename}] Sheet ${sheetIdx + 1}/${sheets.length}: "${sheet.name}" (${(sheet.content.length / 1024).toFixed(0)}KB)`);
+
+    // Compress text to remove empty rows and excessive whitespace
+    const originalSize = sheet.content.length;
+    sheet.content = compressText(sheet.content);
+    const compressedSize = sheet.content.length;
+    const saved = ((1 - compressedSize / originalSize) * 100).toFixed(0);
+
+    console.log(`  [${doc.filename}] Sheet ${sheetIdx + 1}/${sheets.length}: "${sheet.name}" (${(originalSize / 1024).toFixed(0)}KB -> ${(compressedSize / 1024).toFixed(0)}KB, ${saved}% compressed)`);
 
     // Chunk large sheets
     const chunks = chunkSheet(sheet);
@@ -502,57 +520,54 @@ async function extractFromText(
       console.log(`    Chunked into ${chunks.length} segments`);
     }
 
-    // Process chunks in parallel batches (CHUNK_CONCURRENCY at a time)
+    // Process ALL chunks in parallel (router handles concurrency internally)
     const chunkFacilities: any[] = [];
 
-    for (let batchStart = 0; batchStart < chunks.length; batchStart += CHUNK_CONCURRENCY) {
-      const batch = chunks.slice(batchStart, batchStart + CHUNK_CONCURRENCY);
-      console.log(`    Processing batch ${Math.floor(batchStart / CHUNK_CONCURRENCY) + 1} (${batch.length} chunk${batch.length > 1 ? 's' : ''} in parallel)...`);
+    console.log(`    Processing ${chunks.length} chunk(s) in parallel...`);
 
-      const batchResults = await Promise.allSettled(
-        batch.map(async (chunk) => {
-          const chunkLabel = chunks.length > 1
-            ? `chunk ${chunk.chunkIndex + 1}/${chunk.totalChunks}`
-            : 'full sheet';
+    const chunkResults = await Promise.allSettled(
+      chunks.map(async (chunk) => {
+        const chunkLabel = chunks.length > 1
+          ? `chunk ${chunk.chunkIndex + 1}/${chunk.totalChunks}`
+          : 'full sheet';
 
-          const userPrompt = chunks.length > 1
-            ? `Extract all financial data from this section (${chunkLabel}) of sheet "${chunk.sheetName}" in document "${doc.filename}".\nThis is part of a larger sheet — extract everything you see in this segment.\n\n${chunk.content}`
-            : `Extract all financial data from sheet "${chunk.sheetName}" in document "${doc.filename}".\n\n${chunk.content}`;
+        const userPrompt = chunks.length > 1
+          ? `Extract all financial data from this section (${chunkLabel}) of sheet "${chunk.sheetName}" in document "${doc.filename}".\nThis is part of a larger sheet — extract everything you see in this segment.\n\n${chunk.content}`
+          : `Extract all financial data from sheet "${chunk.sheetName}" in document "${doc.filename}".\n\n${chunk.content}`;
 
-          const router = getRouter();
-          const response = await router.route({
-            taskType: 'vision_extraction',
-            systemPrompt: FINANCIAL_EXTRACTION_SYSTEM,
-            userPrompt,
-            maxTokens: TEXT_MAX_TOKENS,
-            responseFormat: 'json',
-          });
+        const router = getRouter();
+        const response = await router.route({
+          taskType: 'vision_extraction',
+          systemPrompt: FINANCIAL_EXTRACTION_SYSTEM,
+          userPrompt,
+          maxTokens: TEXT_MAX_TOKENS,
+          responseFormat: 'json',
+        });
 
-          return { chunk, chunkLabel, content: response.content || '' };
-        })
-      );
+        return { chunk, chunkLabel, content: response.content || '' };
+      })
+    );
 
-      for (const outcome of batchResults) {
-        if (outcome.status === 'fulfilled') {
-          const { chunk, chunkLabel, content } = outcome.value;
-          rawAnalysisParts.push(`--- Sheet: ${chunk.sheetName} (${chunkLabel}) ---\n${content}`);
+    for (const outcome of chunkResults) {
+      if (outcome.status === 'fulfilled') {
+        const { chunk, chunkLabel, content } = outcome.value;
+        rawAnalysisParts.push(`--- Sheet: ${chunk.sheetName} (${chunkLabel}) ---\n${content}`);
 
-          const { data: parsed, warnings } = robustJsonParse(content);
-          allWarnings.push(...warnings);
+        const { data: parsed, warnings } = robustJsonParse(content);
+        allWarnings.push(...warnings);
 
-          const facilities = parsed.facilities || [];
-          chunkFacilities.push(...facilities);
+        const facilities = parsed.facilities || [];
+        chunkFacilities.push(...facilities);
 
-          if (parsed.warnings && Array.isArray(parsed.warnings)) {
-            allWarnings.push(...parsed.warnings);
-          }
-
-          console.log(`    -> ${chunkLabel}: ${facilities.length} facilities, ${facilities.reduce((s: number, f: any) => s + (f.lineItems?.length || 0), 0)} line items`);
-        } else {
-          const msg = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
-          console.error(`    ERROR in batch: ${msg}`);
-          allWarnings.push(`Failed to extract chunk: ${msg}`);
+        if (parsed.warnings && Array.isArray(parsed.warnings)) {
+          allWarnings.push(...parsed.warnings);
         }
+
+        console.log(`    -> ${chunkLabel}: ${facilities.length} facilities, ${facilities.reduce((s: number, f: any) => s + (f.lineItems?.length || 0), 0)} line items`);
+      } else {
+        const msg = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
+        console.error(`    ERROR: ${msg}`);
+        allWarnings.push(`Failed to extract chunk: ${msg}`);
       }
     }
 

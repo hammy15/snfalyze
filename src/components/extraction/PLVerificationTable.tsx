@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import {
   Check,
@@ -372,6 +372,13 @@ export function PLVerificationTable({
   const [activeFacilityId, setActiveFacilityId] = useState(facilities[0]?.id || '');
   const [filterCategory, setFilterCategory] = useState<'all' | 'revenue' | 'expense' | 'metric'>('all');
   const [showOnlyLowConfidence, setShowOnlyLowConfidence] = useState(false);
+
+  // Sync activeFacilityId when facilities change (e.g., after extraction completes)
+  useEffect(() => {
+    if (facilities.length > 0 && !facilities.find(f => f.id === activeFacilityId)) {
+      setActiveFacilityId(facilities[0].id);
+    }
+  }, [facilities, activeFacilityId]);
 
   const activeFacility = facilities.find(f => f.id === activeFacilityId);
 

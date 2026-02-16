@@ -11,11 +11,11 @@ export const maxDuration = 300;
 // CONSTANTS
 // ============================================================================
 
-/** Max text per AI call (~100KB). Sheets larger than this get chunked. */
-const MAX_CHUNK_SIZE = 100_000;
+/** Max text per AI call (~200KB). Sheets larger than this get chunked. */
+const MAX_CHUNK_SIZE = 200_000;
 
 /** Max concurrent chunk AI calls within a single file */
-const CHUNK_CONCURRENCY = 3;
+const CHUNK_CONCURRENCY = 5;
 
 /** Max tokens for text extraction response */
 const TEXT_MAX_TOKENS = 16384;

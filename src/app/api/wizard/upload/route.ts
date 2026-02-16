@@ -171,13 +171,14 @@ async function processDocument(documentId: string, file: File, dealId: string | 
     ) {
       // Check for encrypted files first (only for Excel formats, not Numbers)
       if (!fileName.endsWith('.numbers') && isEncryptedExcel(buffer)) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `The file "${fileName}" is encrypted with Microsoft's Rights Management Service (RMS). Please open the file in Microsoft Excel and save a copy without encryption/protection, then try uploading again.`,
-          },
-          { status: 400 }
-        );
+        await db
+          .update(documents)
+          .set({
+            status: 'error',
+            errors: [`The file "${fileName}" is encrypted with Microsoft RMS. Please save a copy without encryption and re-upload.`],
+          })
+          .where(eq(documents.id, documentId));
+        return;
       }
 
       try {
@@ -236,8 +237,26 @@ async function processDocument(documentId: string, file: File, dealId: string | 
         rawText = `[Error extracting CSV: ${csvError instanceof Error ? csvError.message : 'Unknown error'}]`;
       }
     } else if (fileType.includes('image')) {
-      rawText = `[Image file: ${file.name} - OCR processing available but requires additional setup]`;
-      extractedData.requiresOcr = true;
+      // Use AI vision extraction for images
+      try {
+        const { getRouter } = await import('@/lib/ai');
+        const router = getRouter();
+        const base64Data = buffer.toString('base64');
+        const visionResult = await router.route({
+          taskType: 'vision_extraction',
+          systemPrompt: 'You are a document extraction specialist for healthcare facility acquisitions. Extract all text, numbers, tables, and data from this image. Preserve table structure using tab-separated values.',
+          userPrompt: 'Extract all text, numbers, tables, and data from this image. Format tables as tab-separated rows. Include all visible financial figures, facility names, addresses, bed counts, and any other relevant data.',
+          images: [{ data: base64Data, mimeType: fileType }],
+          maxTokens: 4000,
+        });
+        rawText = visionResult.content || `[Image: ${file.name}]`;
+        extractedData.visionExtracted = true;
+        console.log(`[Wizard] Vision extracted ${rawText.length} chars from image ${file.name}`);
+      } catch (visionError) {
+        console.error('[Wizard] Vision extraction failed:', visionError);
+        rawText = `[Image: ${file.name} - vision extraction failed]`;
+        extractedData.requiresOcr = true;
+      }
     } else {
       rawText = buffer.toString('utf-8');
     }
@@ -267,7 +286,7 @@ async function processDocument(documentId: string, file: File, dealId: string | 
 
     // Run AI analysis if we have actual text content
     let aiAnalysis: DocumentAnalysisResult | null = null;
-    if (rawText.length > 100 && !rawText.startsWith('[Error') && !rawText.startsWith('[Image')) {
+    if (rawText.length > 100 && !rawText.startsWith('[Error') && !rawText.startsWith('[Image:') && !rawText.startsWith('[Image file:')) {
       try {
         console.log(`[Wizard] Starting AI analysis for document ${documentId}...`);
         aiAnalysis = await analyzeDocument({

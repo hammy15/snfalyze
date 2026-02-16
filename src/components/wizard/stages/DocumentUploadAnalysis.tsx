@@ -214,7 +214,13 @@ export function DocumentUploadAnalysis({
           body: formData,
         });
 
-        const data = await response.json();
+        const text = await response.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error(`Server error (${response.status})`);
+        }
 
         if (data.success) {
           setFiles((prev) =>
@@ -250,6 +256,8 @@ export function DocumentUploadAnalysis({
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
       'application/vnd.ms-excel': ['.xls'],
       'text/csv': ['.csv'],
+      'image/png': ['.png'],
+      'image/jpeg': ['.jpg', '.jpeg'],
     },
   });
 
@@ -309,7 +317,13 @@ export function DocumentUploadAnalysis({
 
       clearInterval(progressInterval);
 
-      const data = await response.json();
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(`Server error (${response.status})`);
+      }
 
       if (data.success) {
         setProcessingStage('complete');
@@ -479,7 +493,7 @@ export function DocumentUploadAnalysis({
               Drop your deal documents here
             </p>
             <p className="text-sm text-surface-500 mt-2">
-              PDF, Excel (.xlsx, .xls), CSV - We'll analyze and extract deal info automatically
+              PDF, Excel, CSV, or Images — AI will extract and analyze deal info automatically
             </p>
           </>
         )}
@@ -491,7 +505,7 @@ export function DocumentUploadAnalysis({
           <input
             type="file"
             multiple
-            accept=".pdf,.xlsx,.xls,.csv"
+            accept=".pdf,.xlsx,.xls,.csv,.png,.jpg,.jpeg"
             onChange={(e) => {
               const selectedFiles = e.target.files ? Array.from(e.target.files) : [];
               if (selectedFiles.length > 0) {

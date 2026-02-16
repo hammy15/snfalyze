@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, documents, facilities as facilitiesTable } from '@/db';
 import { eq, inArray } from 'drizzle-orm';
-import Anthropic from '@anthropic-ai/sdk';
+import { getRouter } from '@/lib/ai';
 import { join } from 'path';
 import { comprehensiveExtract, type ExtractionResult } from '@/lib/extraction/comprehensive-extractor';
 import { extractSingleFile, type PerFileExtractionResult } from '@/lib/extraction/per-file-extractor';
@@ -9,8 +9,6 @@ import { populateFromExtraction } from '@/lib/extraction/db-populator';
 import { crossReferenceValidate, type CrossReferenceResult } from '@/lib/extraction/cross-reference-validator';
 import { generateAISummary, generateQuickSummary, type AISummaryOutput } from '@/lib/extraction/ai-summary-generator';
 import { matchExtractedFacilityToCMS, type NormalizedProviderData } from '@/lib/cms';
-
-const anthropic = new Anthropic();
 
 // Use /tmp on Vercel (serverless), local uploads folder in development
 const getUploadsDir = () => {
@@ -593,13 +591,15 @@ Consider:
 Return ONLY valid JSON.`;
 
       try {
-        const message = await anthropic.messages.create({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          messages: [{ role: 'user', content: summaryPrompt }],
+        const router = getRouter();
+        const aiResponse = await router.route({
+          taskType: 'deal_analysis',
+          systemPrompt: 'You are a healthcare real estate deal analyst. Analyze the provided deal data and return structured JSON recommendations.',
+          userPrompt: summaryPrompt,
+          maxTokens: 1000,
         });
 
-        const responseText = message.content[0].type === 'text' ? message.content[0].text : '';
+        const responseText = aiResponse.content || '';
         const jsonMatch = responseText.match(/\{[\s\S]*\}/);
 
         if (jsonMatch) {

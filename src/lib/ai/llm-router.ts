@@ -17,8 +17,6 @@ import type {
   ProviderClient,
   ProviderMetrics,
   RoutingRule,
-  ReportRequest,
-  ReportResponse,
 } from './types';
 import { ProviderError, AllProvidersFailedError, COST_PER_1K_TOKENS } from './types';
 import { DEFAULT_ROUTING_RULES, DEFAULT_PROVIDER_CONFIGS, PROVIDER_ENV_KEYS } from './routing-config';
@@ -26,7 +24,7 @@ import { AnthropicProvider } from './providers/anthropic';
 import { GeminiProvider } from './providers/gemini';
 import { OpenAIProvider } from './providers/openai';
 import { GrokProvider } from './providers/grok';
-import { CanvaProvider } from './providers/canva';
+import { PerplexityProvider } from './providers/perplexity';
 
 // ============================================================================
 // CIRCUIT BREAKER
@@ -72,7 +70,7 @@ export class LLMRouter {
       gemini: () => new GeminiProvider(DEFAULT_PROVIDER_CONFIGS.gemini.defaultModel),
       openai: () => new OpenAIProvider(DEFAULT_PROVIDER_CONFIGS.openai.defaultModel),
       grok: () => new GrokProvider(DEFAULT_PROVIDER_CONFIGS.grok.defaultModel),
-      canva: () => new CanvaProvider(),
+      perplexity: () => new PerplexityProvider(DEFAULT_PROVIDER_CONFIGS.perplexity.defaultModel),
     };
 
     for (const [provider, factory] of Object.entries(providerFactories)) {
@@ -142,7 +140,7 @@ export class LLMRouter {
     if (availableChain.length === 0) {
       // Last resort: try any available provider
       const anyAvailable = [...this.providers.keys()].filter(
-        (p) => p !== 'canva' && this.isProviderReady(p),
+        (p) => this.isProviderReady(p),
       );
       if (anyAvailable.length > 0) {
         availableChain.push(...anyAvailable);
@@ -252,21 +250,6 @@ export class LLMRouter {
     }
 
     throw new ProviderError('openai', undefined, false, 'OpenAI provider not available for embeddings');
-  }
-
-  // --------------------------------------------------------------------------
-  // REPORT GENERATION — Direct Canva Access
-  // --------------------------------------------------------------------------
-
-  async generateReport(params: ReportRequest): Promise<ReportResponse> {
-    this.ensureInitialized();
-
-    const canva = this.providers.get('canva');
-    if (canva?.generateReport) {
-      return canva.generateReport(params);
-    }
-
-    throw new ProviderError('canva', undefined, false, 'Canva provider not available for report generation');
   }
 
   // --------------------------------------------------------------------------

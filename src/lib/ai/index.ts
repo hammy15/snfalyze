@@ -22,8 +22,6 @@ export type {
   ProviderClient,
   ProviderMetrics,
   RoutingRule,
-  ReportRequest,
-  ReportResponse,
 } from './types';
 
 export { ProviderError, AllProvidersFailedError } from './types';

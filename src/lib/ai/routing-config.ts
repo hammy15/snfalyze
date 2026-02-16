@@ -61,12 +61,12 @@ export const DEFAULT_ROUTING_RULES: RoutingRule[] = [
     fallbacks: ['openai', 'grok'],
     config: { temperature: 0.5 },
   },
-  // Phase 5: Market Intelligence — Grok's real-time data
+  // Phase 5: Market Intelligence — Perplexity for cited real-time data, Grok fallback
   {
     taskType: 'market_intelligence',
-    primary: 'grok',
-    fallbacks: ['openai', 'anthropic'],
-    config: { temperature: 0.3, maxTokens: 2000 },
+    primary: 'perplexity',
+    fallbacks: ['grok', 'openai', 'anthropic'],
+    config: { temperature: 0.2, maxTokens: 2000 },
   },
   // Phase 7: Synthesis — Claude's writing quality
   {
@@ -75,11 +75,12 @@ export const DEFAULT_ROUTING_RULES: RoutingRule[] = [
     fallbacks: ['openai'],
     config: { maxTokens: 4096, temperature: 0.7 },
   },
-  // Post-pipeline: Report generation — Canva design API
+  // Deep research — Perplexity excels with sourced, cited answers
   {
-    taskType: 'report_generation',
-    primary: 'canva',
-    fallbacks: [],
+    taskType: 'deep_research',
+    primary: 'perplexity',
+    fallbacks: ['grok', 'openai'],
+    config: { temperature: 0.2, maxTokens: 4096 },
   },
   // Embeddings — OpenAI only
   {
@@ -131,14 +132,14 @@ export const DEFAULT_PROVIDER_CONFIGS: Record<LLMProvider, Omit<ProviderConfig, 
     maxConcurrent: 5,
     rateLimitPerMinute: 30,
   },
-  canva: {
-    provider: 'canva',
-    defaultModel: 'canva-connect-v1',
+  perplexity: {
+    provider: 'perplexity',
+    defaultModel: 'sonar-pro',
     maxRetries: 1,
-    retryDelayMs: 2000,
-    timeoutMs: 60_000,
-    maxConcurrent: 2,
-    rateLimitPerMinute: 10,
+    retryDelayMs: 1000,
+    timeoutMs: 30_000,
+    maxConcurrent: 5,
+    rateLimitPerMinute: 20,
   },
 };
 
@@ -151,5 +152,5 @@ export const PROVIDER_ENV_KEYS: Record<LLMProvider, string> = {
   gemini: 'GOOGLE_AI_API_KEY',
   openai: 'OPENAI_API_KEY',
   grok: 'XAI_API_KEY',
-  canva: 'CANVA_API_KEY',
+  perplexity: 'PERPLEXITY_API_KEY',
 };

@@ -9,7 +9,7 @@
 // ============================================================================
 
 export interface AIModelSettings {
-  provider: 'anthropic' | 'openai' | 'gemini' | 'grok' | 'canva';
+  provider: 'anthropic' | 'openai' | 'gemini' | 'grok' | 'perplexity';
   model: string;
   maxTokens: number;
   temperature: number;
@@ -19,14 +19,14 @@ export interface AIModelSettings {
   systemPrompt: string;
   fallbackModel: string;
   enableStreaming: boolean;
-  /** Enable multi-provider routing (Gemini, Claude, OpenAI, Grok, Canva) */
+  /** Enable multi-provider routing (Gemini, Claude, OpenAI, Grok, Perplexity) */
   multiProviderEnabled: boolean;
   /** Per-provider overrides (optional) */
   providerOverrides?: {
     documentAnalysis?: 'anthropic' | 'gemini' | 'openai';
     dealAnalysis?: 'anthropic' | 'openai';
     visionExtraction?: 'anthropic' | 'gemini';
-    marketIntelligence?: 'grok' | 'openai' | 'anthropic';
+    marketIntelligence?: 'perplexity' | 'grok' | 'openai' | 'anthropic';
     fieldExtraction?: 'openai' | 'anthropic' | 'gemini';
   };
 }

@@ -15,6 +15,7 @@ import { analyzeDeal, type AnalysisInput } from '@/lib/analysis/engine';
 import { matchExtractedFacilityToCMS } from '@/lib/cms/provider-lookup';
 import { autoRunTools } from './tool-runner';
 import { getRouter } from '@/lib/ai';
+import { getMarketConditionsSummary } from '@/lib/market';
 import pdfParse from 'pdf-parse';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
@@ -1106,29 +1107,42 @@ export class SmartIntakePipeline {
       })),
     };
 
-    // Market intelligence enrichment (Grok) — non-blocking, best-effort
+    // Market intelligence enrichment — non-blocking, best-effort
+    // Fetches: (1) FRED economic data, (2) Perplexity/Grok market context
     let marketContext = '';
     try {
+      this.emitter.emitPipelineEvent('phase_progress', {
+        phase: 'analyze',
+        percent: 15,
+        message: 'Fetching economic indicators (FRED)...',
+      });
+
+      // FRED economic data — Treasury rates, borrowing rates, recession signals
+      const fredSummary = await getMarketConditionsSummary();
+      marketContext += fredSummary + '\n\n';
+
       this.emitter.emitPipelineEvent('phase_progress', {
         phase: 'analyze',
         percent: 20,
         message: 'Fetching real-time market intelligence...',
       });
 
+      // Perplexity/Grok real-time market research
       const router = getRouter();
-      if (router.getAvailableProviders().includes('grok') || router.getAvailableProviders().includes('openai')) {
+      const available = router.getAvailableProviders();
+      if (available.includes('perplexity') || available.includes('grok') || available.includes('openai')) {
         const state = data.facilities[0]?.state || 'US';
         const assetType = data.suggestedAssetType || 'SNF';
         const marketResponse = await router.route({
           taskType: 'market_intelligence',
-          systemPrompt: 'You are a healthcare real estate market analyst. Provide a concise market context briefing.',
+          systemPrompt: 'You are a healthcare real estate market analyst. Provide a concise market context briefing with sources.',
           userPrompt: `Provide current market conditions for ${assetType} facilities in ${state}. Include: recent transaction activity, cap rate trends, occupancy trends, regulatory changes, and notable market events. Keep to 300 words max.`,
         });
-        marketContext = marketResponse.content;
-        console.log(`[Pipeline] Market intelligence enrichment complete (${marketResponse.provider})`);
+        marketContext += '## Real-Time Market Intelligence\n\n' + marketResponse.content;
+        console.log(`[Pipeline] Market intelligence enrichment complete (FRED + ${marketResponse.provider})`);
       }
     } catch (err) {
-      console.log('[Pipeline] Market intelligence unavailable, continuing without it');
+      console.log('[Pipeline] Market intelligence partially unavailable, continuing with available data');
     }
 
     this.emitter.emitPipelineEvent('phase_progress', {

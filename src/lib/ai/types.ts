@@ -2,14 +2,14 @@
  * Multi-LLM Orchestration — Shared Type Definitions
  *
  * Central types for provider-agnostic LLM routing across
- * Anthropic, Gemini, OpenAI, Grok, and Canva.
+ * Anthropic, Gemini, OpenAI, Grok, and Perplexity.
  */
 
 // ============================================================================
 // PROVIDER & TASK TYPES
 // ============================================================================
 
-export type LLMProvider = 'anthropic' | 'gemini' | 'openai' | 'grok' | 'canva';
+export type LLMProvider = 'anthropic' | 'gemini' | 'openai' | 'grok' | 'perplexity';
 
 export type TaskType =
   | 'document_analysis'       // Phase 1: Ingest — analyze uploaded docs
@@ -19,7 +19,7 @@ export type TaskType =
   | 'clarification_reasoning' // Phase 3: Clarify — resolve ambiguities
   | 'market_intelligence'     // Phase 5: real-time market context
   | 'synthesis'               // Phase 7: Synthesize — executive summary
-  | 'report_generation'       // Post-pipeline: Canva reports
+  | 'deep_research'           // Perplexity: sourced real-time research
   | 'embeddings'              // Cross-cutting: text embeddings
   | 'structure_analysis'      // Extraction pipeline Pass 1
   | 'data_extraction';        // Extraction pipeline Pass 2
@@ -93,9 +93,6 @@ export interface ProviderClient {
 
   /** Generate embeddings (OpenAI only) */
   embed?(texts: string[], model?: string): Promise<number[][]>;
-
-  /** Generate a report (Canva only) */
-  generateReport?(params: ReportRequest): Promise<ReportResponse>;
 
   /** Health check */
   healthCheck(): Promise<boolean>;
@@ -177,28 +174,6 @@ export class AllProvidersFailedError extends Error {
 }
 
 // ============================================================================
-// REPORT TYPES (Canva)
-// ============================================================================
-
-export interface ReportRequest {
-  templateType: 'deal_summary' | 'investor_presentation' | 'executive_brief';
-  data: Record<string, unknown>;
-  branding?: {
-    primaryColor?: string;
-    logo?: string;
-    companyName?: string;
-  };
-  format: 'pdf' | 'pptx' | 'png';
-}
-
-export interface ReportResponse {
-  url: string;
-  format: string;
-  pageCount: number;
-  generatedAt: Date;
-}
-
-// ============================================================================
 // COST TABLE
 // ============================================================================
 
@@ -211,4 +186,6 @@ export const COST_PER_1K_TOKENS: Record<string, { input: number; output: number 
   'gemini-2.0-pro': { input: 0.00125, output: 0.005 },
   'grok-3': { input: 0.003, output: 0.015 },
   'grok-3-mini': { input: 0.0003, output: 0.0005 },
+  'sonar-pro': { input: 0.003, output: 0.015 },
+  'sonar': { input: 0.001, output: 0.001 },
 };

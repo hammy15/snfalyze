@@ -216,7 +216,13 @@ export function VisionExtractionVerification({
           body: formData,
         });
 
-        const data = await response.json();
+        const text = await response.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error(`Server error (${response.status})`);
+        }
 
         if (data.success) {
           setFiles((prev) =>
@@ -255,6 +261,9 @@ export function VisionExtractionVerification({
       'application/pdf': ['.pdf'],
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
       'application/vnd.ms-excel': ['.xls'],
+      'text/csv': ['.csv'],
+      'image/png': ['.png'],
+      'image/jpeg': ['.jpg', '.jpeg'],
     },
   });
 
@@ -311,7 +320,13 @@ export function VisionExtractionVerification({
 
       clearInterval(progressInterval);
 
-      const data = await response.json();
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(`Server error (${response.status})`);
+      }
 
       if (data.success) {
         setExtractionProgress({
@@ -469,7 +484,7 @@ export function VisionExtractionVerification({
                   Drop deal documents for AI extraction
                 </p>
                 <p className="text-sm text-surface-500 mt-2">
-                  Excel files (.xlsx, .xls) work best for P&L extraction. PDFs supported for rate letters.
+                  Excel, CSV, PDF, or Images — AI will extract and analyze deal info automatically
                 </p>
               </>
             )}
@@ -481,7 +496,7 @@ export function VisionExtractionVerification({
               <input
                 type="file"
                 multiple
-                accept=".pdf,.xlsx,.xls"
+                accept=".pdf,.xlsx,.xls,.csv,.png,.jpg,.jpeg"
                 onChange={(e) => {
                   const selectedFiles = e.target.files ? Array.from(e.target.files) : [];
                   if (selectedFiles.length > 0) {

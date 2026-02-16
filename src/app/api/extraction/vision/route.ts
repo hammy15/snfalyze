@@ -3,6 +3,7 @@ import { db, documents } from '@/db';
 import { eq, inArray } from 'drizzle-orm';
 import { join } from 'path';
 import { extractWithVision, extractPDFWithVision, type VisionExtractionResult } from '@/lib/extraction/vision-extractor';
+import { getRouter } from '@/lib/ai';
 
 // Use /tmp on Vercel (serverless), local uploads folder in development
 const getUploadsDir = () => {
@@ -87,6 +88,84 @@ export async function POST(request: NextRequest) {
               console.log(`  [${progress.stage.toUpperCase()}] ${progress.progress}% - ${progress.message}`);
             }
           );
+        } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
+          // Image file — use stored base64 from upload or read from disk
+          const extractedData = doc.extractedData as Record<string, any> | null;
+          let base64Data = extractedData?.imageBase64;
+          const mimeType = extractedData?.imageMimeType || `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+
+          if (!base64Data) {
+            // Try reading from disk as fallback
+            const fs = await import('fs/promises');
+            try {
+              const imgBuffer = await fs.readFile(filePath);
+              base64Data = imgBuffer.toString('base64');
+            } catch {
+              throw new Error(`Image file not found and no stored base64 data`);
+            }
+          }
+
+          console.log(`  Running AI vision on image (${(base64Data.length / 1024).toFixed(0)}KB base64)`);
+
+          const router = getRouter();
+          const visionResponse = await router.route({
+            taskType: 'vision_extraction',
+            systemPrompt: `You are a document extraction specialist for healthcare facility acquisitions (SNF, ALF, ILF).
+Extract ALL text, numbers, tables, and data from this image. Return structured JSON:
+{
+  "facilities": [{ "name": "...", "state": "...", "beds": N, "lineItems": [...] }],
+  "tables": [{ "headers": [...], "rows": [[...], ...] }],
+  "rawText": "all visible text",
+  "confidence": 0.0-1.0
+}
+For tables, preserve exact structure. Include all financial figures, facility names, addresses, bed counts.`,
+            userPrompt: 'Extract all data from this image. Return structured JSON with facilities, tables, and raw text.',
+            images: [{ data: base64Data, mimeType }],
+            maxTokens: 4000,
+          });
+
+          // Parse the vision response into VisionExtractionResult format
+          const content = visionResponse.content || '';
+          let parsedData: any = {};
+          try {
+            const jsonMatch = content.match(/\{[\s\S]*\}/);
+            if (jsonMatch) parsedData = JSON.parse(jsonMatch[0]);
+          } catch {
+            parsedData = { rawText: content };
+          }
+
+          result = {
+            documentId: doc.id,
+            filename: doc.filename || 'unknown.png',
+            facilities: (parsedData.facilities || []).map((f: any) => ({
+              name: f.name || 'Unknown Facility',
+              state: f.state,
+              city: f.city,
+              beds: f.beds,
+              periods: [],
+              lineItems: (f.lineItems || []).map((item: any, idx: number) => ({
+                category: item.category || 'metric',
+                subcategory: item.subcategory || 'other',
+                label: item.label || `Item ${idx + 1}`,
+                values: item.values || [],
+                confidence: item.confidence || 0.7,
+              })),
+              confidence: f.confidence || 0.7,
+            })),
+            sheets: [{
+              name: doc.filename || 'Image',
+              index: 0,
+              type: 'unknown' as const,
+              facilitiesFound: parsedData.facilities?.map((f: any) => f.name) || [],
+              periodsFound: [],
+              confidence: parsedData.confidence || 0.7,
+            }],
+            rawAnalysis: content,
+            confidence: parsedData.confidence || 0.7,
+            processingTimeMs: 0,
+            warnings: [],
+            errors: [],
+          };
         } else {
           throw new Error(`Unsupported file type: ${ext}`);
         }

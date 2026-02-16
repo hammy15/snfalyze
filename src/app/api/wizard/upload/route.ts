@@ -237,26 +237,14 @@ async function processDocument(documentId: string, file: File, dealId: string | 
         rawText = `[Error extracting CSV: ${csvError instanceof Error ? csvError.message : 'Unknown error'}]`;
       }
     } else if (fileType.includes('image')) {
-      // Use AI vision extraction for images
-      try {
-        const { getRouter } = await import('@/lib/ai');
-        const router = getRouter();
-        const base64Data = buffer.toString('base64');
-        const visionResult = await router.route({
-          taskType: 'vision_extraction',
-          systemPrompt: 'You are a document extraction specialist for healthcare facility acquisitions. Extract all text, numbers, tables, and data from this image. Preserve table structure using tab-separated values.',
-          userPrompt: 'Extract all text, numbers, tables, and data from this image. Format tables as tab-separated rows. Include all visible financial figures, facility names, addresses, bed counts, and any other relevant data.',
-          images: [{ data: base64Data, mimeType: fileType }],
-          maxTokens: 4000,
-        });
-        rawText = visionResult.content || `[Image: ${file.name}]`;
-        extractedData.visionExtracted = true;
-        console.log(`[Wizard] Vision extracted ${rawText.length} chars from image ${file.name}`);
-      } catch (visionError) {
-        console.error('[Wizard] Vision extraction failed:', visionError);
-        rawText = `[Image: ${file.name} - vision extraction failed]`;
-        extractedData.requiresOcr = true;
-      }
+      // Store base64 for later vision extraction (done in /api/extraction/vision)
+      // Don't run AI vision here — it causes Vercel serverless timeout (504)
+      const base64Data = buffer.toString('base64');
+      rawText = `[Image: ${file.name}]`;
+      extractedData.imageBase64 = base64Data;
+      extractedData.imageMimeType = fileType;
+      extractedData.requiresVision = true;
+      console.log(`[Wizard] Image stored for vision extraction: ${file.name} (${(base64Data.length / 1024).toFixed(0)}KB base64)`);
     } else {
       rawText = buffer.toString('utf-8');
     }

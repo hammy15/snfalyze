@@ -78,18 +78,23 @@ export default function RootLayout({
             `,
           }}
         />
-        {/* Service Worker Registration */}
+        {/* Unregister old service workers to prevent stale caches */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
               if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js').then(function(registration) {
-                    console.log('SNFalyze SW registered:', registration.scope);
-                  }, function(err) {
-                    console.log('SNFalyze SW registration failed:', err);
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                  registrations.forEach(function(registration) {
+                    registration.unregister().then(function() {
+                      console.log('SNFalyze: Cleared stale service worker');
+                    });
                   });
                 });
+                if (caches) {
+                  caches.keys().then(function(names) {
+                    names.forEach(function(name) { caches.delete(name); });
+                  });
+                }
               }
             `,
           }}

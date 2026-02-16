@@ -115,8 +115,17 @@
   /* Semantic color aliases */
   --color-text-primary: #18181b;
   --color-text-secondary: #52525b;
-  --color-bg-page: #fafafa;
+  --color-bg-page: #F8F7F4;
   --color-bg-card: #ffffff;
+
+  /* Warm palette */
+  --warm-bg: #F8F7F4;
+  --warm-surface: #EFEDE8;
+  --warm-border: #E2DFD8;
+  --warm-shadow-dark: #D6D3CD;
+  --warm-shadow-light: #FFFFFF;
+  --warm-text: #2D2D2D;
+  --warm-text-secondary: #6B6B6B;
 
   /* Gray scale aliases (mapped to surface) */
   --gray-50: #fafafa;
@@ -195,7 +204,7 @@
   }
 
   body {
-    @apply bg-surface-100 text-surface-900 dark:bg-surface-900 dark:text-surface-100;
+    @apply bg-[#F8F7F4] text-surface-900 dark:bg-surface-900 dark:text-surface-100;
     @apply transition-colors duration-300;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
@@ -359,6 +368,107 @@
 
   .neu-badge-primary {
     @apply bg-primary-500/20 text-primary-700 dark:text-primary-300;
+  }
+
+  /* ================================================
+     WARM NEUMORPHISM COMPONENTS
+     ================================================ */
+
+  /* Warm Neumorphic Card — raised on warm off-white */
+  .neu-card-warm {
+    @apply rounded-2xl p-5;
+    background: var(--warm-bg);
+    @apply transition-all duration-300 ease-smooth;
+    box-shadow:
+      6px 6px 14px var(--warm-shadow-dark),
+      -6px -6px 14px var(--warm-shadow-light);
+  }
+
+  .neu-card-warm:hover {
+    box-shadow:
+      8px 8px 18px var(--warm-shadow-dark),
+      -8px -8px 18px var(--warm-shadow-light);
+  }
+
+  /* Warm Inset — pressed/recessed area */
+  .neu-inset-warm {
+    @apply rounded-xl;
+    background: var(--warm-surface);
+    box-shadow:
+      inset 3px 3px 6px var(--warm-shadow-dark),
+      inset -3px -3px 6px var(--warm-shadow-light);
+  }
+
+  /* Warm Pill — small raised element for timeline, tags */
+  .neu-pill-warm {
+    @apply rounded-xl;
+    background: var(--warm-bg);
+    box-shadow:
+      4px 4px 8px var(--warm-shadow-dark),
+      -4px -4px 8px var(--warm-shadow-light);
+  }
+
+  /* Warm Shimmer — loading placeholder */
+  .shimmer-warm {
+    @apply relative overflow-hidden rounded-lg;
+    background: var(--warm-surface);
+  }
+
+  .shimmer-warm::after {
+    content: '';
+    @apply absolute inset-0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.5),
+      transparent
+    );
+    background-size: 200% 100%;
+    animation: shimmer-warm 1.8s infinite linear;
+  }
+
+  /* Dark mode overrides for warm components */
+  .dark .neu-card-warm {
+    background: linear-gradient(145deg, #1c1c1f 0%, #141416 100%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow:
+      0 4px 24px rgba(0, 0, 0, 0.4),
+      0 0 0 1px rgba(255, 255, 255, 0.03),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .dark .neu-card-warm:hover {
+    border-color: rgba(20, 184, 166, 0.2);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.5),
+      0 0 16px rgba(20, 184, 166, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .dark .neu-inset-warm {
+    background: #0f0f10;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+
+  .dark .neu-pill-warm {
+    background: linear-gradient(145deg, #222225 0%, #18181b 100%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  }
+
+  .dark .shimmer-warm {
+    background: #18181b;
+  }
+
+  .dark .shimmer-warm::after {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.06),
+      transparent
+    );
+    background-size: 200% 100%;
   }
 
   /* ================================================
@@ -712,6 +822,11 @@
 }
 
 @keyframes skeleton-wave {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes shimmer-warm {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }

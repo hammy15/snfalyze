@@ -57,11 +57,11 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 const TYPE_COLORS: Record<string, string> = {
-  ai: 'text-purple-400 bg-purple-500/10',
-  deal: 'text-primary-400 bg-primary-500/10',
-  facility: 'text-blue-400 bg-blue-500/10',
-  tool: 'text-amber-400 bg-amber-500/10',
-  page: 'text-surface-400 bg-surface-500/10',
+  ai: 'text-purple-600 bg-purple-100 dark:text-purple-400 dark:bg-purple-500/10',
+  deal: 'text-primary-600 bg-primary-100 dark:text-primary-400 dark:bg-primary-500/10',
+  facility: 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-500/10',
+  tool: 'text-amber-600 bg-amber-100 dark:text-amber-400 dark:bg-amber-500/10',
+  page: 'text-surface-500 bg-surface-100 dark:text-surface-400 dark:bg-surface-500/10',
 };
 
 export function CommandBar() {
@@ -221,15 +221,15 @@ export function CommandBar() {
         <div
           className={cn(
             'w-full max-w-xl pointer-events-auto animate-scale-in',
-            'bg-surface-900/95 backdrop-blur-xl border border-surface-700/50 rounded-2xl shadow-2xl overflow-hidden',
+            'bg-white/95 dark:bg-surface-900/95 backdrop-blur-xl border border-surface-200 dark:border-surface-700/50 rounded-2xl shadow-2xl overflow-hidden',
           )}
         >
           {/* Input */}
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-surface-800">
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-surface-200 dark:border-surface-800">
             {loading ? (
               <Loader2 className="w-5 h-5 text-primary-400 animate-spin flex-shrink-0" />
             ) : (
-              <Search className="w-5 h-5 text-surface-500 flex-shrink-0" />
+              <Search className="w-5 h-5 text-surface-400 dark:text-surface-500 flex-shrink-0" />
             )}
             <input
               ref={inputRef}
@@ -238,10 +238,10 @@ export function CommandBar() {
               onChange={e => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Search deals, facilities, tools, or ask AI..."
-              className="flex-1 bg-transparent text-surface-100 placeholder:text-surface-500 text-sm outline-none"
+              className="flex-1 bg-transparent text-surface-800 dark:text-surface-100 placeholder:text-surface-400 dark:placeholder:text-surface-500 text-sm outline-none"
             />
-            <div className="flex items-center gap-1.5 text-surface-600">
-              <kbd className="px-1.5 py-0.5 bg-surface-800 rounded text-[10px] font-mono">ESC</kbd>
+            <div className="flex items-center gap-1.5 text-surface-400 dark:text-surface-600">
+              <kbd className="px-1.5 py-0.5 bg-surface-100 dark:bg-surface-800 text-surface-500 rounded text-[10px] font-mono">ESC</kbd>
             </div>
           </div>
 
@@ -260,8 +260,8 @@ export function CommandBar() {
                     className={cn(
                       'flex items-center gap-3 w-full px-4 py-2.5 text-left transition-colors',
                       isSelected
-                        ? 'bg-surface-800/80 text-surface-100'
-                        : 'text-surface-400 hover:bg-surface-800/40'
+                        ? 'bg-surface-100 dark:bg-surface-800/80 text-surface-800 dark:text-surface-100'
+                        : 'text-surface-600 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-800/40'
                     )}
                   >
                     <div className={cn(
@@ -294,16 +294,16 @@ export function CommandBar() {
           {/* Empty state */}
           {query && !loading && results.length === 0 && (
             <div className="px-4 py-8 text-center">
-              <Sparkles className="w-8 h-8 text-surface-600 mx-auto mb-2" />
+              <Sparkles className="w-8 h-8 text-surface-400 dark:text-surface-600 mx-auto mb-2" />
               <p className="text-sm text-surface-500">No results found</p>
-              <p className="text-xs text-surface-600 mt-1">Try a different search term</p>
+              <p className="text-xs text-surface-400 dark:text-surface-600 mt-1">Try a different search term</p>
             </div>
           )}
 
           {/* Quick actions when empty */}
           {!query && (
             <div className="px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wider text-surface-600 mb-2">Quick Actions</p>
+              <p className="text-[10px] uppercase tracking-wider text-surface-400 dark:text-surface-600 mb-2">Quick Actions</p>
               <div className="grid grid-cols-2 gap-1.5">
                 {[
                   { label: 'New Deal', icon: Crosshair, href: '/app/deals' },
@@ -314,7 +314,7 @@ export function CommandBar() {
                   <button
                     key={action.label}
                     onClick={() => { setOpen(false); router.push(action.href); }}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-surface-400 hover:text-surface-200 hover:bg-surface-800/50 transition-colors text-xs"
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-surface-500 dark:text-surface-400 hover:text-surface-700 dark:hover:text-surface-200 hover:bg-surface-100 dark:hover:bg-surface-800/50 transition-colors text-xs"
                   >
                     <action.icon className="w-3.5 h-3.5" />
                     {action.label}
@@ -325,16 +325,16 @@ export function CommandBar() {
           )}
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-4 py-2 border-t border-surface-800 text-[10px] text-surface-600">
+          <div className="flex items-center justify-between px-4 py-2 border-t border-surface-200 dark:border-surface-800 text-[10px] text-surface-400 dark:text-surface-600">
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1">
-                <kbd className="px-1 py-0.5 bg-surface-800 rounded font-mono">↑↓</kbd> navigate
+                <kbd className="px-1 py-0.5 bg-surface-100 dark:bg-surface-800 rounded font-mono">↑↓</kbd> navigate
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="px-1 py-0.5 bg-surface-800 rounded font-mono">↵</kbd> select
+                <kbd className="px-1 py-0.5 bg-surface-100 dark:bg-surface-800 rounded font-mono">↵</kbd> select
               </span>
             </div>
-            <div className="flex items-center gap-1 text-primary-500/60">
+            <div className="flex items-center gap-1 text-primary-600/60 dark:text-primary-500/60">
               <Zap className="w-3 h-3" />
               <span>AI-powered</span>
             </div>

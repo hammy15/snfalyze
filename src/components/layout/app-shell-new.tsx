@@ -27,7 +27,7 @@ export function AppShellNew({ children }: AppShellNewProps) {
   // App pages - Focus Rail + Context Breadcrumb + Command Bar
   if (isAppPage) {
     return (
-      <div className="min-h-screen bg-[var(--color-bg-page)]">
+      <div className="min-h-screen bg-[#F8F7F4] dark:bg-surface-900">
         <FocusRail />
         <ContextBreadcrumb />
         <CommandBar />

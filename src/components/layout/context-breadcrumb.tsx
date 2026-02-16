@@ -82,7 +82,7 @@ export function ContextBreadcrumb() {
     <header
       className={cn(
         'fixed top-0 right-0 z-30 h-12 flex items-center justify-between',
-        'bg-surface-950/80 backdrop-blur-xl border-b border-surface-800/50',
+        'bg-[#F8F7F4]/90 dark:bg-surface-950/80 backdrop-blur-xl border-b border-[#E2DFD8] dark:border-surface-800/50',
         'left-14' // Account for collapsed focus rail width
       )}
     >
@@ -91,16 +91,16 @@ export function ContextBreadcrumb() {
         {segments.map((segment, index) => (
           <div key={segment.href} className="flex items-center gap-1 min-w-0">
             {index > 0 && (
-              <ChevronRight className="w-3 h-3 text-surface-600 flex-shrink-0" />
+              <ChevronRight className="w-3 h-3 text-surface-400 dark:text-surface-600 flex-shrink-0" />
             )}
             {index === segments.length - 1 ? (
-              <span className="text-xs font-medium text-surface-200 truncate">
+              <span className="text-xs font-medium text-surface-800 dark:text-surface-200 truncate">
                 {segment.label}
               </span>
             ) : (
               <Link
                 href={segment.href}
-                className="text-xs text-surface-500 hover:text-surface-300 transition-colors truncate"
+                className="text-xs text-surface-500 hover:text-surface-700 dark:hover:text-surface-300 transition-colors truncate"
               >
                 {segment.label}
               </Link>
@@ -110,7 +110,7 @@ export function ContextBreadcrumb() {
 
         {/* Stage dots for deal pages */}
         {isDealPage && (
-          <div className="flex items-center gap-1 ml-4 pl-4 border-l border-surface-800">
+          <div className="flex items-center gap-1 ml-4 pl-4 border-l border-[#E2DFD8] dark:border-surface-800">
             {Object.entries(DEAL_STAGES).map(([key, stage]) => (
               <div
                 key={key}
@@ -121,7 +121,7 @@ export function ContextBreadcrumb() {
                   stage.color,
                   'opacity-30 group-hover:opacity-100'
                 )} />
-                <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 px-2 py-1 bg-surface-800 text-surface-200 text-[10px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
+                <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 px-2 py-1 bg-white dark:bg-surface-800 text-surface-700 dark:text-surface-200 text-[10px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg border border-surface-200 dark:border-surface-700">
                   {stage.label}
                 </div>
               </div>
@@ -143,8 +143,8 @@ export function ContextBreadcrumb() {
           }}
           className={cn(
             'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg',
-            'bg-surface-800/50 hover:bg-surface-800 text-surface-500 hover:text-surface-300',
-            'transition-colors text-xs border border-surface-700/50'
+            'bg-[#EFEDE8] dark:bg-surface-800/50 hover:bg-[#E2DFD8] dark:hover:bg-surface-800 text-surface-500 hover:text-surface-700 dark:hover:text-surface-300',
+            'transition-colors text-xs border border-[#E2DFD8] dark:border-surface-700/50'
           )}
         >
           <Command className="w-3 h-3" />
@@ -155,19 +155,19 @@ export function ContextBreadcrumb() {
         <button
           className={cn(
             'w-8 h-8 rounded-lg flex items-center justify-center',
-            'text-primary-400/60 hover:text-primary-400 hover:bg-primary-500/10',
+            'text-primary-500/60 dark:text-primary-400/60 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-500/10',
             'transition-colors relative'
           )}
         >
           <Sparkles className="w-4 h-4" />
-          <div className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-primary-400 animate-pulse-soft" />
+          <div className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-primary-500 dark:bg-primary-400 animate-pulse-soft" />
         </button>
 
         {/* Notifications */}
         <button
           className={cn(
             'w-8 h-8 rounded-lg flex items-center justify-center',
-            'text-surface-500 hover:text-surface-300 hover:bg-surface-800/50',
+            'text-surface-500 hover:text-surface-700 dark:hover:text-surface-300 hover:bg-[#EFEDE8] dark:hover:bg-surface-800/50',
             'transition-colors relative'
           )}
         >

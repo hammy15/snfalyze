@@ -39,10 +39,10 @@ export default function NewDealPage() {
       <div className="max-w-5xl mx-auto mb-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-surface-900 dark:text-surface-50">
+            <h1 className="text-2xl font-bold text-[var(--warm-text)] dark:text-surface-50">
               New Deal
             </h1>
-            <p className="text-sm text-surface-500 dark:text-surface-400 mt-1">
+            <p className="text-sm text-[var(--warm-text-secondary)] dark:text-surface-400 mt-1">
               {useSmart
                 ? 'Drop your broker packages and let AI handle the rest'
                 : 'Drop your broker package, enter a CMS number, or start with basics'}
@@ -50,7 +50,7 @@ export default function NewDealPage() {
           </div>
 
           {/* Mode toggle */}
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-100 dark:bg-surface-800/50 border border-surface-200 dark:border-surface-700/50">
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-[var(--warm-surface)] dark:bg-surface-800/50 border border-[var(--warm-border)] dark:border-surface-700/50">
             <button
               onClick={() => setUseSmart(true)}
               className={cn(

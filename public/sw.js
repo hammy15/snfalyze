@@ -1,4 +1,4 @@
-const CACHE_NAME = 'snfalyze-v1';
+const CACHE_NAME = 'snfalyze-v2';
 const OFFLINE_URL = '/offline.html';
 
 // Assets to cache immediately on install
@@ -72,33 +72,55 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // For other requests, try cache first, then network
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Update cache in background
-        fetch(event.request).then((response) => {
+  // For JS/CSS assets, use network-first to avoid stale code
+  // Only cache images and fonts with cache-first
+  const url = new URL(event.request.url);
+  const isCodeAsset = url.pathname.endsWith('.js') || url.pathname.endsWith('.css');
+
+  if (isCodeAsset) {
+    // Network-first for code — always serve fresh JS/CSS
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
           if (response.status === 200) {
+            const responseClone = response.clone();
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, response);
+              cache.put(event.request, responseClone);
             });
           }
-        });
-        return cachedResponse;
-      }
-
-      return fetch(event.request).then((response) => {
-        // Cache successful responses
-        if (response.status === 200) {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
+          return response;
+        })
+        .catch(() => {
+          return caches.match(event.request);
+        })
+    );
+  } else {
+    // Cache-first for static assets (images, fonts)
+    event.respondWith(
+      caches.match(event.request).then((cachedResponse) => {
+        if (cachedResponse) {
+          fetch(event.request).then((response) => {
+            if (response.status === 200) {
+              caches.open(CACHE_NAME).then((cache) => {
+                cache.put(event.request, response);
+              });
+            }
           });
+          return cachedResponse;
         }
-        return response;
-      });
-    })
-  );
+
+        return fetch(event.request).then((response) => {
+          if (response.status === 200) {
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseClone);
+            });
+          }
+          return response;
+        });
+      })
+    );
+  }
 });
 
 // Handle push notifications

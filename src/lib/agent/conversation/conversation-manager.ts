@@ -89,7 +89,7 @@ export class ConversationManager {
           content: msg.content,
         });
       } else if (msg.role === 'assistant') {
-        const content: ContentBlock[] = [{ type: 'text', text: msg.content }];
+        const content: ContentBlock[] = [{ type: 'text', text: msg.content, citations: null }];
 
         // Add tool calls if present
         if (msg.toolCalls && Array.isArray(msg.toolCalls)) {

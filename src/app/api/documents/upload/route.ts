@@ -126,13 +126,12 @@ async function processDocument(documentId: string, file: File) {
     ) {
       // Check for encrypted files first (only for Excel formats, not Numbers)
       if (!fileName.endsWith('.numbers') && isEncryptedExcel(buffer)) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `The file "${file.name}" is encrypted with Microsoft's Rights Management Service (RMS). Please open the file in Microsoft Excel and save a copy without encryption/protection, then try uploading again.`,
-          },
-          { status: 400 }
-        );
+        const encryptedMsg = `The file "${file.name}" is encrypted with Microsoft's Rights Management Service (RMS). Please open in Excel and save without encryption.`;
+        await db
+          .update(documents)
+          .set({ status: 'error', errors: [encryptedMsg] })
+          .where(eq(documents.id, documentId));
+        return;
       }
 
       // Parse Excel files using xlsx
@@ -193,9 +192,34 @@ async function processDocument(documentId: string, file: File) {
         rawText = `[Error extracting CSV: ${csvError instanceof Error ? csvError.message : 'Unknown error'}]`;
       }
     } else if (fileType.includes('image')) {
-      // For images, we'll skip OCR for now and note it needs manual review
-      rawText = `[Image file: ${file.name} - OCR processing available but requires additional setup]`;
-      extractedData.requiresOcr = true;
+      // Use AI vision to extract text/data from images
+      try {
+        const { getRouter } = await import('@/lib/ai');
+        const router = getRouter();
+        const base64Data = buffer.toString('base64');
+        const mediaType = fileType || 'image/png';
+        const dataUrl = `data:${mediaType};base64,${base64Data}`;
+
+        const visionResult = await router.route({
+          taskType: 'vision_extraction',
+          systemPrompt: 'You are a document extraction specialist for healthcare real estate analysis. Extract all text, numbers, and data from images accurately.',
+          userPrompt: 'Extract all text, numbers, tables, and financial data from this image. This is a healthcare real estate document (likely a financial statement, rent roll, census report, or survey). Output the extracted content as structured text preserving any table layouts.',
+          images: [
+            {
+              data: base64Data,
+              mimeType: mediaType,
+            },
+          ],
+        });
+
+        rawText = visionResult.content || `[Image: ${file.name}]`;
+        extractedData.visionExtracted = true;
+        console.log(`Vision extracted ${rawText.length} chars from image ${file.name}`);
+      } catch (visionErr) {
+        console.warn('Vision extraction failed, storing image reference:', visionErr);
+        rawText = `[Image file: ${file.name} - Vision extraction unavailable]`;
+        extractedData.requiresOcr = true;
+      }
     } else {
       // Try to read as text
       rawText = buffer.toString('utf-8');
@@ -226,7 +250,7 @@ async function processDocument(documentId: string, file: File) {
 
     // Run AI analysis if we have actual text content
     let aiAnalysis: DocumentAnalysisResult | null = null;
-    if (rawText.length > 100 && !rawText.startsWith('[Error') && !rawText.startsWith('[Image')) {
+    if (rawText.length > 100 && !rawText.startsWith('[Error') && !rawText.startsWith('[Image file:')) {
       try {
         console.log(`Starting AI analysis for document ${documentId}...`);
         aiAnalysis = await analyzeDocument({

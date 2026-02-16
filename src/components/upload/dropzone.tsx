@@ -3,14 +3,14 @@
 import * as React from 'react';
 import { useCallback, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { Upload, FileText, FileSpreadsheet, Image, X, CheckCircle, Loader2 } from 'lucide-react';
+import { Upload, FileText, FileSpreadsheet, Image, X, CheckCircle, Loader2, Circle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 
 export interface UploadedFile {
   id: string;
   file: File;
-  status: 'uploading' | 'parsing' | 'normalizing' | 'analyzing' | 'complete' | 'error';
+  status: 'ready' | 'uploading' | 'uploaded' | 'parsing' | 'extracting' | 'normalizing' | 'analyzing' | 'complete' | 'error';
   progress: number;
   type?: string;
   error?: string;
@@ -20,6 +20,7 @@ interface DropzoneProps {
   onFilesAccepted: (files: File[]) => void;
   uploadedFiles: UploadedFile[];
   onRemoveFile: (id: string) => void;
+  disabled?: boolean;
   className?: string;
 }
 
@@ -32,32 +33,34 @@ const acceptedTypes = {
   'image/png': ['.png'],
 };
 
-export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, className }: DropzoneProps) {
+export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, disabled, className }: DropzoneProps) {
   const [isDragActive, setIsDragActive] = useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (disabled) return;
     if (e.type === 'dragenter' || e.type === 'dragover') {
       setIsDragActive(true);
     } else if (e.type === 'dragleave') {
       setIsDragActive(false);
     }
-  }, []);
+  }, [disabled]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
       setIsDragActive(false);
+      if (disabled) return;
 
       const files = Array.from(e.dataTransfer.files);
       if (files.length > 0) {
         onFilesAccepted(files);
       }
     },
-    [onFilesAccepted]
+    [onFilesAccepted, disabled]
   );
 
   const handleChange = useCallback(
@@ -66,9 +69,16 @@ export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, classNa
       if (files.length > 0) {
         onFilesAccepted(files);
       }
+      // Reset so re-selecting the same file works
+      if (inputRef.current) inputRef.current.value = '';
     },
     [onFilesAccepted]
   );
+
+  const handleClick = useCallback(() => {
+    if (disabled) return;
+    inputRef.current?.click();
+  }, [disabled]);
 
   const getFileIcon = (file: File) => {
     const type = file.type;
@@ -80,14 +90,20 @@ export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, classNa
 
   const getStatusText = (status: UploadedFile['status']) => {
     switch (status) {
+      case 'ready':
+        return 'Ready to upload';
       case 'uploading':
         return 'Uploading...';
+      case 'uploaded':
+        return 'Uploaded — queued for processing';
       case 'parsing':
-        return 'Extracting data...';
+        return 'Extracting text & data...';
+      case 'extracting':
+        return 'Deep extraction...';
       case 'normalizing':
-        return 'Normalizing to COA...';
+        return 'Mapping to Chart of Accounts...';
       case 'analyzing':
-        return 'AI analysis...';
+        return 'AI analyzing document...';
       case 'complete':
         return 'Complete';
       case 'error':
@@ -111,16 +127,19 @@ export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, classNa
   return (
     <div className={cn('space-y-6', className)}>
       {/* Dropzone Area */}
-      <label
+      <div
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
         onDragOver={handleDrag}
         onDrop={handleDrop}
+        onClick={handleClick}
         className={cn(
-          'relative block border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-all',
-          isDragActive
-            ? 'border-accent bg-accent/5'
-            : 'border-surface-300 hover:border-accent/50 hover:bg-surface-50'
+          'relative block border-2 border-dashed rounded-xl p-12 text-center transition-all',
+          disabled
+            ? 'border-surface-200 bg-surface-50 cursor-not-allowed opacity-60'
+            : isDragActive
+              ? 'border-accent bg-accent/5 cursor-pointer'
+              : 'border-surface-300 hover:border-accent/50 hover:bg-surface-50 cursor-pointer'
         )}
       >
         <input
@@ -129,10 +148,11 @@ export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, classNa
           multiple
           accept={Object.values(acceptedTypes).flat().join(',')}
           onChange={handleChange}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+          disabled={disabled}
+          className="hidden"
         />
 
-        <div className="flex flex-col items-center gap-4 pointer-events-none">
+        <div className="flex flex-col items-center gap-4">
           <div
             className={cn(
               'p-4 rounded-full transition-colors',
@@ -152,29 +172,29 @@ export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, classNa
               {isDragActive ? 'Drop files here' : 'Drop deal documents here'}
             </p>
             <p className="mt-1 text-sm text-surface-500">
-              or click to browse
+              or <span className="text-accent font-medium underline">click to browse</span>
             </p>
           </div>
 
-          <div className="flex flex-wrap justify-center gap-2 mt-2 pointer-events-none">
+          <div className="flex flex-wrap justify-center gap-2 mt-2">
             <span className="px-2 py-1 text-xs bg-surface-100 text-surface-600 rounded">PDF</span>
             <span className="px-2 py-1 text-xs bg-surface-100 text-surface-600 rounded">Excel</span>
             <span className="px-2 py-1 text-xs bg-surface-100 text-surface-600 rounded">CSV</span>
             <span className="px-2 py-1 text-xs bg-surface-100 text-surface-600 rounded">Images</span>
           </div>
         </div>
-      </label>
+      </div>
 
       {/* Uploaded Files List */}
       {uploadedFiles.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-sm font-medium text-surface-700">
-            Uploaded Documents ({uploadedFiles.length})
+            Documents ({uploadedFiles.length})
           </h3>
           <div className="space-y-2">
             {uploadedFiles.map((uploadedFile) => {
               const Icon = getFileIcon(uploadedFile.file);
-              const isProcessing = ['uploading', 'parsing', 'normalizing', 'analyzing'].includes(
+              const isProcessing = ['uploading', 'uploaded', 'parsing', 'extracting', 'normalizing', 'analyzing'].includes(
                 uploadedFile.status
               );
 
@@ -200,7 +220,14 @@ export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, classNa
                     </div>
 
                     <div className="flex items-center gap-2 mt-1">
-                      {isProcessing ? (
+                      {uploadedFile.status === 'ready' ? (
+                        <>
+                          <Circle className="w-3 h-3 text-surface-400" />
+                          <span className="text-xs text-surface-500">
+                            {getStatusText(uploadedFile.status)}
+                          </span>
+                        </>
+                      ) : isProcessing ? (
                         <>
                           <Loader2 className="w-3 h-3 text-accent animate-spin" />
                           <span className="text-xs text-surface-500">
@@ -229,17 +256,19 @@ export function Dropzone({ onFilesAccepted, uploadedFiles, onRemoveFile, classNa
                     )}
                   </div>
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveFile(uploadedFile.id);
-                    }}
-                    className="text-surface-400 hover:text-surface-600"
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
+                  {!isProcessing && uploadedFile.status !== 'complete' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveFile(uploadedFile.id);
+                      }}
+                      className="text-surface-400 hover:text-surface-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
               );
             })}

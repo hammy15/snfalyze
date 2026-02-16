@@ -99,6 +99,17 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const fileBuffer = Buffer.from(arrayBuffer);
 
+    // For images: store base64 inline with the document record (no background processing)
+    const isImage = file.type.includes('image');
+    const imageData = isImage ? {
+      rawText: `[Image: ${file.name}]`,
+      extractedData: {
+        imageBase64: fileBuffer.toString('base64'),
+        imageMimeType: file.type,
+        requiresVision: true,
+      },
+    } : {};
+
     // Create document record
     const [doc] = await db
       .insert(documents)
@@ -109,11 +120,17 @@ export async function POST(request: NextRequest) {
         type: fileType,
         status: 'uploaded',
         uploadedAt: new Date(),
+        ...imageData,
       })
       .returning();
 
-    // Process document in background (like main upload route)
-    processDocument(doc.id, file.name, file.type, fileBuffer, dealId).catch(console.error);
+    // Process non-image documents in background
+    // Images skip processing — vision extraction happens in /api/extraction/vision
+    if (!isImage) {
+      processDocument(doc.id, file.name, file.type, fileBuffer, dealId).catch(console.error);
+    } else {
+      console.log(`[Wizard] Image stored for later vision extraction: ${file.name}`);
+    }
 
     return NextResponse.json({
       success: true,

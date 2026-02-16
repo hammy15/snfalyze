@@ -228,6 +228,7 @@ export interface DealSynthesis {
     pricePerBed?: number;
   };
   toolSummary: Array<{ tool: string; headline: string }>;
+  executiveSummary?: string;
 }
 
 // ============================================================================

@@ -14,6 +14,7 @@ import { analyzeDocument } from '@/lib/documents/ai-analyzer';
 import { analyzeDeal, type AnalysisInput } from '@/lib/analysis/engine';
 import { matchExtractedFacilityToCMS } from '@/lib/cms/provider-lookup';
 import { autoRunTools } from './tool-runner';
+import { getRouter } from '@/lib/ai';
 import pdfParse from 'pdf-parse';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
@@ -1105,6 +1106,31 @@ export class SmartIntakePipeline {
       })),
     };
 
+    // Market intelligence enrichment (Grok) — non-blocking, best-effort
+    let marketContext = '';
+    try {
+      this.emitter.emitPipelineEvent('phase_progress', {
+        phase: 'analyze',
+        percent: 20,
+        message: 'Fetching real-time market intelligence...',
+      });
+
+      const router = getRouter();
+      if (router.getAvailableProviders().includes('grok') || router.getAvailableProviders().includes('openai')) {
+        const state = data.facilities[0]?.state || 'US';
+        const assetType = data.suggestedAssetType || 'SNF';
+        const marketResponse = await router.route({
+          taskType: 'market_intelligence',
+          systemPrompt: 'You are a healthcare real estate market analyst. Provide a concise market context briefing.',
+          userPrompt: `Provide current market conditions for ${assetType} facilities in ${state}. Include: recent transaction activity, cap rate trends, occupancy trends, regulatory changes, and notable market events. Keep to 300 words max.`,
+        });
+        marketContext = marketResponse.content;
+        console.log(`[Pipeline] Market intelligence enrichment complete (${marketResponse.provider})`);
+      }
+    } catch (err) {
+      console.log('[Pipeline] Market intelligence unavailable, continuing without it');
+    }
+
     this.emitter.emitPipelineEvent('phase_progress', {
       phase: 'analyze',
       percent: 30,
@@ -1112,6 +1138,10 @@ export class SmartIntakePipeline {
     });
 
     try {
+      // If we got market context, append it to the analysis input
+      if (marketContext) {
+        (analysisInput as any).marketContext = marketContext;
+      }
       const result = await analyzeDeal(analysisInput);
 
       this.session.analysisResult = {
@@ -1251,6 +1281,31 @@ export class SmartIntakePipeline {
           headline: typeof t.result?.headline === 'string' ? t.result.headline : `${t.toolLabel} complete`,
         })),
     };
+
+    // AI-powered executive summary enhancement (Claude primary)
+    try {
+      const router = getRouter();
+      const summaryResponse = await router.route({
+        taskType: 'synthesis',
+        systemPrompt: 'You are an executive deal analyst at Cascadia Healthcare. Write a concise, actionable executive summary.',
+        userPrompt: `Generate a 3-paragraph executive summary for this deal:
+
+Deal: ${data.suggestedDealName}
+Asset Type: ${data.suggestedAssetType}
+Score: ${synthesis.dealScore}/100
+Recommendation: ${synthesis.recommendation}
+Thesis: ${synthesis.investmentThesis}
+Key Risks: ${synthesis.keyRisks.slice(0, 5).join('; ')}
+Asking Price: ${synthesis.valuationSummary.askingPrice ? '$' + synthesis.valuationSummary.askingPrice.toLocaleString() : 'Undisclosed'}
+Facilities: ${data.facilities.length} (${data.facilities.reduce((s, f) => s + (f.licensedBeds || 0), 0)} beds)
+
+Format: Paragraph 1 = opportunity overview. Paragraph 2 = key risks and mitigants. Paragraph 3 = recommended action.`,
+      });
+      synthesis.executiveSummary = summaryResponse.content;
+    } catch {
+      // Non-blocking — synthesis works fine without AI summary
+      console.log('[Pipeline] AI executive summary unavailable, using rule-based synthesis');
+    }
 
     this.session.synthesis = synthesis;
     await this.persistSession();

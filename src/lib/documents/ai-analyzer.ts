@@ -1,10 +1,11 @@
 /**
  * AI Document Analyzer
  *
- * Uses Claude to intelligently extract and analyze financial data from documents.
+ * Uses multi-LLM router (Gemini primary → Claude fallback → OpenAI fallback)
+ * to intelligently extract and analyze financial data from documents.
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import { getRouter } from '@/lib/ai';
 
 // Types
 export interface DocumentAnalysisRequest {
@@ -38,16 +39,6 @@ export interface ClarificationRequest {
   extractedValue: any;
   possibleValues?: any[];
   priority: 'high' | 'medium' | 'low';
-}
-
-// Anthropic client singleton
-let anthropicClient: Anthropic | null = null;
-
-function getAnthropicClient(): Anthropic {
-  if (!anthropicClient) {
-    anthropicClient = new Anthropic();
-  }
-  return anthropicClient;
 }
 
 // Analysis prompts by document type
@@ -240,8 +231,6 @@ For each value found, provide the exact number and your confidence (0-1).`,
 export async function analyzeDocument(
   request: DocumentAnalysisRequest
 ): Promise<DocumentAnalysisResult> {
-  const anthropic = getAnthropicClient();
-
   const analysisPrompt = ANALYSIS_PROMPTS[request.documentType] || ANALYSIS_PROMPTS.other;
 
   // Build the context
@@ -286,14 +275,11 @@ Respond in JSON format with this structure:
 }`;
 
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: `${analysisPrompt}
+    const router = getRouter();
+    const response = await router.route({
+      taskType: 'document_analysis',
+      systemPrompt,
+      userPrompt: `${analysisPrompt}
 
 Document filename: ${request.filename}
 Facility type: ${request.facilityType || 'Unknown'}
@@ -302,18 +288,12 @@ Facility type: ${request.facilityType || 'Unknown'}
 ${documentContent}
 
 Extract the data and respond with JSON only.`,
-        },
-      ],
+      responseFormat: 'json',
+      metadata: { documentId: request.documentId },
     });
 
-    // Extract JSON from response
-    const content = response.content[0];
-    if (content.type !== 'text') {
-      throw new Error('Unexpected response type from Claude');
-    }
-
     // Parse JSON from response (may be wrapped in markdown code blocks)
-    let jsonStr = content.text;
+    let jsonStr = response.content;
     const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (jsonMatch) {
       jsonStr = jsonMatch[1];

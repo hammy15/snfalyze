@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { getRouter } from '@/lib/ai';
 import { CASCADIA_SYSTEM_PROMPT, ANALYSIS_PROMPT_TEMPLATE, getStateMarketData } from './prompts';
 import { calculateConfidenceDecay } from '@/lib/utils';
 import {
@@ -16,10 +16,6 @@ import {
   type MarketTier,
   type BuyerProfile,
 } from './knowledge';
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-});
 
 export interface AnalysisInput {
   id: string;
@@ -68,24 +64,16 @@ export async function analyzeDeal(deal: AnalysisInput): Promise<AnalysisResult> 
   const prompt = buildAnalysisPrompt(deal);
 
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 8000,
-      system: CASCADIA_SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
+    const router = getRouter();
+    const response = await router.route({
+      taskType: 'deal_analysis',
+      systemPrompt: CASCADIA_SYSTEM_PROMPT,
+      userPrompt: prompt,
+      maxTokens: 8000,
+      metadata: { dealId: deal.id },
     });
 
-    const textContent = response.content.find((c) => c.type === 'text');
-    if (!textContent || textContent.type !== 'text') {
-      throw new Error('No text content in response');
-    }
-
-    const analysisResult = parseAnalysisResponse(textContent.text);
+    const analysisResult = parseAnalysisResponse(response.content);
     return analysisResult;
   } catch (error) {
     console.error('AI Analysis Error:', error);

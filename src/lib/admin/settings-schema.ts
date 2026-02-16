@@ -9,7 +9,7 @@
 // ============================================================================
 
 export interface AIModelSettings {
-  provider: 'anthropic' | 'openai';
+  provider: 'anthropic' | 'openai' | 'gemini' | 'grok' | 'canva';
   model: string;
   maxTokens: number;
   temperature: number;
@@ -19,6 +19,16 @@ export interface AIModelSettings {
   systemPrompt: string;
   fallbackModel: string;
   enableStreaming: boolean;
+  /** Enable multi-provider routing (Gemini, Claude, OpenAI, Grok, Canva) */
+  multiProviderEnabled: boolean;
+  /** Per-provider overrides (optional) */
+  providerOverrides?: {
+    documentAnalysis?: 'anthropic' | 'gemini' | 'openai';
+    dealAnalysis?: 'anthropic' | 'openai';
+    visionExtraction?: 'anthropic' | 'gemini';
+    marketIntelligence?: 'grok' | 'openai' | 'anthropic';
+    fieldExtraction?: 'openai' | 'anthropic' | 'gemini';
+  };
 }
 
 export const DEFAULT_AI_SETTINGS: AIModelSettings = {
@@ -49,6 +59,7 @@ export const DEFAULT_AI_SETTINGS: AIModelSettings = {
 5. **Transparency**: Always explain reasoning and highlight key assumptions`,
   fallbackModel: 'claude-3-haiku-20240307',
   enableStreaming: true,
+  multiProviderEnabled: true,
 };
 
 // ============================================================================

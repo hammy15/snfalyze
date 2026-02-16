@@ -11,13 +11,11 @@
  * 4. Identifies facility boundaries in multi-building files
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import { getRouter } from '@/lib/ai';
 import * as ExcelJS from 'exceljs';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
-
-const anthropic = new Anthropic();
 
 // ============================================================================
 // TYPES
@@ -451,18 +449,16 @@ async function analyzeWithVision(
   const warnings: string[] = [];
 
   try {
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 16000,  // Increased to handle large multi-facility extractions
-      messages: [
-        {
-          role: 'user',
-          content: EXTRACTION_PROMPT + combinedContent + `\n\nFilename: ${filename}\n\nIMPORTANT: Return ONLY valid JSON. No markdown formatting, no code blocks, no explanatory text. Start your response with { and end with }.`
-        }
-      ],
+    const router = getRouter();
+    const message = await router.route({
+      taskType: 'vision_extraction',
+      systemPrompt: '',
+      userPrompt: EXTRACTION_PROMPT + combinedContent + `\n\nFilename: ${filename}\n\nIMPORTANT: Return ONLY valid JSON. No markdown formatting, no code blocks, no explanatory text. Start your response with { and end with }.`,
+      maxTokens: 16000,
+      responseFormat: 'json',
     });
 
-    const responseText = message.content[0].type === 'text' ? message.content[0].text : '';
+    const responseText = message.content;
 
     // Log response for debugging
     console.log(`[Vision] Response length: ${responseText.length} chars`);

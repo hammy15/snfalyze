@@ -5,7 +5,7 @@
  * Handles structure analysis (Pass 1) and data extraction (Pass 2).
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import { getRouter, type LLMRouter } from '@/lib/ai';
 import { nanoid } from 'nanoid';
 import type {
   DocumentStructure,
@@ -45,16 +45,12 @@ const TEMPERATURE = 0.1; // Low temperature for extraction accuracy
 // ============================================================================
 
 export class AIDocumentReader {
-  private client: Anthropic;
-  private model: string;
+  private router: LLMRouter;
   private totalTokensUsed: number = 0;
   private callCount: number = 0;
 
-  constructor(apiKey?: string, model?: string) {
-    this.client = new Anthropic({
-      apiKey: apiKey || process.env.ANTHROPIC_API_KEY,
-    });
-    this.model = model || DEFAULT_MODEL;
+  constructor(_apiKey?: string, _model?: string) {
+    this.router = getRouter();
   }
 
   // --------------------------------------------------------------------------
@@ -224,27 +220,25 @@ export class AIDocumentReader {
     this.callCount++;
 
     try {
-      const response = await this.client.messages.create({
-        model: this.model,
-        max_tokens: MAX_TOKENS,
+      // Route through multi-LLM router — structure_analysis for Pass 1, data_extraction for Pass 2
+      const isStructureAnalysis = systemPrompt.includes('structure') || systemPrompt.includes('Structure');
+      const taskType = isStructureAnalysis ? 'structure_analysis' as const : 'data_extraction' as const;
+
+      const response = await this.router.route({
+        taskType,
+        systemPrompt,
+        userPrompt,
+        maxTokens: MAX_TOKENS,
         temperature: TEMPERATURE,
-        system: systemPrompt,
-        messages: [
-          {
-            role: 'user',
-            content: userPrompt,
-          },
-        ],
+        responseFormat: 'json',
       });
 
       // Track token usage
-      this.totalTokensUsed += response.usage.input_tokens + response.usage.output_tokens;
+      this.totalTokensUsed += response.usage.inputTokens + response.usage.outputTokens;
 
-      // Extract text content
-      const textContent = response.content.find((c) => c.type === 'text');
-      return textContent?.text || '';
+      return response.content;
     } catch (error) {
-      console.error('Claude API error:', error);
+      console.error('AI extraction error:', error);
       throw new Error(`AI extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }

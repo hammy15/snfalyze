@@ -11,14 +11,14 @@ export const maxDuration = 300;
 // CONSTANTS
 // ============================================================================
 
-/** Max text per AI call (~200KB). Sheets larger than this get chunked. */
-const MAX_CHUNK_SIZE = 200_000;
+/** Max text per AI call. Sheets larger than this get chunked. */
+const MAX_CHUNK_SIZE = 300_000;
 
-/** Max concurrent chunk AI calls within a single file */
-const CHUNK_CONCURRENCY = 5;
-
-/** Max tokens for text extraction response */
+/** Max tokens for a full sheet extraction (single chunk) */
 const TEXT_MAX_TOKENS = 16384;
+
+/** Max tokens for chunked extraction (partial sheet — less data, needs fewer tokens) */
+const CHUNK_MAX_TOKENS = 8192;
 
 /** Max tokens for image extraction response */
 const IMAGE_MAX_TOKENS = 8000;
@@ -535,12 +535,13 @@ async function extractFromText(
           ? `Extract all financial data from this section (${chunkLabel}) of sheet "${chunk.sheetName}" in document "${doc.filename}".\nThis is part of a larger sheet — extract everything you see in this segment.\n\n${chunk.content}`
           : `Extract all financial data from sheet "${chunk.sheetName}" in document "${doc.filename}".\n\n${chunk.content}`;
 
+        const isChunked = chunks.length > 1;
         const router = getRouter();
         const response = await router.route({
           taskType: 'vision_extraction',
           systemPrompt: FINANCIAL_EXTRACTION_SYSTEM,
           userPrompt,
-          maxTokens: TEXT_MAX_TOKENS,
+          maxTokens: isChunked ? CHUNK_MAX_TOKENS : TEXT_MAX_TOKENS,
           responseFormat: 'json',
         });
 

@@ -16,6 +16,7 @@ import { matchExtractedFacilityToCMS } from '@/lib/cms/provider-lookup';
 import { autoRunTools } from './tool-runner';
 import pdfParse from 'pdf-parse';
 import * as XLSX from 'xlsx';
+import Papa from 'papaparse';
 import type {
   SmartPipelineSession,
   PipelinePhase,
@@ -309,7 +310,12 @@ export class SmartIntakePipeline {
       }
       pageCount = workbook.SheetNames.length;
     } else if (ext === 'csv') {
-      rawText = buffer.toString('utf-8');
+      const csvText = buffer.toString('utf-8');
+      const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+      rawText = csvText;
+      if (parsed.data && parsed.data.length > 0) {
+        spreadsheetData = { 'Sheet1': [parsed.meta.fields || [], ...parsed.data.map((row: any) => Object.values(row))] as unknown[][] };
+      }
     } else {
       rawText = buffer.toString('utf-8').slice(0, 50000);
     }
@@ -1138,7 +1144,7 @@ export class SmartIntakePipeline {
           confidenceScore: result.confidenceScore,
           analysisNarrative: result.narrative?.slice(0, 5000),
           thesis: result.thesis?.slice(0, 5000),
-          status: 'analyzed' as any,
+          status: 'reviewed',
         })
         .where(eq(deals.id, this.session.dealId));
 
@@ -1310,11 +1316,13 @@ export class SmartIntakePipeline {
           suggestedDealName: this.session.extractedData.suggestedDealName,
           suggestedAssetType: this.session.extractedData.suggestedAssetType,
           facilityCount: this.session.extractedData.facilities.length,
+          facilities: this.session.extractedData.facilities,
           financials: {
             noi: this.session.extractedData.financials.noi,
             totalRevenue: this.session.extractedData.financials.totalRevenue,
             askingPrice: this.session.extractedData.financials.askingPrice,
           },
+          analysisResult: this.session.analysisResult || null,
         } as any,
         clarifications: this.session.clarifications as any,
         clarificationAnswers: this.session.clarificationAnswers as any,

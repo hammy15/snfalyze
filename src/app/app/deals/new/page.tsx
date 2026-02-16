@@ -50,14 +50,14 @@ export default function NewDealPage() {
           </div>
 
           {/* Mode toggle */}
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-800/50 border border-surface-700/50">
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-100 dark:bg-surface-800/50 border border-surface-200 dark:border-surface-700/50">
             <button
               onClick={() => setUseSmart(true)}
               className={cn(
                 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
                 useSmart
-                  ? 'bg-primary-500/20 text-primary-300 border border-primary-500/30'
-                  : 'text-surface-400 hover:text-surface-300'
+                  ? 'bg-primary-100 dark:bg-primary-500/20 text-primary-700 dark:text-primary-300 border border-primary-300 dark:border-primary-500/30'
+                  : 'text-surface-500 dark:text-surface-400 hover:text-surface-700 dark:hover:text-surface-300'
               )}
             >
               <Sparkles className="w-3.5 h-3.5" />
@@ -68,8 +68,8 @@ export default function NewDealPage() {
               className={cn(
                 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
                 !useSmart
-                  ? 'bg-surface-700 text-surface-200 border border-surface-600'
-                  : 'text-surface-400 hover:text-surface-300'
+                  ? 'bg-white dark:bg-surface-700 text-surface-800 dark:text-surface-200 border border-surface-300 dark:border-surface-600 shadow-sm'
+                  : 'text-surface-500 dark:text-surface-400 hover:text-surface-700 dark:hover:text-surface-300'
               )}
             >
               <List className="w-3.5 h-3.5" />

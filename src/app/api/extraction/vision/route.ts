@@ -5,6 +5,9 @@ import { join } from 'path';
 import { extractWithVision, extractPDFWithVision, type VisionExtractionResult } from '@/lib/extraction/vision-extractor';
 import { getRouter } from '@/lib/ai';
 
+// Allow up to 60s for AI extraction of multiple files
+export const maxDuration = 60;
+
 // Use /tmp on Vercel (serverless), local uploads folder in development
 const getUploadsDir = () => {
   if (process.env.VERCEL) {
@@ -70,24 +73,105 @@ export async function POST(request: NextRequest) {
       try {
         let result: VisionExtractionResult;
 
-        if (ext === 'xlsx' || ext === 'xls') {
-          result = await extractWithVision(
-            filePath,
-            doc.id,
-            doc.filename || 'unknown.xlsx',
-            (progress) => {
-              console.log(`  [${progress.stage.toUpperCase()}] ${progress.progress}% - ${progress.message}`);
-            }
-          );
-        } else if (ext === 'pdf') {
-          result = await extractPDFWithVision(
-            filePath,
-            doc.id,
-            doc.filename || 'unknown.pdf',
-            (progress) => {
-              console.log(`  [${progress.stage.toUpperCase()}] ${progress.progress}% - ${progress.message}`);
-            }
-          );
+        if (ext === 'xlsx' || ext === 'xls' || ext === 'csv' || ext === 'pdf') {
+          // Use already-parsed data from DB (stored during upload) — send to AI for structured extraction
+          const rawText = doc.rawText || '';
+          const docExtractedData = doc.extractedData as Record<string, any> | null;
+
+          if (!rawText || rawText.length < 20 || rawText.startsWith('[Error')) {
+            throw new Error(`No parsed text available for ${doc.filename}. Raw text: ${rawText?.slice(0, 100)}`);
+          }
+
+          console.log(`  Using stored text data (${(rawText.length / 1024).toFixed(0)}KB) for AI extraction`);
+
+          const router = getRouter();
+          const extractionResponse = await router.route({
+            taskType: 'vision_extraction',
+            systemPrompt: `You are a financial data extraction specialist for healthcare facility acquisitions (SNF, ALF, ILF).
+You are analyzing spreadsheet/document data that has already been parsed into text format.
+Extract ALL financial data, facility names, and metrics. Return structured JSON:
+{
+  "facilities": [{
+    "name": "Facility Name",
+    "state": "XX",
+    "city": "City",
+    "beds": 100,
+    "lineItems": [{
+      "category": "revenue|expense|metric",
+      "subcategory": "medicaid|medicare|private|nursing|dietary|admin|other",
+      "label": "Line item label",
+      "values": [{"period": "2024-01", "value": 123456.78}],
+      "confidence": 0.9
+    }]
+  }],
+  "periods": ["2024-01", "2024-02", ...],
+  "confidence": 0.85
+}
+
+Rules:
+- Extract EVERY revenue and expense line item you find
+- Identify facility names from sheet names or headers
+- Map periods to YYYY-MM format
+- Include totals (Total Revenue, Total Expenses, EBITDAR, EBITDA, Net Income)
+- For multi-facility files, create separate facility entries`,
+            userPrompt: `Extract all financial data from this ${ext.toUpperCase()} document "${doc.filename}":\n\n${rawText.slice(0, 80000)}`,
+            maxTokens: 8000,
+          });
+
+          const content = extractionResponse.content || '';
+          let parsedData: any = {};
+          try {
+            const jsonMatch = content.match(/\{[\s\S]*\}/);
+            if (jsonMatch) parsedData = JSON.parse(jsonMatch[0]);
+          } catch {
+            parsedData = { rawText: content };
+          }
+
+          const extractedFacilities = (parsedData.facilities || []).map((f: any) => ({
+            name: f.name || doc.filename || 'Unknown Facility',
+            state: f.state,
+            city: f.city,
+            beds: f.beds,
+            periods: parsedData.periods || [],
+            lineItems: (f.lineItems || []).map((item: any, idx: number) => ({
+              category: item.category || 'metric',
+              subcategory: item.subcategory || 'other',
+              label: item.label || `Item ${idx + 1}`,
+              values: item.values || [],
+              confidence: item.confidence || 0.7,
+            })),
+            confidence: f.confidence || parsedData.confidence || 0.7,
+          }));
+
+          // If no facilities found, create one from the filename with raw extraction
+          if (extractedFacilities.length === 0 && rawText.length > 100) {
+            extractedFacilities.push({
+              name: doc.filename?.replace(/\.(xlsx|xls|csv|pdf)$/i, '') || 'Unknown',
+              periods: [],
+              lineItems: [],
+              confidence: 0.3,
+            });
+          }
+
+          result = {
+            documentId: doc.id,
+            filename: doc.filename || `unknown.${ext}`,
+            facilities: extractedFacilities,
+            sheets: (docExtractedData?.sheetNames || [doc.filename]).map((name: string, idx: number) => ({
+              name,
+              index: idx,
+              type: 'unknown' as const,
+              facilitiesFound: extractedFacilities.map((f: any) => f.name),
+              periodsFound: parsedData.periods || [],
+              confidence: parsedData.confidence || 0.7,
+            })),
+            rawAnalysis: content,
+            confidence: parsedData.confidence || 0.7,
+            processingTimeMs: 0,
+            warnings: [],
+            errors: [],
+          };
+
         } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
           // Image file — use stored base64 from upload or read from disk
           const extractedData = doc.extractedData as Record<string, any> | null;

@@ -3,6 +3,7 @@
 // =============================================================================
 
 import type { RiskFactor, RiskCategory, CMSData, OperatingMetrics, NormalizedFinancials, MarketData, FacilityProfile } from '../types';
+import { isCONState, getCONData, REIMBURSEMENT_OPTIMIZATION, QUALITY_REVENUE_IMPACT } from '../knowledge';
 
 // =============================================================================
 // TYPES
@@ -799,6 +800,209 @@ export const REPUTATIONAL_RISK_FACTORS: RiskFactorDefinition[] = [
 ];
 
 // =============================================================================
+// KNOWLEDGE-DRIVEN RISK FACTORS (from institutional intelligence)
+// =============================================================================
+
+export const KNOWLEDGE_REGULATORY_RISK_FACTORS: RiskFactorDefinition[] = [
+  {
+    id: 'con_regulatory_risk',
+    name: 'CON Regulatory Complexity',
+    category: 'regulatory',
+    weight: 0.15,
+    description: 'Certificate of Need state regulatory burden and timeline risk',
+    dataSource: 'Institutional knowledge / CON database',
+    evaluate: (data) => {
+      const state = data.facility?.address?.state;
+      if (!state) {
+        return { score: 30, severity: 'moderate', details: 'State unknown — cannot assess CON status' };
+      }
+
+      if (!isCONState(state)) {
+        return {
+          score: 5,
+          severity: 'low',
+          details: `${state} is not a CON state — no certificate of need requirements`,
+        };
+      }
+
+      const conData = getCONData(state);
+      if (!conData) {
+        return { score: 35, severity: 'moderate', details: `${state} is a CON state but detailed data unavailable` };
+      }
+
+      // Higher investment score = less risky (better market despite CON)
+      // Scale: 10 = great, 5 = poor → risk score inverted
+      const riskFromScore = Math.max(0, (10 - conData.investmentScore) * 10);
+
+      // Reform risk adds uncertainty
+      const reformPenalty = conData.reformRisk === 'high' ? 15 : conData.reformRisk === 'moderate' ? 8 : 0;
+
+      // Timeline adds cost
+      const timelinePenalty = conData.timelineMonths.standard > 10 ? 10 : conData.timelineMonths.standard > 7 ? 5 : 0;
+
+      const score = Math.min(85, riskFromScore + reformPenalty + timelinePenalty);
+
+      return {
+        score,
+        severity: scoreToSeverity(score),
+        details: `${state} CON state — investment score ${conData.investmentScore}/10, ${conData.timelineMonths.standard}mo typical timeline, $${(conData.applicationCost.low / 1000).toFixed(0)}-${(conData.applicationCost.high / 1000).toFixed(0)}K application cost`,
+        recommendation: score >= 40 ? `Budget $${(conData.applicationCost.high / 1000).toFixed(0)}K and ${conData.timelineMonths.extended}mo for CON process` : undefined,
+      };
+    },
+  },
+];
+
+export const KNOWLEDGE_FINANCIAL_RISK_FACTORS: RiskFactorDefinition[] = [
+  {
+    id: 'reimbursement_concentration',
+    name: 'Reimbursement Concentration Risk',
+    category: 'financial',
+    weight: 0.15,
+    description: 'Risk from dependence on single reimbursement source and optimization gap',
+    dataSource: 'Institutional knowledge / payer data',
+    evaluate: (data) => {
+      if (!data.operations?.payerMix) {
+        return { score: 40, severity: 'elevated', details: 'Payer mix data unavailable — cannot assess reimbursement concentration' };
+      }
+
+      const medicaid = data.operations.payerMix.medicaid;
+      const medicareA = data.operations.payerMix.medicareA;
+      const ma = data.operations.payerMix.medicareAdvantage;
+
+      let score = 0;
+      const details: string[] = [];
+
+      // Heavy Medicaid dependence
+      if (medicaid > 70) {
+        score += 35;
+        details.push(`${medicaid.toFixed(0)}% Medicaid — high reimbursement cliff risk`);
+      } else if (medicaid > 55) {
+        score += 20;
+        details.push(`${medicaid.toFixed(0)}% Medicaid — moderate concentration`);
+      }
+
+      // MA rate compression risk
+      if (ma > 20) {
+        score += 25;
+        details.push(`${ma.toFixed(0)}% Medicare Advantage — rate compression exposure (MA rates 15-30% below traditional)`);
+      } else if (ma > 10) {
+        score += 10;
+        details.push(`${ma.toFixed(0)}% Medicare Advantage exposure`);
+      }
+
+      // Low Medicare A (PDPM optimization limited)
+      if (medicareA < 15) {
+        score += 15;
+        details.push(`${medicareA.toFixed(0)}% Medicare A — limited PDPM optimization upside`);
+      }
+
+      score = Math.min(score, 90);
+
+      return {
+        score,
+        severity: scoreToSeverity(score),
+        details: details.length > 0 ? details.join('; ') : 'Balanced reimbursement sources',
+        recommendation: score >= 40 ? 'Develop payer diversification strategy and PDPM optimization plan' : undefined,
+      };
+    },
+  },
+  {
+    id: 'quality_bonus_opportunity',
+    name: 'Quality Revenue Opportunity',
+    category: 'financial',
+    weight: 0.10,
+    description: 'Revenue upside from quality improvement (inverted — lower rating = higher opportunity)',
+    dataSource: 'Institutional knowledge / CMS data',
+    evaluate: (data) => {
+      if (!data.cmsData) {
+        return { score: 30, severity: 'moderate', details: 'CMS data unavailable — cannot assess quality revenue opportunity' };
+      }
+
+      const rating = data.cmsData.overallRating;
+      const impact = QUALITY_REVENUE_IMPACT.find((q) => q.starRating === rating);
+
+      if (!impact) {
+        return { score: 30, severity: 'moderate', details: 'Cannot map rating to revenue impact' };
+      }
+
+      // This is an OPPORTUNITY score, not a risk score
+      // Lower star rating = more upside = lower risk (opportunity pricing)
+      // We invert: 1-star has most opportunity → lower score (positive signal)
+      if (rating >= 4) {
+        return {
+          score: 10,
+          severity: 'low',
+          details: `${rating}-star facility — limited quality bonus upside ($${impact.revenuePerBed.low.toLocaleString()}-${impact.revenuePerBed.high.toLocaleString()}/bed), already high performer`,
+        };
+      }
+
+      if (rating === 3) {
+        return {
+          score: 20,
+          severity: 'moderate',
+          details: `3-star facility — moderate quality improvement opportunity ($${impact.revenuePerBed.low.toLocaleString()}-${impact.revenuePerBed.high.toLocaleString()}/bed achievable)`,
+          recommendation: 'Target 4-star within 12 months through QAPI and staffing investment',
+        };
+      }
+
+      // 1-2 star: high opportunity but requires investment
+      return {
+        score: 35,
+        severity: 'moderate',
+        details: `${rating}-star facility — significant quality bonus opportunity ($${impact.revenuePerBed.low.toLocaleString()}-${impact.revenuePerBed.high.toLocaleString()}/bed), requires $${(impact.investmentRequired.low / 1000).toFixed(0)}-${(impact.investmentRequired.high / 1000).toFixed(0)}K investment, ROI ${impact.roi.low}-${impact.roi.high}%`,
+        recommendation: `Invest in quality improvement — ${impact.paybackMonths.low}-${impact.paybackMonths.high} month payback with ${impact.roi.low}-${impact.roi.high}% ROI`,
+      };
+    },
+  },
+];
+
+export const KNOWLEDGE_MARKET_RISK_FACTORS: RiskFactorDefinition[] = [
+  {
+    id: 'succession_motivation',
+    name: 'Seller Succession / Motivation',
+    category: 'market',
+    weight: 0.15,
+    description: 'Assessment of seller motivation from succession pressure (55% of operators are family-owned)',
+    dataSource: 'Institutional knowledge / deal intelligence',
+    evaluate: (data) => {
+      // This factor primarily provides context — without specific seller data,
+      // we flag the macro trend and its implications
+      if (!data.market) {
+        return {
+          score: 30,
+          severity: 'moderate',
+          details: '55% of SNF operators are family-owned and facing succession — this creates both opportunity (motivated sellers, 10-20% discount potential) and risk (deferred maintenance, outdated systems)',
+        };
+      }
+
+      // If we have market data, assess based on market characteristics
+      const marketOcc = data.market.marketOccupancy * 100;
+      const supplyGrowth = data.market.supplyGrowthRate * 100;
+
+      let score = 25; // Base — succession dynamics are always present
+      const details: string[] = ['55% of operators face succession — deal flow opportunity'];
+
+      // Soft market + succession = more motivated sellers
+      if (marketOcc < 80) {
+        score -= 5; // Actually good for buyers — more negotiating leverage
+        details.push('Soft market increases seller motivation');
+      }
+
+      if (supplyGrowth < 1) {
+        score -= 5; // Low supply growth means less new competition
+        details.push('Low supply growth protects existing operators');
+      }
+
+      return {
+        score: Math.max(5, score),
+        severity: scoreToSeverity(Math.max(5, score)),
+        details: details.join('; '),
+      };
+    },
+  },
+];
+
+// =============================================================================
 // ALL RISK FACTORS
 // =============================================================================
 
@@ -808,6 +1012,9 @@ export const ALL_RISK_FACTORS: RiskFactorDefinition[] = [
   ...FINANCIAL_RISK_FACTORS,
   ...MARKET_RISK_FACTORS,
   ...REPUTATIONAL_RISK_FACTORS,
+  ...KNOWLEDGE_REGULATORY_RISK_FACTORS,
+  ...KNOWLEDGE_FINANCIAL_RISK_FACTORS,
+  ...KNOWLEDGE_MARKET_RISK_FACTORS,
 ];
 
 // =============================================================================

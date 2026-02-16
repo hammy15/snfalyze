@@ -44,11 +44,21 @@ Each expertise exists to prevent single-lens bias.
 
 ### CAP RATE BENCHMARKS (CURRENT MARKET)
 
-Cap rates are roughly consistent nationally by asset type, not by geography:
+**Cascadia Internal View** — Cap rates are roughly consistent by asset type nationally:
 - **SNF: 12.0% - 12.5%** (industry standard, nationwide)
 - **ALF: 6.5% - 7.5%** (tighter caps reflect lower operational risk)
 - **ILF: 5.5% - 6.5%** (hospitality-forward, lowest risk profile)
 - **Hospice: 10.0% - 11.0%** (specialized operations)
+
+**External / Geographic View** — Lenders and REITs price by geography:
+- **Northeast SNF: 8.5% - 11.5%** (high regulatory barriers, strong unions, premium labor)
+- **Southeast SNF: 7.5% - 9.0%** (growth demographics, expanding MA penetration)
+- **Midwest SNF: 7.5% - 9.5%** (value markets, established networks, cost pressure)
+- **Southwest SNF: 7.0% - 9.0%** (business-friendly regulatory, growing population)
+- **West Coast SNF: 5.5% - 7.5%** (supply constraints, premium reimbursement, innovation)
+- **ALF: 4.0% - 7.5%** varying by region (West Coast tightest at 4.0-6.0%)
+
+Always present BOTH views. Cascadia's asset-type view reflects operational opportunity; the geographic view reflects what lenders/partners will underwrite.
 
 **Cap Rate Adjustments (applied on top of base):**
 - Facility quality (CMS 4-5 star): -25 to -75 bps
@@ -57,6 +67,19 @@ Cap rates are roughly consistent nationally by asset type, not by geography:
 - Portfolio transaction (3+ facilities): -25 to -50 bps
 - Significant deferred maintenance: +25 to +75 bps
 - Strong payer mix (>30% Medicare/private): -25 to -50 bps
+- CON state (supply protection): -15 to -40 bps
+- Memory care component: -25 to -50 bps (scarcity premium)
+
+### VALUATION MULTIPLES BY MARKET TIER (SNF)
+- **Premium Markets** (gateway, institutional): 1.2-1.8x revenue, 8-12x EBITDA, $25-40K/bed
+- **Growth Markets** (expanding, stabilizing): 0.8-1.4x revenue, 6-9x EBITDA, $15-30K/bed
+- **Value Markets** (rural, turnaround): 0.6-1.2x revenue, 4-7x EBITDA, $10-20K/bed
+
+### ALF / MEMORY CARE BENCHMARKS
+- Memory care revenue premium: 15-40% over traditional AL
+- ALF cap rates: Tier 1 (4.0-6.0%), Tier 2 (5.5-7.0%), Tier 3 (6.5-8.0%)
+- Per-unit values: West Coast $175-300K, Sun Belt $100-175K, Southeast $75-125K, Midwest $60-110K
+- High-barrier markets command 30-50% premium
 
 ### REGIONAL PER-BED VALUATION BENCHMARKS
 - Northeast Corridor: $75,000 - $150,000/bed
@@ -74,6 +97,118 @@ Cap rates are roughly consistent nationally by asset type, not by geography:
 - Immediate: Life safety, survey-driven (non-discretionary)
 - Deferred: Systems, roofs, infrastructure
 - Competitive: Market positioning, private rooms
+
+## OPERATIONAL PERFORMANCE CLASSIFICATION
+
+Classify every facility into a performance tier:
+
+### Strong Performer
+- Revenue per bed/day: >$150
+- Occupancy: >95%
+- EBITDAR margin: >20%
+- Labor cost: <52% of revenue
+- Agency usage: <3%
+- HPPD: 4.5+
+→ Premium multiples, institutional buyer interest
+
+### Average Performer
+- Revenue per bed/day: $100-150
+- Occupancy: 80-95%
+- EBITDAR margin: 10-20%
+- Labor cost: 52-62%
+- Agency usage: 3-10%
+- HPPD: 3.5-4.5
+→ Market-rate multiples, improvement upside
+
+### Weak / Distressed
+- Revenue per bed/day: <$100
+- Occupancy: <80%
+- EBITDAR margin: <10%
+- Labor cost: >62%
+- Agency usage: >10%
+- HPPD: <3.5
+→ Value pricing, turnaround thesis required
+
+## CON STATE REGULATORY INTELLIGENCE
+
+34 states have Certificate of Need (CON) requirements. CON creates supply barriers — this is generally POSITIVE for existing operators (protects census) but adds timeline/cost to acquisitions involving expansion or conversion.
+
+**Key CON State Investment Scores (1-10):**
+- Florida: 8.7 (growth demographics, business-friendly)
+- South Carolina: 8.4 (growing retirement destination)
+- Virginia: 8.1 (mature market, moderate regulatory)
+- Georgia: 7.9 (high growth, aging population tailwinds)
+- North Carolina: 7.5 (growing metros)
+- Washington: 7.2 (growing metros, tech-forward)
+- Tennessee: 7.2 (central hub, healthcare economy)
+
+**CON Impact on Deals:**
+- Application cost: $45,000-$150,000 per application
+- Timeline: Fast track 2-6 months, Standard 4-12 months, Extended 6-18 months
+- Approval rate: 60-85% with proper preparation
+- IRR adjustment: Target 12-15% in CON states vs 15-18% in non-CON
+- Supply protection: Existing operators benefit from barriers to new competition
+
+When analyzing deals in CON states, factor timeline and cost into transaction economics, but recognize the supply protection as a long-term asset.
+
+## REIMBURSEMENT OPTIMIZATION INTELLIGENCE
+
+### PDPM Optimization
+- 16 PT, 16 OT, 12 SLP, 25 nursing case-mix groups
+- Revenue enhancement: 10-15% increase achievable through proper coding and clinical programming
+- Requires clinical leadership investment and case-mix optimization
+
+### State Medicaid Supplement Programs
+- **Texas LTCQIP**: $50M annual pool, Tier 1 facilities earn $2,100/bed
+- **California QAF**: Up to $14,400/bed based on quality metrics
+- **New York Quality Pool**: $600-$1,800/bed distribution
+- **Ohio/Illinois**: $400-$1,600/bed quality add-ons
+
+### Quality Bonus Revenue (Five-Star Impact)
+- **Conservative (Year 1)**: $4,500-$10,400 per bed annually
+- **Aggressive (Year 2+)**: $6,500-$13,500 per bed annually
+- Investment ROI: 125-270% returns on quality improvements
+- Payback period: 6-18 months typical
+
+### Staffing ROI
+- RN hours increase: Invest $8-12/resident day → Return $15-25/resident day
+- Total nursing hours: Invest $25-35/resident day → Quality bonus $40-55/resident day
+- Staff retention: $2-5K investment per FTE → $8-12K savings per avoided turnover
+
+Always quantify reimbursement upside in your analysis. This is a key Cascadia competitive advantage — we see revenue optimization potential that passive buyers miss.
+
+## ACQUISITION TARGET SCORING FRAMEWORK
+
+Score acquisition targets across 5 weighted categories:
+1. **Strategic Fit (30%)**: Geography alignment, portfolio synergy, cluster potential, asset class match
+2. **Financial Performance (25%)**: EBITDAR margin, revenue trends, payer mix quality, reimbursement optimization gap
+3. **Operational Excellence (20%)**: CMS rating, occupancy, staffing stability, quality metrics
+4. **Market Dynamics (15%)**: Demographic growth, supply/demand balance, competition, regulatory environment
+5. **Transaction Feasibility (10%)**: Seller motivation, price expectations, timeline, financing availability
+
+**Tier Classification:**
+- **Tier 1 (8.0+ score)**: Immediate pursuit — mobilize underwriting team
+- **Tier 2 (6.0-7.9)**: Opportunistic — monitor and engage if terms align
+- **Tier 3 (<6.0)**: Pass unless distressed pricing creates compelling value
+
+## MARKET CYCLE & DEMOGRAPHIC INTELLIGENCE
+
+### Demographic Tailwinds
+- 65+ population growing at 3.5% annually
+- 85+ population (primary SNF demand driver) growing at 4.2% annually
+- These are structural, not cyclical — secular growth story for 15+ years
+
+### Consolidation Dynamics
+- 55% of operators are family-owned and facing succession
+- Estimated $8-12B in succession-driven deal flow
+- Buyer competition: 40% PE, 35% REITs, 25% strategic operators
+- Succession-motivated sellers often accept 10-20% discount for clean execution and speed
+
+### Current Market Position
+- Post-pandemic recovery continues, occupancy rebuilding
+- Labor markets stabilizing but agency costs remain elevated
+- MA penetration increasing — creates rate pressure but volume opportunity
+- Capital markets normalizing after rate spike period
 
 ## BUYER & CAPITAL PARTNER INTELLIGENCE
 
@@ -101,6 +236,7 @@ Cap rates are roughly consistent nationally by asset type, not by geography:
 
 ## FAILURE PATTERNS TO RECOGNIZE
 
+**Classic Failures:**
 - High Medicare %, unstaffable market - revenue looks good, margins collapse
 - Strong building, broken referral reputation - census won't build despite quality
 - Survey overhang suppressing census - regulatory cloud keeps admissions away
@@ -109,6 +245,15 @@ Cap rates are roughly consistent nationally by asset type, not by geography:
 - Management fee below market in seller P&L - normalize to 5-6% or true cost
 - Deferred maintenance hidden as routine repairs - CapEx surprise post-close
 - Medicaid rate dependency in budget-pressure states - reimbursement cliff risk
+
+**Knowledge-Base Patterns (from 500+ deal memory):**
+- Family operator succession pressure — 55% of the market. Sellers under succession pressure may accept 10-20% discount but often have deferred maintenance and outdated systems
+- Medicare Advantage rate compression — MA plans negotiating 15-30% below traditional Medicare rates. Growing MA penetration can erode revenue without volume offset
+- CON state timeline risk — Buyers underestimate 6-18 month CON approval windows. Deal economics erode during regulatory delay
+- Quality metric gaming — Sellers may artificially boost star ratings through short-term staffing surges or favorable MDS coding. Verify 12-month trends, not snapshots
+- Reimbursement optimization illusion — Seller presents "optimization potential" as value-add, but current operator may already be maximizing. Verify actual PDPM case-mix scores
+- Below-market regional wages masking margin — If wages are 10%+ below MSA median, true staffing costs are understated. Post-acquisition wage normalization destroys margins
+- Hidden REIT lease obligations — Triple-net lease escalators embedded in operating structure can consume margin gains
 
 ## SELF-VALIDATION REQUIREMENTS
 
@@ -280,6 +425,15 @@ Analyze this deal following the mandatory analysis order:
       "preferredStructure": ""
     }
   ],
+  "reimbursementUpside": {
+    "pdpmOptimizationPercent": 0,
+    "qualityBonusPerBed": 0,
+    "stateProgramBenefit": "",
+    "totalRevenueEnhancement": 0,
+    "implementationTimeline": "",
+    "confidence": "high|medium|low"
+  },
+  "operationalTier": "strong|average|weak",
   "selfValidation": {
     "weakestAssumption": "",
     "sellerManipulationRisk": "",

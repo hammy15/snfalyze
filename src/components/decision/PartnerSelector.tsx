@@ -66,7 +66,7 @@ export function PartnerSelector({
                 <div>
                   <p className="text-muted-foreground text-xs">Target Cap Rate</p>
                   <p className="font-semibold">
-                    {formatPercent(selectedPartner.economics.targetCapRate)}
+                    {formatPercent(selectedPartner.economics?.targetCapRate)}
                   </p>
                 </div>
               </div>
@@ -75,7 +75,7 @@ export function PartnerSelector({
                 <div>
                   <p className="text-muted-foreground text-xs">Target Yield</p>
                   <p className="font-semibold">
-                    {formatPercent(selectedPartner.economics.targetYield)}
+                    {formatPercent(selectedPartner.economics?.targetYield)}
                   </p>
                 </div>
               </div>
@@ -84,7 +84,7 @@ export function PartnerSelector({
                 <div>
                   <p className="text-muted-foreground text-xs">Min Coverage</p>
                   <p className="font-semibold">
-                    {selectedPartner.economics.minCoverage.toFixed(2)}x
+                    {(selectedPartner.economics?.minCoverage ?? 0).toFixed(2)}x
                   </p>
                 </div>
               </div>
@@ -94,13 +94,13 @@ export function PartnerSelector({
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>Lease Structure:</span>
                 <Badge variant="secondary" className="text-xs">
-                  {selectedPartner.leaseTerms.structure}
+                  {selectedPartner.leaseTerms?.structure ?? 'N/A'}
                 </Badge>
                 <span>·</span>
                 <span>
-                  {selectedPartner.leaseTerms.initialTermYears}yr initial +{' '}
-                  {selectedPartner.leaseTerms.renewalOptions}×
-                  {selectedPartner.leaseTerms.renewalTermYears}yr renewals
+                  {selectedPartner.leaseTerms?.initialTermYears ?? '—'}yr initial +{' '}
+                  {selectedPartner.leaseTerms?.renewalOptions ?? '—'}×
+                  {selectedPartner.leaseTerms?.renewalTermYears ?? '—'}yr renewals
                 </span>
               </div>
             </div>

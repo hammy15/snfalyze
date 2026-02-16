@@ -16,12 +16,14 @@ import {
   RefreshCw,
   Save,
   AlertCircle,
+  Activity,
 } from 'lucide-react';
 import {
   ValuationMethodsGrid,
   InteractiveSensitivity,
   ParameterAdjuster,
   MonteCarloVisualization,
+  MarketIntelligencePanel,
   type SensitivityParameter,
   type SensitivityResult,
   type ParameterGroup,
@@ -403,6 +405,10 @@ export default function DealAnalysisPage() {
             <BarChart3 className="h-4 w-4" />
             Monte Carlo
           </TabsTrigger>
+          <TabsTrigger value="intelligence" className="flex items-center gap-2">
+            <Activity className="h-4 w-4" />
+            Market Intelligence
+          </TabsTrigger>
         </TabsList>
 
         {/* Valuation Methods */}
@@ -453,6 +459,21 @@ export default function DealAnalysisPage() {
               );
             }}
             baselineValue={MOCK_VALUATION_RESULT.reconciledValue}
+          />
+        </TabsContent>
+
+        {/* Market Intelligence */}
+        <TabsContent value="intelligence" className="mt-6">
+          <MarketIntelligencePanel
+            state="TX"
+            assetType="SNF"
+            beds={100}
+            cmsRating={3}
+            occupancy={85.2}
+            ebitdarMargin={14.5}
+            revenuePerBedDay={125}
+            agencyPercent={8.5}
+            currentRevenue={4500000}
           />
         </TabsContent>
       </Tabs>

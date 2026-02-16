@@ -34,3 +34,9 @@ export {
   type DistributionConfig,
   type MonteCarloVisualizationProps,
 } from './MonteCarloVisualization';
+
+// Market Intelligence Panel
+export {
+  MarketIntelligencePanel,
+  type MarketIntelligencePanelProps,
+} from './MarketIntelligencePanel';

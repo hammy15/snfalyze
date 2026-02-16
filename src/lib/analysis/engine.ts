@@ -1,6 +1,21 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { CASCADIA_SYSTEM_PROMPT, ANALYSIS_PROMPT_TEMPLATE, getStateMarketData } from './prompts';
 import { calculateConfidenceDecay } from '@/lib/utils';
+import {
+  getGeographicCapRate,
+  getRegion,
+  getMarketTier,
+  isCONState,
+  getCONData,
+  REIMBURSEMENT_OPTIMIZATION,
+  STATE_REIMBURSEMENT_PROGRAMS,
+  QUALITY_REVENUE_IMPACT,
+  BUYER_PROFILES,
+  SNF_OPERATIONAL_TIERS,
+  type OperationalTier,
+  type MarketTier,
+  type BuyerProfile,
+} from './knowledge';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -162,38 +177,228 @@ function parseAnalysisResponse(responseText: string): AnalysisResult {
   }
 }
 
-// National cap rate lookup by asset type (flat across geography)
+// Cap rate lookup — Cascadia view is asset-type based, External is geography-aware
 export function getMarketCapRates(
   assetType: string,
   state: string,
   view: 'external' | 'cascadia'
 ): { low: number; base: number; high: number } {
-  // Cap rates are consistent nationally by asset type, not geography
-  // External = conservative lender/REIT view
-  // Cascadia = execution view with operational upside priced in
-  const capRates: Record<string, { external: { low: number; base: number; high: number }; cascadia: { low: number; base: number; high: number } }> = {
-    SNF: {
-      external: { low: 0.12, base: 0.125, high: 0.13 },
-      cascadia: { low: 0.105, base: 0.115, high: 0.125 },
-    },
-    ALF: {
-      external: { low: 0.065, base: 0.07, high: 0.075 },
-      cascadia: { low: 0.06, base: 0.065, high: 0.07 },
-    },
-    ILF: {
-      external: { low: 0.055, base: 0.06, high: 0.065 },
-      cascadia: { low: 0.05, base: 0.055, high: 0.06 },
-    },
-    HOSPICE: {
-      external: { low: 0.10, base: 0.105, high: 0.11 },
-      cascadia: { low: 0.09, base: 0.095, high: 0.10 },
-    },
+  // Cascadia internal view: asset-type based (operational opportunity pricing)
+  const cascadiaRates: Record<string, { low: number; base: number; high: number }> = {
+    SNF: { low: 0.105, base: 0.115, high: 0.125 },
+    ALF: { low: 0.06, base: 0.065, high: 0.07 },
+    ILF: { low: 0.05, base: 0.055, high: 0.06 },
+    HOSPICE: { low: 0.09, base: 0.095, high: 0.10 },
   };
 
   const type = assetType?.toUpperCase() || 'SNF';
-  const assetData = capRates[type] || capRates['SNF'];
 
-  return view === 'external' ? assetData.external : assetData.cascadia;
+  if (view === 'cascadia') {
+    return cascadiaRates[type] || cascadiaRates['SNF'];
+  }
+
+  // External view: geography-aware (what lenders/REITs will underwrite)
+  const geoCapRate = getGeographicCapRate(state, assetType);
+  if (geoCapRate) {
+    const mid = (geoCapRate.low + geoCapRate.high) / 2;
+    return { low: geoCapRate.low, base: mid, high: geoCapRate.high };
+  }
+
+  // Fallback to national rates if no geographic data
+  const fallbackExternal: Record<string, { low: number; base: number; high: number }> = {
+    SNF: { low: 0.12, base: 0.125, high: 0.13 },
+    ALF: { low: 0.065, base: 0.07, high: 0.075 },
+    ILF: { low: 0.055, base: 0.06, high: 0.065 },
+    HOSPICE: { low: 0.10, base: 0.105, high: 0.11 },
+  };
+
+  return fallbackExternal[type] || fallbackExternal['SNF'];
+}
+
+// =============================================================================
+// REIMBURSEMENT UPSIDE CALCULATOR
+// =============================================================================
+
+export interface ReimbursementUpsideResult {
+  pdpmPotentialRevenue: number;
+  qualityBonusRevenue: { conservative: number; aggressive: number };
+  stateProgramRevenue: number;
+  totalConservative: number;
+  totalAggressive: number;
+  stateProgram: string | null;
+  implementationMonths: number;
+}
+
+export function calculateReimbursementUpside(
+  state: string,
+  beds: number,
+  currentRevenue: number,
+  cmsRating?: number,
+): ReimbursementUpsideResult {
+  // PDPM optimization potential (10-15% of current revenue)
+  const pdpmLow = currentRevenue * REIMBURSEMENT_OPTIMIZATION.pdpmPotential.low;
+  const pdpmHigh = currentRevenue * REIMBURSEMENT_OPTIMIZATION.pdpmPotential.high;
+  const pdpmMid = (pdpmLow + pdpmHigh) / 2;
+
+  // Quality bonus revenue based on star rating
+  let qualityConservative = 0;
+  let qualityAggressive = 0;
+  if (cmsRating && cmsRating <= 3) {
+    // Lower-rated facilities have more upside from quality improvement
+    const impact = QUALITY_REVENUE_IMPACT.find((q) => q.starRating === cmsRating);
+    if (impact) {
+      qualityConservative = beds * impact.revenuePerBed.low;
+      qualityAggressive = beds * impact.revenuePerBed.high;
+    }
+  } else if (cmsRating && cmsRating >= 4) {
+    // Already high-rated: smaller incremental gains
+    qualityConservative = beds * 800;
+    qualityAggressive = beds * 2000;
+  } else {
+    // Unknown rating — assume average
+    qualityConservative = beds * REIMBURSEMENT_OPTIMIZATION.qualityBonusPerBed.conservative.low;
+    qualityAggressive = beds * REIMBURSEMENT_OPTIMIZATION.qualityBonusPerBed.aggressive.high;
+  }
+
+  // State-specific programs
+  const stateUpper = state?.toUpperCase();
+  const stateProgram = STATE_REIMBURSEMENT_PROGRAMS[stateUpper];
+  let stateProgramRevenue = 0;
+  if (stateProgram) {
+    stateProgramRevenue = beds * ((stateProgram.perBedBenefit.low + stateProgram.perBedBenefit.high) / 2);
+  }
+
+  return {
+    pdpmPotentialRevenue: pdpmMid,
+    qualityBonusRevenue: { conservative: qualityConservative, aggressive: qualityAggressive },
+    stateProgramRevenue,
+    totalConservative: pdpmLow + qualityConservative + stateProgramRevenue,
+    totalAggressive: pdpmHigh + qualityAggressive + stateProgramRevenue,
+    stateProgram: stateProgram?.name || null,
+    implementationMonths: cmsRating && cmsRating <= 2 ? 18 : 12,
+  };
+}
+
+// =============================================================================
+// OPERATIONAL TIER CLASSIFICATION
+// =============================================================================
+
+export function classifyOperationalTier(metrics: {
+  revenuePerBedDay?: number;
+  occupancy?: number;
+  ebitdarMargin?: number;
+  laborCostPercent?: number;
+  agencyPercent?: number;
+  hppd?: number;
+}): { tier: OperationalTier; score: number; details: string[] } {
+  let strongCount = 0;
+  let weakCount = 0;
+  const details: string[] = [];
+  const tiers = SNF_OPERATIONAL_TIERS;
+
+  if (metrics.revenuePerBedDay != null) {
+    if (metrics.revenuePerBedDay >= tiers.strong.revenuePerBedDay.min) { strongCount++; details.push(`Revenue/bed/day $${metrics.revenuePerBedDay.toFixed(0)} (strong)`); }
+    else if (metrics.revenuePerBedDay < tiers.weak.revenuePerBedDay.max) { weakCount++; details.push(`Revenue/bed/day $${metrics.revenuePerBedDay.toFixed(0)} (weak)`); }
+    else { details.push(`Revenue/bed/day $${metrics.revenuePerBedDay.toFixed(0)} (average)`); }
+  }
+
+  if (metrics.occupancy != null) {
+    if (metrics.occupancy >= tiers.strong.occupancy.min) { strongCount++; details.push(`Occupancy ${metrics.occupancy.toFixed(1)}% (strong)`); }
+    else if (metrics.occupancy < tiers.weak.occupancy.max) { weakCount++; details.push(`Occupancy ${metrics.occupancy.toFixed(1)}% (weak)`); }
+    else { details.push(`Occupancy ${metrics.occupancy.toFixed(1)}% (average)`); }
+  }
+
+  if (metrics.ebitdarMargin != null) {
+    if (metrics.ebitdarMargin >= tiers.strong.ebitdarMargin.min) { strongCount++; details.push(`EBITDAR margin ${metrics.ebitdarMargin.toFixed(1)}% (strong)`); }
+    else if (metrics.ebitdarMargin < tiers.weak.ebitdarMargin.max) { weakCount++; details.push(`EBITDAR margin ${metrics.ebitdarMargin.toFixed(1)}% (weak)`); }
+    else { details.push(`EBITDAR margin ${metrics.ebitdarMargin.toFixed(1)}% (average)`); }
+  }
+
+  if (metrics.agencyPercent != null) {
+    if (metrics.agencyPercent <= tiers.strong.agencyPercent.max) { strongCount++; details.push(`Agency ${metrics.agencyPercent.toFixed(1)}% (strong)`); }
+    else if (metrics.agencyPercent > tiers.weak.agencyPercent.min) { weakCount++; details.push(`Agency ${metrics.agencyPercent.toFixed(1)}% (weak)`); }
+    else { details.push(`Agency ${metrics.agencyPercent.toFixed(1)}% (average)`); }
+  }
+
+  // Determine overall tier
+  let tier: OperationalTier;
+  if (strongCount >= 3) tier = 'strong';
+  else if (weakCount >= 3) tier = 'weak';
+  else if (strongCount > weakCount) tier = 'strong';
+  else if (weakCount > strongCount) tier = 'weak';
+  else tier = 'average';
+
+  const totalMetrics = strongCount + weakCount + (details.length - strongCount - weakCount);
+  const score = totalMetrics > 0 ? ((strongCount * 10 + (totalMetrics - strongCount - weakCount) * 5) / (totalMetrics * 10)) * 10 : 5;
+
+  return { tier, score, details };
+}
+
+// =============================================================================
+// KNOWLEDGE-ENHANCED PARTNER MATCHING
+// =============================================================================
+
+export function matchKnowledgeBasePartners(
+  deal: { assetType: string; primaryState?: string | null; askingPrice?: number | string | null },
+): { partner: BuyerProfile; matchScore: number; concerns: string[]; strengths: string[] }[] {
+  const dealValue = typeof deal.askingPrice === 'number' ? deal.askingPrice / 1e6 : 0; // Convert to millions
+  const dealRisk = deal.assetType === 'SNF' ? 'moderate' : 'conservative';
+  const state = deal.primaryState?.toUpperCase() || '';
+
+  return BUYER_PROFILES.map((partner) => {
+    let matchScore = 100;
+    const concerns: string[] = [];
+    const strengths: string[] = [];
+
+    // Asset type match
+    if (partner.assetFocus.includes(deal.assetType?.toUpperCase())) {
+      strengths.push(`Target asset class (${deal.assetType})`);
+    } else {
+      matchScore -= 30;
+      concerns.push(`${deal.assetType} not in focus: ${partner.assetFocus.join(', ')}`);
+    }
+
+    // Deal size match
+    if (dealValue > 0) {
+      if (dealValue >= partner.dealSizeRange.min && dealValue <= partner.dealSizeRange.max) {
+        strengths.push(`Deal size $${dealValue.toFixed(0)}M within range ($${partner.dealSizeRange.min}-${partner.dealSizeRange.max}M)`);
+      } else if (dealValue < partner.dealSizeRange.min) {
+        matchScore -= 25;
+        concerns.push(`Deal $${dealValue.toFixed(0)}M below minimum $${partner.dealSizeRange.min}M`);
+      } else {
+        matchScore -= 10;
+        concerns.push(`Deal $${dealValue.toFixed(0)}M above typical $${partner.dealSizeRange.max}M`);
+      }
+    }
+
+    // Geographic alignment
+    if (partner.geographicPreference === 'National') {
+      strengths.push('National buyer — no geographic constraints');
+    } else if (state && partner.geographicPreference.toLowerCase().includes(getRegion(state))) {
+      strengths.push(`Preferred geography: ${partner.geographicPreference}`);
+      matchScore += 5;
+    } else {
+      matchScore -= 10;
+      concerns.push(`Prefers ${partner.geographicPreference}`);
+    }
+
+    // Risk profile
+    if (partner.riskAppetite === 'opportunistic' || partner.riskAppetite === 'aggressive') {
+      strengths.push('High risk tolerance — open to turnaround');
+    } else if (partner.riskAppetite === 'conservative' && dealRisk !== 'conservative') {
+      matchScore -= 15;
+      concerns.push('Conservative risk appetite');
+    }
+
+    return {
+      partner,
+      matchScore: Math.max(matchScore, 0),
+      concerns,
+      strengths,
+    };
+  })
+  .sort((a, b) => b.matchScore - a.matchScore)
+  .slice(0, 8);
 }
 
 // Dual valuation with geography awareness

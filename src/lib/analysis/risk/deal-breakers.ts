@@ -3,6 +3,7 @@
 // =============================================================================
 
 import type { CMSData, OperatingMetrics, NormalizedFinancials, MarketData, FacilityProfile } from '../types';
+import { isCONState, getCONData } from '../knowledge';
 
 // =============================================================================
 // TYPES
@@ -276,6 +277,33 @@ export const DEAL_BREAKER_RULES: DealBreakerRule[] = [
         actual: `${occ.toFixed(1)}%`,
         reason: occ < 70 ? 'Severe oversupply in market' : undefined,
         exception: 'May consider if acquisition eliminates competitor capacity',
+      };
+    },
+  },
+
+  // Knowledge-Driven Deal Breakers
+  {
+    id: 'con_moratorium',
+    name: 'CON State Moratorium Risk',
+    description: 'State has CON requirements with very low approval rates or extended timelines affecting deal viability',
+    category: 'regulatory',
+    evaluate: (data) => {
+      const state = data.facility?.address?.state;
+      if (!state || !isCONState(state)) {
+        return { triggered: false, threshold: 'No CON moratorium', actual: state ? `${state} — no CON` : 'Unknown' };
+      }
+      const conData = getCONData(state);
+      if (!conData) {
+        return { triggered: false, threshold: 'No CON moratorium', actual: `${state} — CON data unavailable` };
+      }
+      // Trigger if approval rate < 55% AND extended timeline > 16 months
+      const isHighRisk = conData.approvalRate < 0.55 && conData.timelineMonths.extended > 16;
+      return {
+        triggered: isHighRisk,
+        threshold: 'Approval rate >55% and timeline <16mo',
+        actual: `${state}: ${(conData.approvalRate * 100).toFixed(0)}% approval, ${conData.timelineMonths.extended}mo max timeline`,
+        reason: isHighRisk ? `CON state with very low approval rate (${(conData.approvalRate * 100).toFixed(0)}%) and extended timeline (${conData.timelineMonths.extended}mo) — deal economics may not survive regulatory delay` : undefined,
+        exception: 'May proceed if deal does not require CON approval (existing bed count, no conversion)',
       };
     },
   },

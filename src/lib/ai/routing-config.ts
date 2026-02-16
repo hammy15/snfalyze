@@ -19,11 +19,11 @@ export const DEFAULT_ROUTING_RULES: RoutingRule[] = [
     fallbacks: ['anthropic', 'openai'],
     config: { temperature: 0.1, responseFormat: 'json' },
   },
-  // Phase 1/2: Multimodal — Gemini's vision + long context
+  // Phase 1/2: Multimodal extraction — Anthropic primary (reliable paid key), OpenAI/Gemini fallback
   {
     taskType: 'vision_extraction',
-    primary: 'gemini',
-    fallbacks: ['anthropic'],
+    primary: 'anthropic',
+    fallbacks: ['openai', 'gemini'],
     config: { maxTokens: 16384, temperature: 0.1 },
   },
   // Phase 2: Structured extraction — OpenAI json_mode

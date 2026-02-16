@@ -103,7 +103,8 @@ export class OpenAIProvider implements ProviderClient {
     } catch (err) {
       const error = err as Error & { status?: number };
       const statusCode = error.status;
-      const retryable = statusCode === 429 || statusCode === 500 || statusCode === 502 || statusCode === 503;
+      const retryable = statusCode === 429 || statusCode === 500 || statusCode === 502 || statusCode === 503
+        || !statusCode; // Connection/network errors are transient — retry
       throw new ProviderError('openai', statusCode, retryable, error.message, error);
     }
   }

@@ -87,6 +87,7 @@ export class GeminiProvider implements ProviderClient {
         statusCode === 429 ||
         statusCode === 500 ||
         statusCode === 503 ||
+        !statusCode ||  // Connection/network errors are transient — retry
         error.message?.includes('RESOURCE_EXHAUSTED');
       throw new ProviderError('gemini', statusCode, retryable, error.message, error);
     }

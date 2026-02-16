@@ -37,7 +37,7 @@ export class AnthropicProvider implements ProviderClient {
                 ? m.content
                 : this.convertContentParts(m.content),
             }))
-        : [{ role: 'user' as const, content: request.userPrompt }];
+        : this.buildUserMessage(request);
 
       // If responseFormat is json, append instruction to user message
       if (request.responseFormat === 'json' && messages.length > 0) {
@@ -71,7 +71,8 @@ export class AnthropicProvider implements ProviderClient {
     } catch (err) {
       const error = err as Error & { status?: number };
       const statusCode = error.status;
-      const retryable = statusCode === 429 || statusCode === 500 || statusCode === 502 || statusCode === 503;
+      const retryable = statusCode === 429 || statusCode === 500 || statusCode === 502 || statusCode === 503
+        || !statusCode; // Connection/network errors (no status code) are transient — retry
       throw new ProviderError('anthropic', statusCode, retryable, error.message, error);
     }
   }
@@ -87,6 +88,28 @@ export class AnthropicProvider implements ProviderClient {
     } catch {
       return false;
     }
+  }
+
+  /** Build user message from userPrompt + optional images */
+  private buildUserMessage(request: LLMRequest): Anthropic.MessageParam[] {
+    if (request.images && request.images.length > 0) {
+      const content: Anthropic.MessageCreateParams['messages'][0]['content'] = [];
+      // Add images first
+      for (const img of request.images) {
+        content.push({
+          type: 'image' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: (img.mimeType || 'image/png') as 'image/png',
+            data: img.data,
+          },
+        });
+      }
+      // Then text prompt
+      content.push({ type: 'text' as const, text: request.userPrompt });
+      return [{ role: 'user' as const, content }];
+    }
+    return [{ role: 'user' as const, content: request.userPrompt }];
   }
 
   private convertContentParts(parts: LLMContentPart[]): Anthropic.MessageCreateParams['messages'][0]['content'] {

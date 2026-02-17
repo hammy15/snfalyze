@@ -122,7 +122,121 @@ export function FinancialConsolidation({ stageData, onUpdate, dealId }: Financia
     const loadData = async () => {
       setLoading(true);
 
-      // First, try to load from extraction data (available before deal is created)
+      // First, try vision extraction data (7-stage wizard pipeline)
+      const visionFacilities = stageData.visionExtraction?.facilities || [];
+      const analysisResult = stageData.analysisResult;
+
+      if (visionFacilities.length > 0) {
+        // Build data from vision extraction facilities
+        const totalRevenue = analysisResult?.financialSummary?.totalRevenue ||
+          visionFacilities.reduce((sum: number, f: any) => {
+            const revItems = (f.lineItems || []).filter((i: any) => i.category === 'revenue');
+            return sum + revItems.reduce((s: number, i: any) => {
+              const vals = (i.values || []).map((v: any) => v.value || 0);
+              if (vals.length === 0) return s;
+              const median = vals.sort((a: number, b: number) => a - b)[Math.floor(vals.length / 2)];
+              const largest = Math.max(...vals);
+              // Detect annual total vs monthly
+              if (largest > median * 5 && vals.length > 3) return s + largest;
+              return s + vals.slice(-12).reduce((a: number, b: number) => a + b, 0);
+            }, 0);
+          }, 0);
+        const totalExpenses = analysisResult?.financialSummary?.totalExpenses ||
+          visionFacilities.reduce((sum: number, f: any) => {
+            const expItems = (f.lineItems || []).filter((i: any) => i.category === 'expense');
+            return sum + expItems.reduce((s: number, i: any) => {
+              const vals = (i.values || []).map((v: any) => v.value || 0);
+              if (vals.length === 0) return s;
+              const median = vals.sort((a: number, b: number) => a - b)[Math.floor(vals.length / 2)];
+              const largest = Math.max(...vals);
+              if (largest > median * 5 && vals.length > 3) return s + largest;
+              return s + vals.slice(-12).reduce((a: number, b: number) => a + b, 0);
+            }, 0);
+          }, 0);
+        const totalNoi = totalRevenue - totalExpenses;
+        const totalBeds = analysisResult?.financialSummary?.totalBeds ||
+          visionFacilities.reduce((sum: number, f: any) => sum + (f.beds || 0), 0);
+
+        setRollup({
+          totalRevenue,
+          totalExpenses,
+          totalNoi,
+          noiMargin: totalRevenue > 0 ? (totalNoi / totalRevenue) * 100 : 0,
+          totalBeds,
+          averageOccupancy: 85,
+        });
+
+        // Build census data
+        const censusFromVision: CensusData[] = visionFacilities.map((f: any, idx: number) => ({
+          facilityId: `facility-${idx}`,
+          facilityName: f.name || `Facility ${idx + 1}`,
+          licensedBeds: f.beds || 0,
+          averageDailyCensus: f.census?.totalDays?.[0]?.value || (f.beds || 0) * 0.85,
+          occupancyRate: f.beds ? ((f.census?.totalDays?.[0]?.value || f.beds * 0.85) / f.beds) : 0.85,
+          isVerified: false,
+        }));
+        setCensusData(censusFromVision);
+
+        // Build PPD data
+        const ppdFromVision: PPDData[] = visionFacilities.map((f: any, idx: number) => {
+          const adc = f.census?.totalDays?.[0]?.value || (f.beds || 1) * 0.85;
+          const daysInYear = 365;
+          const patientDays = adc * daysInYear;
+          const fRevenue = (f.lineItems || []).filter((i: any) => i.category === 'revenue')
+            .reduce((s: number, i: any) => s + ((i.values || []).slice(-1)[0]?.value || 0), 0);
+          const fExpenses = (f.lineItems || []).filter((i: any) => i.category === 'expense')
+            .reduce((s: number, i: any) => s + ((i.values || []).slice(-1)[0]?.value || 0), 0);
+          return {
+            facilityId: `facility-${idx}`,
+            facilityName: f.name || `Facility ${idx + 1}`,
+            revenuePpd: patientDays > 0 ? fRevenue / patientDays : 0,
+            laborPpd: 0,
+            expensesPpd: patientDays > 0 ? fExpenses / patientDays : 0,
+            noiPpd: patientDays > 0 ? (fRevenue - fExpenses) / patientDays : 0,
+          };
+        });
+        setPpdData(ppdFromVision);
+
+        // Build facility P&L
+        const facilityPnlFromVision: FacilityPnL[] = visionFacilities.map((f: any, idx: number) => {
+          const fRev = (f.lineItems || []).filter((i: any) => i.category === 'revenue')
+            .reduce((s: number, i: any) => {
+              const vals = (i.values || []).map((v: any) => v.value || 0);
+              if (vals.length === 0) return s;
+              const median = vals.sort((a: number, b: number) => a - b)[Math.floor(vals.length / 2)];
+              const largest = Math.max(...vals);
+              if (largest > median * 5 && vals.length > 3) return s + largest;
+              return s + vals.slice(-12).reduce((a: number, b: number) => a + b, 0);
+            }, 0);
+          const fExp = (f.lineItems || []).filter((i: any) => i.category === 'expense')
+            .reduce((s: number, i: any) => {
+              const vals = (i.values || []).map((v: any) => v.value || 0);
+              if (vals.length === 0) return s;
+              const median = vals.sort((a: number, b: number) => a - b)[Math.floor(vals.length / 2)];
+              const largest = Math.max(...vals);
+              if (largest > median * 5 && vals.length > 3) return s + largest;
+              return s + vals.slice(-12).reduce((a: number, b: number) => a + b, 0);
+            }, 0);
+          const fNoi = fRev - fExp;
+          return {
+            facilityId: `facility-${idx}`,
+            facilityName: f.name || `Facility ${idx + 1}`,
+            revenue: fRev,
+            expenses: fExp,
+            noi: fNoi,
+            margin: fRev > 0 ? (fNoi / fRev) * 100 : 0,
+          };
+        });
+        setFacilityPnl(facilityPnlFromVision);
+
+        if (stageData.financialConsolidation?.proformaGenerated) {
+          setProformaGenerated(true);
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Fallback: try legacy extraction data
       const extraction = (stageData as any).extraction;
       const facilities = stageData.facilityIdentification?.facilities || [];
 

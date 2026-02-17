@@ -86,6 +86,9 @@ export function AnalysisValuation({ stageData, onUpdate, sessionId }: AnalysisVa
             narrative: data.data.narrative,
             confidenceScore: data.data.confidenceScore,
             valuations: data.data.valuations,
+            purchaseRecommendation: data.data.purchaseRecommendation,
+            rentRecommendation: data.data.rentRecommendation,
+            financialSummary: data.data.financialSummary,
             riskAssessment: data.data.riskAssessment,
             selfValidation: data.data.selfValidation,
             criticalQuestions: data.data.criticalQuestions,
@@ -322,7 +325,75 @@ export function AnalysisValuation({ stageData, onUpdate, sessionId }: AnalysisVa
               </Card>
             ))}
 
-            {/* Valuation range */}
+            {/* Purchase Price Recommendation */}
+            {(analysisResult as any).purchaseRecommendation && (() => {
+              const pr = (analysisResult as any).purchaseRecommendation;
+              return (
+                <Card className="border-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/20">
+                  <CardContent className="py-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Target className="w-5 h-5 text-emerald-600" />
+                      <p className="font-semibold text-emerald-800 dark:text-emerald-200">Recommended Purchase Price</p>
+                    </div>
+                    <div className="text-center mb-4">
+                      <p className="text-3xl font-bold text-emerald-700 dark:text-emerald-300">{formatCurrency(pr.recommended)}</p>
+                      {pr.perBed > 0 && <p className="text-sm text-emerald-600">{formatCurrency(pr.perBed)} per bed</p>}
+                    </div>
+                    <div className="flex items-center gap-4 text-sm">
+                      <div className="text-center flex-1">
+                        <p className="text-xs text-surface-500">Conservative</p>
+                        <p className="font-medium text-rose-600">{formatCurrency(pr.low)}</p>
+                      </div>
+                      <div className="flex-1 h-2 bg-surface-200 dark:bg-surface-700 rounded-full overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-rose-400 via-emerald-500 to-blue-400 rounded-full" style={{ width: '100%' }} />
+                      </div>
+                      <div className="text-center flex-1">
+                        <p className="text-xs text-surface-500">Aggressive</p>
+                        <p className="font-medium text-blue-600">{formatCurrency(pr.high)}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {/* Rent Recommendation */}
+            {(analysisResult as any).rentRecommendation && (() => {
+              const rent = (analysisResult as any).rentRecommendation;
+              return (
+                <Card className="border-2 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/20">
+                  <CardContent className="py-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Building2 className="w-5 h-5 text-blue-600" />
+                      <p className="font-semibold text-blue-800 dark:text-blue-200">Rent Recommendation (Triple-Net)</p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 text-center mb-3">
+                      <div>
+                        <p className="text-xs text-surface-500">Annual Rent</p>
+                        <p className="text-lg font-bold text-blue-700">{formatCurrency(rent.annualRent)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-surface-500">Monthly Rent</p>
+                        <p className="text-lg font-bold text-blue-700">{formatCurrency(rent.monthlyRent)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-surface-500">Per Bed/Month</p>
+                        <p className="text-lg font-bold text-blue-700">{formatCurrency(rent.rentPerBedMonth)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-sm p-2 rounded bg-blue-100/50 dark:bg-blue-900/30">
+                      <span>Lease Yield: {((rent.leaseYield || 0) * 100).toFixed(1)}%</span>
+                      <span className={rent.sustainable ? 'text-emerald-600' : 'text-rose-600'}>
+                        Coverage: {(rent.rentCoverage || 0).toFixed(2)}x {rent.sustainable ? '(Healthy)' : '(Weak)'}
+                      </span>
+                    </div>
+                    {rent.notes && <p className="text-xs text-surface-500 mt-2">{rent.notes}</p>}
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {/* Valuation Methods */}
             {analysisResult.valuations && analysisResult.valuations.length > 0 && (() => {
               const values = analysisResult.valuations!.map(v => v.value).filter(v => v > 0);
               const min = Math.min(...values);

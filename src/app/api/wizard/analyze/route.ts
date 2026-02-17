@@ -111,18 +111,52 @@ async function handleStageDataAnalysis(body: {
     );
   }
 
-  // Build financial metrics from vision extraction
+  // ===================================================================
+  // SMART FINANCIAL METRICS — avoid double-counting annual + monthly
+  // ===================================================================
   const totalBeds = facilities.reduce((sum: number, f: any) => sum + (f.beds || 0), 0);
-  const totalRevenue = facilities.reduce((sum: number, f: any) => {
-    const revItems = (f.lineItems || []).filter((i: any) => i.category === 'revenue');
-    return sum + revItems.reduce((s: number, item: any) =>
-      s + (item.values?.reduce((t: number, v: any) => t + (v.value || 0), 0) || 0), 0);
-  }, 0);
-  const totalExpenses = facilities.reduce((sum: number, f: any) => {
-    const expItems = (f.lineItems || []).filter((i: any) => i.category === 'expense');
-    return sum + expItems.reduce((s: number, item: any) =>
-      s + (item.values?.reduce((t: number, v: any) => t + (v.value || 0), 0) || 0), 0);
-  }, 0);
+
+  function getAnnualValue(facility: any, category: string, labelPattern: RegExp): number {
+    const items = (facility.lineItems || []).filter((i: any) =>
+      i.category === category && labelPattern.test(i.label)
+    );
+    if (items.length === 0) return 0;
+    const item = items[0];
+    const values = item.values || [];
+    if (values.length === 0) return 0;
+
+    // Strategy 1: Look for an annual-period value (period ending in "-12" with value > monthly)
+    const monthlyValues = values.filter((v: any) => v.value > 0).sort((a: any, b: any) => b.value - a.value);
+    if (monthlyValues.length === 0) return 0;
+
+    // If largest value is > 5x median, it's likely an annual total
+    const median = monthlyValues[Math.floor(monthlyValues.length / 2)]?.value || 0;
+    const largest = monthlyValues[0]?.value || 0;
+    if (largest > median * 5 && monthlyValues.length > 3) {
+      return largest; // This is the annual total
+    }
+
+    // Strategy 2: Sum the 12 most recent monthly values
+    const sorted = values
+      .filter((v: any) => v.value > 0)
+      .sort((a: any, b: any) => (a.period || '').localeCompare(b.period || ''));
+    const last12 = sorted.slice(-12);
+    return last12.reduce((s: number, v: any) => s + (v.value || 0), 0);
+  }
+
+  // Get annual revenue and expenses per facility
+  const facilityMetrics = facilities.map((f: any) => {
+    const revenue = getAnnualValue(f, 'revenue', /total.*revenue|total.*operating/i)
+      || getAnnualValue(f, 'revenue', /revenue/i);
+    const expenses = getAnnualValue(f, 'expense', /total.*expense|total.*operating/i)
+      || getAnnualValue(f, 'expense', /expense|nursing/i);
+    const nursing = getAnnualValue(f, 'expense', /total.*nursing|nursing.*service/i);
+    const totalCensus = getAnnualValue(f, 'metric', /total.*census/i);
+    return { name: f.name, beds: f.beds || 0, revenue, expenses, nursing, totalCensus, noi: revenue - expenses };
+  });
+
+  const totalRevenue = facilityMetrics.reduce((s: number, m: any) => s + m.revenue, 0);
+  const totalExpenses = facilityMetrics.reduce((s: number, m: any) => s + m.expenses, 0);
   const noi = totalRevenue - totalExpenses;
   const noiMargin = totalRevenue > 0 ? (noi / totalRevenue) * 100 : 0;
 
@@ -190,17 +224,87 @@ Return ONLY valid JSON.`;
     console.error('AI analysis error, using fallback:', aiError);
   }
 
-  // Build valuations
-  const midCapRate = 0.115;
-  const capRateValue = noi > 0 ? noi / midCapRate : 0;
-  const pricePerBed = totalBeds > 0 ? 20000 : 0;
+  // ===================================================================
+  // VALUATIONS — real purchase price recommendations
+  // ===================================================================
+  // Cascadia cap rates: SNF 12.0-12.5%, ALF 6.5-7.5%
+  const assetType = stageData.dealStructure?.assetType || 'SNF';
+  const isSnf = assetType === 'SNF' || assetType === 'snf';
+  const lowCapRate = isSnf ? 0.125 : 0.075;     // Conservative (lender)
+  const midCapRate = isSnf ? 0.115 : 0.070;     // Mid-market
+  const highCapRate = isSnf ? 0.105 : 0.065;    // Aggressive (Cascadia execution)
+
+  // Normalized NOI: adjust management fee to 5%, agency to 3%
+  const totalNursing = facilityMetrics.reduce((s: number, m: any) => s + m.nursing, 0);
+  const managementFee5pct = totalRevenue * 0.05;
+  const agencyTarget = totalNursing * 0.03;
+  const normalizedNOI = noi; // Use extracted NOI (already includes actual management/agency)
+
+  const capRateValueLow = normalizedNOI > 0 ? normalizedNOI / lowCapRate : 0;
+  const capRateValueMid = normalizedNOI > 0 ? normalizedNOI / midCapRate : 0;
+  const capRateValueHigh = normalizedNOI > 0 ? normalizedNOI / highCapRate : 0;
+
+  // Per-bed metric: SNF typical $15K-$35K/bed
+  const avgBedValue = isSnf ? 25000 : 75000;
+  const pricePerBedValue = totalBeds > 0 ? totalBeds * avgBedValue : 0;
+
+  // Revenue multiple: SNF 0.8-1.2x, ALF 1.5-2.5x
+  const revMultiple = isSnf ? 1.0 : 2.0;
 
   const valuations = [
-    { method: 'cap_rate', label: 'Cap Rate (11.5%)', value: capRateValue, confidence: 0.9, notes: `NOI / 11.5% cap` },
-    { method: 'price_per_bed', label: 'Price Per Bed ($20K)', value: totalBeds * pricePerBed, confidence: 0.7, notes: `${totalBeds} beds × $${pricePerBed.toLocaleString()}` },
-    { method: 'noi_multiple', label: 'NOI Multiple (7x)', value: noi * 7, confidence: 0.8, notes: `NOI × 7x` },
-    { method: 'revenue_multiple', label: 'Revenue Multiple (1.0x)', value: totalRevenue, confidence: 0.6, notes: `Revenue × 1.0x` },
+    { method: 'cap_rate', label: `Cap Rate (${(midCapRate*100).toFixed(1)}%)`, value: capRateValueMid, confidence: 0.9, notes: `$${(normalizedNOI/1000).toFixed(0)}K NOI / ${(midCapRate*100).toFixed(1)}% cap = $${(capRateValueMid/1000000).toFixed(2)}M` },
+    { method: 'cap_rate_conservative', label: `Conservative (${(lowCapRate*100).toFixed(1)}% Cap)`, value: capRateValueLow, confidence: 0.85, notes: `Lender/external view: $${(capRateValueLow/1000000).toFixed(2)}M` },
+    { method: 'cap_rate_aggressive', label: `Execution (${(highCapRate*100).toFixed(1)}% Cap)`, value: capRateValueHigh, confidence: 0.75, notes: `Cascadia stabilized value: $${(capRateValueHigh/1000000).toFixed(2)}M` },
+    { method: 'price_per_bed', label: `Price Per Bed ($${(avgBedValue/1000).toFixed(0)}K)`, value: pricePerBedValue, confidence: 0.7, notes: `${totalBeds} beds × $${avgBedValue.toLocaleString()} = $${(pricePerBedValue/1000000).toFixed(2)}M` },
+    { method: 'noi_multiple', label: 'NOI Multiple (7x)', value: normalizedNOI * 7, confidence: 0.8, notes: `$${(normalizedNOI/1000).toFixed(0)}K × 7 = $${((normalizedNOI*7)/1000000).toFixed(2)}M` },
+    { method: 'revenue_multiple', label: `Revenue Multiple (${revMultiple}x)`, value: totalRevenue * revMultiple, confidence: 0.6, notes: `$${(totalRevenue/1000000).toFixed(2)}M × ${revMultiple}x` },
   ];
+
+  // ===================================================================
+  // PURCHASE PRICE & RENT RECOMMENDATIONS
+  // ===================================================================
+  const valuationValues = valuations.map(v => v.value).filter(v => v > 0);
+  const weightedAvgValue = valuations.reduce((s, v) => s + v.value * v.confidence, 0) /
+    valuations.reduce((s, v) => s + v.confidence, 0);
+  const minValue = Math.min(...valuationValues);
+  const maxValue = Math.max(...valuationValues);
+
+  // Recommended purchase price: weighted average of methods
+  const recommendedPurchasePrice = weightedAvgValue;
+  const purchasePriceLow = capRateValueLow;   // Conservative
+  const purchasePriceHigh = capRateValueHigh;  // Aggressive
+  const pricePerBedActual = totalBeds > 0 ? recommendedPurchasePrice / totalBeds : 0;
+
+  // Rent recommendation (for sale-leaseback or triple-net lease)
+  // Lease yield: SNF 8.5-9.5%, ALF 7.0-8.0%
+  const leaseYield = isSnf ? 0.09 : 0.075;
+  const annualRent = recommendedPurchasePrice * leaseYield;
+  const monthlyRent = annualRent / 12;
+  const rentPerBedMonth = totalBeds > 0 ? monthlyRent / totalBeds : 0;
+  // Rent coverage: NOI / Rent (target > 1.3x)
+  const rentCoverage = annualRent > 0 ? noi / annualRent : 0;
+
+  const purchaseRecommendation = {
+    recommended: recommendedPurchasePrice,
+    low: purchasePriceLow,
+    high: purchasePriceHigh,
+    perBed: pricePerBedActual,
+    method: 'Weighted average of 6 valuation methods',
+  };
+
+  const rentRecommendation = {
+    annualRent,
+    monthlyRent,
+    rentPerBedMonth,
+    leaseYield,
+    rentCoverage,
+    sustainable: rentCoverage > 1.3,
+    notes: rentCoverage > 1.5
+      ? `Strong coverage at ${rentCoverage.toFixed(2)}x — rent is well-supported`
+      : rentCoverage > 1.3
+        ? `Adequate coverage at ${rentCoverage.toFixed(2)}x — minimal cushion`
+        : `Weak coverage at ${rentCoverage.toFixed(2)}x — rent may stress operations`,
+  };
 
   // Build risk assessment
   const riskAssessment = {
@@ -228,12 +332,16 @@ Return ONLY valid JSON.`;
     coverageUnderStress: noi * 0.75 > 0 ? 'Portfolio survives stress scenario' : 'Portfolio at risk under stress',
   };
 
-  // Fallback thesis/narrative
+  // Fallback thesis/narrative with real purchase price + rent numbers
   if (!thesis) {
-    thesis = `${facilities.length}-facility ${stageData.dealStructure?.assetType || 'SNF'} portfolio with ${totalBeds} beds generating $${(noi/1000).toFixed(0)}K NOI at ${noiMargin.toFixed(1)}% margin. ${riskAssessment.recommendation === 'pursue' ? 'Recommend pursuing.' : riskAssessment.recommendation === 'conditional' ? 'Conditional pursuit.' : 'Recommend passing.'}`;
+    thesis = `${facilities.length}-facility ${assetType} portfolio with ${totalBeds || '?'} beds generating $${(totalRevenue/1000000).toFixed(1)}M revenue and $${(noi/1000000).toFixed(1)}M NOI (${noiMargin.toFixed(1)}% margin). Recommended purchase price: $${(recommendedPurchasePrice/1000000).toFixed(2)}M ($${totalBeds > 0 ? Math.round(pricePerBedActual).toLocaleString() : 'N/A'}/bed). ${riskAssessment.recommendation === 'pursue' ? 'Recommend pursuing.' : riskAssessment.recommendation === 'conditional' ? 'Conditional pursuit with operational upside.' : 'Recommend passing.'}`;
   }
   if (!narrative) {
-    narrative = `This portfolio generates $${(totalRevenue/1000000).toFixed(2)}M in revenue with $${(noi/1000000).toFixed(2)}M NOI. At an 11.5% cap rate, implied value is $${(capRateValue/1000000).toFixed(2)}M ($${totalBeds > 0 ? (capRateValue/totalBeds).toFixed(0) : 'N/A'}/bed). The ${noiMargin.toFixed(1)}% NOI margin ${noiMargin > 15 ? 'provides adequate cushion' : 'is below target and requires operational improvement'}.`;
+    narrative = `This portfolio generates $${(totalRevenue/1000000).toFixed(2)}M in annual revenue with $${(noi/1000000).toFixed(2)}M NOI (${noiMargin.toFixed(1)}% margin). ` +
+      `At a ${(midCapRate*100).toFixed(1)}% cap rate, the implied value is $${(capRateValueMid/1000000).toFixed(2)}M. ` +
+      `The conservative (lender) view at ${(lowCapRate*100).toFixed(1)}% cap yields $${(capRateValueLow/1000000).toFixed(2)}M, while Cascadia's execution view at ${(highCapRate*100).toFixed(1)}% cap yields $${(capRateValueHigh/1000000).toFixed(2)}M. ` +
+      `Recommended purchase price range: $${(purchasePriceLow/1000000).toFixed(2)}M - $${(purchasePriceHigh/1000000).toFixed(2)}M ($${totalBeds > 0 ? Math.round(purchasePriceLow/totalBeds).toLocaleString() : '?'} - $${totalBeds > 0 ? Math.round(purchasePriceHigh/totalBeds).toLocaleString() : '?'}/bed). ` +
+      `For a triple-net lease at ${(leaseYield*100).toFixed(1)}% yield, annual rent would be $${(annualRent/1000).toFixed(0)}K ($${totalBeds > 0 ? Math.round(rentPerBedMonth).toLocaleString() : '?'}/bed/month) with ${rentCoverage.toFixed(2)}x coverage.`;
   }
 
   return NextResponse.json({
@@ -243,6 +351,17 @@ Return ONLY valid JSON.`;
       narrative,
       confidenceScore,
       valuations,
+      purchaseRecommendation,
+      rentRecommendation,
+      financialSummary: {
+        totalRevenue,
+        totalExpenses,
+        noi,
+        noiMargin,
+        totalBeds,
+        facilityCount: facilities.length,
+        perFacility: facilityMetrics,
+      },
       riskAssessment,
       selfValidation,
       criticalQuestions: {

@@ -102,13 +102,17 @@ export async function POST(request: NextRequest) {
     // Parse file content inline — NO background processing (blocks Vercel warm instances)
     let rawText = '';
     let extractedData: Record<string, any> = {};
-    const isImage = file.type.includes('image');
+    // Detect images by MIME type OR extension (file.type can be empty/wrong on Vercel)
+    const isImage = file.type.includes('image') || /\.(png|jpg|jpeg|gif|webp|bmp|tiff)$/i.test(lowerName);
 
     if (isImage) {
       rawText = `[Image: ${file.name}]`;
+      // Derive MIME type from extension if file.type is missing/wrong
+      const ext = lowerName.split('.').pop() || 'png';
+      const mimeType = file.type.includes('image') ? file.type : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
       extractedData = {
         imageBase64: fileBuffer.toString('base64'),
-        imageMimeType: file.type,
+        imageMimeType: mimeType,
         requiresVision: true,
       };
     } else if (lowerName.endsWith('.pdf')) {

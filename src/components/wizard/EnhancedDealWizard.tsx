@@ -175,6 +175,30 @@ export interface WizardStageData {
       whatBreaksThisDeal: string[];
       whatRiskIsUnderpriced: string[];
     };
+    purchaseRecommendation?: {
+      recommended: number;
+      low: number;
+      high: number;
+      perBed: number;
+      method: string;
+    };
+    rentRecommendation?: {
+      annualRent: number;
+      monthlyRent: number;
+      rentPerBedMonth: number;
+      leaseYield: number;
+      rentCoverage: number;
+      sustainable: boolean;
+      notes: string;
+    };
+    financialSummary?: {
+      totalRevenue: number;
+      totalExpenses: number;
+      noi: number;
+      noiMargin: number;
+      totalBeds: number;
+      facilityCount: number;
+    };
   };
   financialConsolidation?: {
     censusVerified?: boolean;

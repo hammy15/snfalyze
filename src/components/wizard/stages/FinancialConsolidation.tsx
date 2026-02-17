@@ -466,7 +466,7 @@ export function FinancialConsolidation({ stageData, onUpdate, dealId }: Financia
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-4 w-full">
+        <TabsList className="grid grid-cols-5 w-full">
           <TabsTrigger value="census" className="flex items-center gap-2">
             <Users className="w-4 h-4" />
             <span className="hidden sm:inline">Census</span>
@@ -482,6 +482,10 @@ export function FinancialConsolidation({ stageData, onUpdate, dealId }: Financia
           <TabsTrigger value="proforma" className="flex items-center gap-2">
             <FileSpreadsheet className="w-4 h-4" />
             <span className="hidden sm:inline">Proforma</span>
+          </TabsTrigger>
+          <TabsTrigger value="valuation" className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4" />
+            <span className="hidden sm:inline">Valuation</span>
           </TabsTrigger>
         </TabsList>
 
@@ -873,6 +877,148 @@ export function FinancialConsolidation({ stageData, onUpdate, dealId }: Financia
                     Upload documents with financial data to enable proforma generation
                   </p>
                 )}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Valuation Tab — Best Practices */}
+        <TabsContent value="valuation" className="space-y-4">
+          {rollup && rollup.totalNoi > 0 ? (() => {
+            const noi = rollup.totalNoi;
+            const beds = rollup.totalBeds || 1;
+            const capRates = [0.10, 0.105, 0.11, 0.115, 0.12, 0.125, 0.13];
+            const revPpd = beds > 0 ? rollup.totalRevenue / (beds * 365) : 0;
+            const expPpd = beds > 0 ? rollup.totalExpenses / (beds * 365) : 0;
+            const noiPpd = revPpd - expPpd;
+            const stressNoi = noi * 0.75; // 15% rev decline + 10% exp increase
+
+            return (
+              <>
+                {/* Cap Rate Sensitivity */}
+                <Card variant="flat">
+                  <CardHeader className="py-3">
+                    <CardTitle className="text-sm">Cap Rate Sensitivity Analysis</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left py-2 font-medium">Cap Rate</th>
+                            <th className="text-right py-2 font-medium">Value</th>
+                            <th className="text-right py-2 font-medium">Per Bed</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {capRates.map(rate => {
+                            const value = noi / rate;
+                            const perBed = value / beds;
+                            const isMid = rate === 0.115;
+                            return (
+                              <tr key={rate} className={cn('border-b', isMid && 'bg-primary-50 dark:bg-primary-900/30 font-semibold')}>
+                                <td className="py-2">{(rate * 100).toFixed(1)}%{isMid ? ' (Base)' : ''}</td>
+                                <td className="text-right py-2 font-mono">{formatCurrency(value)}</td>
+                                <td className="text-right py-2 font-mono">{formatCurrency(perBed)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Dual View */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Card variant="flat" className="border-l-4 border-l-blue-500">
+                    <CardHeader className="py-3">
+                      <CardTitle className="text-sm text-blue-600">External / Lender View</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm">
+                      <div className="flex justify-between"><span>Cap Rate</span><span className="font-mono">12.0%</span></div>
+                      <div className="flex justify-between"><span>Implied Value</span><span className="font-mono">{formatCurrency(noi / 0.12)}</span></div>
+                      <div className="flex justify-between"><span>Per Bed</span><span className="font-mono">{formatCurrency(noi / 0.12 / beds)}</span></div>
+                      <div className="flex justify-between"><span>NOI (As-Is)</span><span className="font-mono">{formatCurrency(noi)}</span></div>
+                    </CardContent>
+                  </Card>
+                  <Card variant="flat" className="border-l-4 border-l-emerald-500">
+                    <CardHeader className="py-3">
+                      <CardTitle className="text-sm text-emerald-600">Cascadia / Execution View</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm">
+                      <div className="flex justify-between"><span>Target Cap Rate</span><span className="font-mono">10.5%</span></div>
+                      <div className="flex justify-between"><span>Stabilized Value</span><span className="font-mono">{formatCurrency(noi * 1.15 / 0.105)}</span></div>
+                      <div className="flex justify-between"><span>Per Bed (Stabilized)</span><span className="font-mono">{formatCurrency(noi * 1.15 / 0.105 / beds)}</span></div>
+                      <div className="flex justify-between"><span>NOI (Stabilized +15%)</span><span className="font-mono">{formatCurrency(noi * 1.15)}</span></div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Stress Test */}
+                <Card variant="flat" className="border-l-4 border-l-amber-500">
+                  <CardHeader className="py-3">
+                    <CardTitle className="text-sm text-amber-600">Recession Stress Scenario</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <p className="text-surface-500">Revenue (-15%)</p>
+                        <p className="font-mono font-medium">{formatCurrency(rollup.totalRevenue * 0.85)}</p>
+                      </div>
+                      <div>
+                        <p className="text-surface-500">Expenses (+10%)</p>
+                        <p className="font-mono font-medium">{formatCurrency(rollup.totalExpenses * 1.10)}</p>
+                      </div>
+                      <div>
+                        <p className="text-surface-500">Stressed NOI</p>
+                        <p className={cn('font-mono font-medium', stressNoi > 0 ? 'text-emerald-600' : 'text-rose-600')}>
+                          {formatCurrency(rollup.totalRevenue * 0.85 - rollup.totalExpenses * 1.10)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-surface-500">Stressed Value (12%)</p>
+                        <p className="font-mono font-medium">
+                          {formatCurrency(Math.max(0, (rollup.totalRevenue * 0.85 - rollup.totalExpenses * 1.10)) / 0.12)}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* PPD Metrics */}
+                <Card variant="flat">
+                  <CardHeader className="py-3">
+                    <CardTitle className="text-sm">Per Patient Day (PPD) Metrics</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div className="text-center p-3 bg-surface-50 dark:bg-surface-800 rounded-lg">
+                        <p className="text-surface-500 text-xs">Revenue PPD</p>
+                        <p className="text-xl font-bold text-emerald-600">${revPpd.toFixed(2)}</p>
+                      </div>
+                      <div className="text-center p-3 bg-surface-50 dark:bg-surface-800 rounded-lg">
+                        <p className="text-surface-500 text-xs">Expense PPD</p>
+                        <p className="text-xl font-bold text-rose-600">${expPpd.toFixed(2)}</p>
+                      </div>
+                      <div className="text-center p-3 bg-surface-50 dark:bg-surface-800 rounded-lg">
+                        <p className="text-surface-500 text-xs">NOI PPD</p>
+                        <p className="text-xl font-bold text-primary-600">${noiPpd.toFixed(2)}</p>
+                      </div>
+                      <div className="text-center p-3 bg-surface-50 dark:bg-surface-800 rounded-lg">
+                        <p className="text-surface-500 text-xs">NOI Margin</p>
+                        <p className="text-xl font-bold">{rollup.noiMargin.toFixed(1)}%</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            );
+          })() : (
+            <Card variant="flat" className="text-center py-8">
+              <CardContent>
+                <TrendingUp className="w-12 h-12 mx-auto text-surface-300 mb-4" />
+                <p className="text-surface-500">Financial data required for valuation analysis.</p>
               </CardContent>
             </Card>
           )}

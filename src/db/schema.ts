@@ -141,6 +141,8 @@ export const wizardStageTypeEnum = pgEnum('wizard_stage_type', [
   'facility_verification',
   'document_extraction',
   'coa_mapping_review',
+  'reconciliation',
+  'analysis',
   'financial_consolidation',
 ]);
 

@@ -5,8 +5,11 @@ import { Check, CircleDot } from 'lucide-react';
 
 const WIZARD_STAGES = [
   { id: 'document_upload', label: 'Upload & Extract', description: 'Upload documents and extract financials with AI Vision' },
-  { id: 'verify_pl', label: 'Verify P&L', description: 'Review and edit extracted P&L data' },
+  { id: 'review_analysis', label: 'Verify P&L', description: 'Review and edit extracted P&L data' },
+  { id: 'coa_mapping_review', label: 'COA Mapping', description: 'Map line items to standard chart of accounts' },
+  { id: 'reconciliation', label: 'Reconcile', description: 'Cross-reference documents and resolve conflicts' },
   { id: 'facility_verification', label: 'Verify Facilities', description: 'Verify facilities against CMS data' },
+  { id: 'analysis', label: 'Analysis', description: 'AI-powered deal analysis with Cascadia intelligence' },
   { id: 'financial_consolidation', label: 'Proforma', description: 'Generate and review 5-year proforma' },
 ];
 

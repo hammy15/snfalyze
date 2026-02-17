@@ -11,6 +11,8 @@ import { VisionExtractionVerification } from './stages/VisionExtractionVerificat
 import { FacilityIdentification } from './stages/FacilityIdentification';
 import { DocumentExtraction } from './stages/DocumentExtraction';
 import { COAMappingReview } from './stages/COAMappingReview';
+import { ReconciliationReview } from './stages/ReconciliationReview';
+import { AnalysisValuation } from './stages/AnalysisValuation';
 import { FinancialConsolidation } from './stages/FinancialConsolidation';
 import type { PLFacility } from '@/components/extraction/PLVerificationTable';
 import { ChevronLeft, ChevronRight, Save, AlertCircle, CheckCircle2, Building2, FileText, Edit2 } from 'lucide-react';
@@ -124,6 +126,55 @@ export interface WizardStageData {
     resolved?: number;
     skipped?: number;
     pending?: number;
+  };
+  reconciliation?: {
+    validated?: boolean;
+    conflicts?: Array<{
+      id: string;
+      field: string;
+      facilityName: string;
+      sourceA: { document: string; value: number };
+      sourceB: { document: string; value: number };
+      variance: number;
+      resolution?: 'auto' | 'manual' | 'pending';
+      resolvedValue?: number;
+    }>;
+    autoResolved?: number;
+    manualResolved?: number;
+    pending?: number;
+    validationScore?: number;
+  };
+  analysisResult?: {
+    completed?: boolean;
+    thesis?: string;
+    narrative?: string;
+    confidenceScore?: number;
+    valuations?: Array<{
+      method: string;
+      label?: string;
+      value: number;
+      confidence: number;
+      notes?: string;
+    }>;
+    riskAssessment?: {
+      overallScore: number;
+      rating: string;
+      recommendation: 'pursue' | 'conditional' | 'pass';
+      topRisks: string[];
+      strengths: string[];
+    };
+    selfValidation?: {
+      weakestAssumption: string;
+      sellerManipulationRisk: string;
+      recessionStressTest: string;
+      coverageUnderStress: string;
+    };
+    criticalQuestions?: {
+      whatMustGoRightFirst: string[];
+      whatCannotGoWrong: string[];
+      whatBreaksThisDeal: string[];
+      whatRiskIsUnderpriced: string[];
+    };
   };
   financialConsolidation?: {
     censusVerified?: boolean;
@@ -635,6 +686,12 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
         clarificationReview: data.clarificationReview
           ? { ...prev.clarificationReview, ...data.clarificationReview }
           : prev.clarificationReview,
+        reconciliation: data.reconciliation
+          ? { ...prev.reconciliation, ...data.reconciliation }
+          : prev.reconciliation,
+        analysisResult: data.analysisResult
+          ? { ...prev.analysisResult, ...data.analysisResult }
+          : prev.analysisResult,
         financialConsolidation: data.financialConsolidation
           ? { ...prev.financialConsolidation, ...data.financialConsolidation }
           : prev.financialConsolidation,
@@ -777,31 +834,33 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
         const extractedFacilities = stageData.visionExtraction?.facilities?.length || 0;
         const isVerified = stageData.visionExtraction?.verified === true;
         if (isVerified && extractedFacilities > 0) {
-          return `${extractedFacilities} facilities extracted and verified. Proceed to facility verification?`;
+          return `${extractedFacilities} facilities extracted and verified. Proceed to verify P&L?`;
         }
         return extractedFacilities > 0
           ? `${extractedFacilities} facilities extracted. Complete verification to proceed.`
           : 'Upload documents and run AI extraction to continue.';
-      case 'verify_pl':
+      case 'review_analysis':
         const totalLineItems = stageData.visionExtraction?.facilities?.reduce(
           (sum, f) => sum + f.lineItems.length, 0
         ) || 0;
-        return `${totalLineItems} line items verified. Proceed to facility verification?`;
-      case 'facility_verification':
-        const facilities = stageData.facilityIdentification?.facilities || [];
-        const verified = facilities.filter(f => f.isVerified).length;
-        return `${verified} of ${facilities.length} facilities verified. Proceed to proforma?`;
-      case 'financial_consolidation':
-        return 'Ready to complete deal setup?';
-      // Legacy stages
-      case 'review_analysis':
-        return `Creating ${stageData.dealStructure?.dealStructure?.replace('_', '-') || 'purchase'} deal "${stageData.dealStructure?.dealName}" with ${stageData.dealStructure?.facilityCount || 0} facilities. Proceed to verification?`;
-      case 'document_extraction':
-        return 'All extractions validated. Proceed to COA mapping?';
+        return `${totalLineItems} line items verified. Proceed to COA mapping?`;
       case 'coa_mapping_review':
         const mapped = stageData.coaMappingReview?.mappedItems || 0;
         const total = stageData.coaMappingReview?.totalItems || 0;
-        return `${mapped}/${total} items mapped. Generate financials?`;
+        return `${mapped}/${total} items mapped to chart of accounts. Proceed to reconciliation?`;
+      case 'reconciliation':
+        return 'Cross-document validation complete. Proceed to facility verification?';
+      case 'facility_verification':
+        const facilities = stageData.facilityIdentification?.facilities || [];
+        const verified = facilities.filter(f => f.isVerified).length;
+        return `${verified} of ${facilities.length} facilities verified. Proceed to analysis?`;
+      case 'analysis':
+        return 'Deal analysis complete. Proceed to generate proforma?';
+      case 'financial_consolidation':
+        return 'Ready to complete deal setup?';
+      // Legacy stages
+      case 'document_extraction':
+        return 'All extractions validated. Proceed to next step?';
       default:
         return 'Proceed to next step?';
     }
@@ -906,7 +965,7 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
             onComplete={handleVisionExtractionComplete}
           />
         );
-      case 'verify_pl':
+      case 'review_analysis':
         // Show summary of verified P&L for review before proceeding
         return (
           <VerifyPLSummary
@@ -914,22 +973,24 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
             onUpdate={updateStageData}
           />
         );
+      case 'coa_mapping_review':
+        return <COAMappingReview {...commonProps} />;
+      case 'reconciliation':
+        return <ReconciliationReview {...commonProps} />;
       case 'facility_verification':
         return <FacilityIdentification {...commonProps} />;
+      case 'analysis':
+        return (
+          <AnalysisValuation
+            {...commonProps}
+            sessionId={session.id}
+          />
+        );
       case 'financial_consolidation':
         return <FinancialConsolidation {...commonProps} />;
       // Legacy stages - keep for backwards compatibility
-      case 'review_analysis':
-        return (
-          <ReviewAnalysisSummary
-            stageData={localStageData}
-            onUpdate={updateStageData}
-          />
-        );
       case 'document_extraction':
         return <DocumentExtraction {...commonProps} />;
-      case 'coa_mapping_review':
-        return <COAMappingReview {...commonProps} />;
       default:
         return <div>Unknown stage: {session.currentStage}</div>;
     }

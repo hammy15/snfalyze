@@ -88,9 +88,187 @@ interface AnalysisResult {
   aiSummary?: AISummaryOutput;
 }
 
+// =======================================================================
+// Handle analysis from already-extracted stageData (wizard stage 6)
+// =======================================================================
+async function handleStageDataAnalysis(body: {
+  sessionId?: string;
+  stageData: {
+    visionExtraction?: any;
+    coaMappingReview?: any;
+    reconciliation?: any;
+    facilityIdentification?: any;
+    dealStructure?: any;
+  };
+}) {
+  const { stageData } = body;
+  const facilities = stageData.visionExtraction?.facilities || [];
+
+  if (facilities.length === 0) {
+    return NextResponse.json(
+      { success: false, error: 'No extracted data to analyze' },
+      { status: 400 }
+    );
+  }
+
+  // Build financial metrics from vision extraction
+  const totalBeds = facilities.reduce((sum: number, f: any) => sum + (f.beds || 0), 0);
+  const totalRevenue = facilities.reduce((sum: number, f: any) => {
+    const revItems = (f.lineItems || []).filter((i: any) => i.category === 'revenue');
+    return sum + revItems.reduce((s: number, item: any) =>
+      s + (item.values?.reduce((t: number, v: any) => t + (v.value || 0), 0) || 0), 0);
+  }, 0);
+  const totalExpenses = facilities.reduce((sum: number, f: any) => {
+    const expItems = (f.lineItems || []).filter((i: any) => i.category === 'expense');
+    return sum + expItems.reduce((s: number, item: any) =>
+      s + (item.values?.reduce((t: number, v: any) => t + (v.value || 0), 0) || 0), 0);
+  }, 0);
+  const noi = totalRevenue - totalExpenses;
+  const noiMargin = totalRevenue > 0 ? (noi / totalRevenue) * 100 : 0;
+
+  // Try AI analysis first
+  let thesis = '';
+  let narrative = '';
+  let confidenceScore = 65;
+
+  try {
+    const router = getRouter();
+    const facilityDetails = facilities.map((f: any) => {
+      const rev = (f.lineItems || []).filter((i: any) => i.category === 'revenue')
+        .reduce((s: number, item: any) => s + (item.values?.reduce((t: number, v: any) => t + (v.value || 0), 0) || 0), 0);
+      const exp = (f.lineItems || []).filter((i: any) => i.category === 'expense')
+        .reduce((s: number, item: any) => s + (item.values?.reduce((t: number, v: any) => t + (v.value || 0), 0) || 0), 0);
+      return `${f.name}: ${f.beds || '?'} beds, ${f.city || '?'} ${f.state || '?'}, Revenue $${(rev/1000).toFixed(0)}K, Expenses $${(exp/1000).toFixed(0)}K, NOI $${((rev-exp)/1000).toFixed(0)}K`;
+    }).join('\n');
+
+    const assetType = stageData.dealStructure?.assetType || 'SNF';
+    const analysisPrompt = `Analyze this ${assetType} portfolio deal:
+
+PORTFOLIO OVERVIEW:
+- ${facilities.length} facilities, ${totalBeds} total beds
+- Total Revenue: $${(totalRevenue/1000000).toFixed(2)}M
+- Total Expenses: $${(totalExpenses/1000000).toFixed(2)}M
+- NOI: $${(noi/1000000).toFixed(2)}M (${noiMargin.toFixed(1)}% margin)
+- Mapped to COA: ${stageData.coaMappingReview?.mappedItems || 0}/${stageData.coaMappingReview?.totalItems || 0} items
+- Reconciliation score: ${stageData.reconciliation?.validationScore || 'N/A'}%
+
+FACILITIES:
+${facilityDetails}
+
+Provide a JSON response with:
+{
+  "thesis": "2-3 sentence investment thesis",
+  "narrative": "Detailed analysis paragraph covering financials, market position, risks, and opportunities",
+  "confidenceScore": 0-100,
+  "recommendation": "pursue" | "conditional" | "pass"
+}
+
+Apply Cascadia Healthcare valuation principles:
+- SNF cap rates: 12.0-12.5% nationally
+- Risk is priced, not avoided
+- Dual view: External (lender) vs Cascadia (execution)
+- Self-validate: recession stress test, seller manipulation check
+
+Return ONLY valid JSON.`;
+
+    const aiResponse = await router.route({
+      taskType: 'deal_analysis',
+      systemPrompt: 'You are Cascadia Healthcare\'s senior underwriting analyst. Analyze deals with institutional rigor, pricing risk rather than avoiding it. Always provide both an external (lender) and internal (Cascadia execution) perspective.',
+      userPrompt: analysisPrompt,
+      maxTokens: 2000,
+    });
+
+    const responseText = aiResponse.content || '';
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      thesis = parsed.thesis || thesis;
+      narrative = parsed.narrative || narrative;
+      confidenceScore = parsed.confidenceScore || confidenceScore;
+    }
+  } catch (aiError) {
+    console.error('AI analysis error, using fallback:', aiError);
+  }
+
+  // Build valuations
+  const midCapRate = 0.115;
+  const capRateValue = noi > 0 ? noi / midCapRate : 0;
+  const pricePerBed = totalBeds > 0 ? 20000 : 0;
+
+  const valuations = [
+    { method: 'cap_rate', label: 'Cap Rate (11.5%)', value: capRateValue, confidence: 0.9, notes: `NOI / 11.5% cap` },
+    { method: 'price_per_bed', label: 'Price Per Bed ($20K)', value: totalBeds * pricePerBed, confidence: 0.7, notes: `${totalBeds} beds × $${pricePerBed.toLocaleString()}` },
+    { method: 'noi_multiple', label: 'NOI Multiple (7x)', value: noi * 7, confidence: 0.8, notes: `NOI × 7x` },
+    { method: 'revenue_multiple', label: 'Revenue Multiple (1.0x)', value: totalRevenue, confidence: 0.6, notes: `Revenue × 1.0x` },
+  ];
+
+  // Build risk assessment
+  const riskAssessment = {
+    overallScore: noiMargin > 15 ? 72 : noiMargin > 10 ? 58 : 42,
+    rating: noiMargin > 15 ? 'Moderate' : noiMargin > 10 ? 'Elevated' : 'High',
+    recommendation: (noiMargin > 12 ? 'pursue' : noiMargin > 8 ? 'conditional' : 'pass') as 'pursue' | 'conditional' | 'pass',
+    topRisks: [
+      noiMargin < 15 ? 'Thin margins require operational improvement' : null,
+      totalBeds < 100 ? 'Small facility size limits economies of scale' : null,
+      'Reimbursement rate volatility',
+      'Labor market tightness',
+    ].filter(Boolean) as string[],
+    strengths: [
+      totalBeds > 50 ? `${totalBeds}-bed portfolio provides scale` : null,
+      noiMargin > 10 ? `${noiMargin.toFixed(1)}% NOI margin` : null,
+      facilities.length > 1 ? `${facilities.length}-facility diversification` : null,
+    ].filter(Boolean) as string[],
+  };
+
+  // Self-validation
+  const selfValidation = {
+    weakestAssumption: 'Current census and occupancy rates are sustainable',
+    sellerManipulationRisk: noiMargin > 20 ? 'HIGH — Margins above 20% warrant scrutiny' : 'LOW — Margins within normal range',
+    recessionStressTest: `15% revenue decline → NOI drops to $${((noi * 0.75) / 1000).toFixed(0)}K`,
+    coverageUnderStress: noi * 0.75 > 0 ? 'Portfolio survives stress scenario' : 'Portfolio at risk under stress',
+  };
+
+  // Fallback thesis/narrative
+  if (!thesis) {
+    thesis = `${facilities.length}-facility ${stageData.dealStructure?.assetType || 'SNF'} portfolio with ${totalBeds} beds generating $${(noi/1000).toFixed(0)}K NOI at ${noiMargin.toFixed(1)}% margin. ${riskAssessment.recommendation === 'pursue' ? 'Recommend pursuing.' : riskAssessment.recommendation === 'conditional' ? 'Conditional pursuit.' : 'Recommend passing.'}`;
+  }
+  if (!narrative) {
+    narrative = `This portfolio generates $${(totalRevenue/1000000).toFixed(2)}M in revenue with $${(noi/1000000).toFixed(2)}M NOI. At an 11.5% cap rate, implied value is $${(capRateValue/1000000).toFixed(2)}M ($${totalBeds > 0 ? (capRateValue/totalBeds).toFixed(0) : 'N/A'}/bed). The ${noiMargin.toFixed(1)}% NOI margin ${noiMargin > 15 ? 'provides adequate cushion' : 'is below target and requires operational improvement'}.`;
+  }
+
+  return NextResponse.json({
+    success: true,
+    data: {
+      thesis,
+      narrative,
+      confidenceScore,
+      valuations,
+      riskAssessment,
+      selfValidation,
+      criticalQuestions: {
+        whatMustGoRightFirst: ['Census must stabilize at current or higher levels', 'State reimbursement rates must remain stable'],
+        whatCannotGoWrong: ['Major survey deficiencies or sanctions', 'Key operational staff departures'],
+        whatBreaksThisDeal: ['State rate cuts exceeding 5%', 'Occupancy drops below 75%'],
+        whatRiskIsUnderpriced: ['Agency labor dependency', 'Deferred capital expenditures'],
+      },
+    },
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+
+    // =======================================================================
+    // PATH A: Analysis from stageData (wizard analysis stage)
+    // =======================================================================
+    if (body.stageData) {
+      return handleStageDataAnalysis(body);
+    }
+
+    // =======================================================================
+    // PATH B: Analysis from fileIds (document extraction stage)
+    // =======================================================================
     const { sessionId, fileIds, dealId, autoPopulate = true } = body as {
       sessionId?: string;
       fileIds: string[];

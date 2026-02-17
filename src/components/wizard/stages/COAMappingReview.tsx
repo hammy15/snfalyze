@@ -99,7 +99,60 @@ export function COAMappingReview({ stageData, onUpdate, dealId }: COAMappingRevi
     initRef.current = true;
 
     const loadMappings = async () => {
-      // First try to get from extraction data stored in stageData
+      // First try to get from vision extraction data (new pipeline)
+      const visionData = stageData.visionExtraction;
+      if (visionData?.facilities && visionData.facilities.length > 0) {
+        const allLineItems = visionData.facilities.flatMap((facility: any) =>
+          (facility.lineItems || []).map((item: any) => ({ ...item, facilityName: facility.name }))
+        );
+        if (allLineItems.length > 0) {
+          console.log('[COAMappingReview] Found vision extraction with', allLineItems.length, 'line items');
+          const items: COAMapping[] = allLineItems.map((item: any, idx: number) => {
+            const label = (item.label || '').toLowerCase();
+            const totalValue = item.values?.reduce((sum: number, v: any) => sum + (v.value || 0), 0) || 0;
+
+            // Auto-map using fuzzy matching against COA_CATEGORIES
+            let bestMatch: typeof COA_CATEGORIES[number] | null = null;
+            let bestScore = 0;
+            for (const coa of COA_CATEGORIES) {
+              const coaName = coa.name.toLowerCase();
+              const words = coaName.split(/\s+/);
+              let score = 0;
+              for (const w of words) {
+                if (w.length > 2 && label.includes(w)) score += 1;
+              }
+              if (label.includes(coaName)) score += 5;
+              if (score > bestScore) { bestScore = score; bestMatch = coa; }
+            }
+
+            let category: COAMapping['category'] = item.category === 'revenue' ? 'revenue'
+              : item.category === 'expense' ? 'expense'
+              : item.category === 'census' ? 'census'
+              : item.category === 'metric' ? 'statistic'
+              : 'other';
+
+            const isMapped = bestScore >= 2 && bestMatch !== null;
+            return {
+              id: `v-${idx}`,
+              sourceLabel: item.label || 'Unknown',
+              sourceValue: totalValue,
+              facilityName: item.facilityName,
+              coaCode: isMapped ? bestMatch!.code : undefined,
+              coaName: isMapped ? bestMatch!.name : undefined,
+              category,
+              mappingConfidence: isMapped ? Math.min(0.95, 0.6 + bestScore * 0.1) : 0.3,
+              isMapped,
+              proformaDestination: isMapped ? bestMatch!.proforma : undefined,
+            };
+          });
+          console.log('[COAMappingReview] Created', items.length, 'mappings,', items.filter(i => i.isMapped).length, 'auto-mapped');
+          setMappings(items);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Fallback: try to get from old extraction data format
       const extraction = (stageData as any).extraction;
 
       if (extraction && extraction.lineItems && extraction.lineItems.length > 0) {

@@ -112,8 +112,20 @@ export interface T13ParseResult {
   rollup?: T13FacilitySection; // Consolidated portfolio data
   entityGroups?: Map<string, T13FacilitySection>; // OR-SNFOwned, etc.
   glCodeMapping: Map<string, string>; // GL code -> label
+  facilityMapping?: Map<string, FacilityMappingEntry>; // Opco name -> metadata
   periods: string[];
   warnings: string[];
+}
+
+export interface FacilityMappingEntry {
+  opcoName: string;       // e.g., "Gateway (Opco)"
+  propertyName: string;   // e.g., "Gateway Care and Retirement Center"
+  stateBL: string;        // e.g., "OR-Split"
+  leaseOwned: string;     // "Leased" or "Owned"
+  group: string;          // e.g., "OR-SplitLeased"
+  beds: number;           // Total Beds/Units
+  businessLine: string;   // e.g., "SNF/IL", "AL/IL/MC"
+  businessLineDetail: string; // e.g., "SNF/IL", "ALF/MC", "MC"
 }
 
 // ============================================================================

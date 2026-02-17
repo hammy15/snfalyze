@@ -129,19 +129,20 @@ function valueSingleFacility(
   const { propertyType, beds, sncPercent } = classification;
 
   // Get the financial metrics
+  // Priority: override > AV (authoritative for valuation) > T13 (operational P&L)
   let ebitda = facilityOverride?.ebitda ?? 0;
   let netIncome = facilityOverride?.netIncome ?? 0;
 
-  // From T13 data
-  if (t13) {
-    if (!ebitda) ebitda = t13.summaryMetrics.ebitda;
-    if (!netIncome) netIncome = t13.summaryMetrics.netIncome;
-  }
-
-  // From asset valuation data (2026 preferred, then 2025)
+  // From asset valuation data (AUTHORITATIVE for valuation — 2026 projected preferred)
   if (av) {
     if (!ebitda) ebitda = av.ebitda2026 || av.ebitda2025 || 0;
     if (!netIncome) netIncome = av.netIncome2026 || av.netIncome2025 || 0;
+  }
+
+  // From T13 data (operational P&L — fallback for facilities not in AV)
+  if (t13) {
+    if (!ebitda) ebitda = t13.summaryMetrics.ebitda;
+    if (!netIncome) netIncome = t13.summaryMetrics.netIncome;
   }
 
   // Apply valuation method

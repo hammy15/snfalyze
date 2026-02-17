@@ -108,6 +108,7 @@ interface VisionExtractionVerificationProps {
   onComplete: (data: {
     facilities: PLFacility[];
     verified: boolean;
+    smartExtraction?: any;
   }) => void;
   className?: string;
 }
@@ -147,6 +148,7 @@ export function VisionExtractionVerification({
   const [extractionProgress, setExtractionProgress] = useState<ExtractionProgress | null>(null);
   const [extractionResult, setExtractionResult] = useState<VisionExtractionResult | null>(null);
   const [extractionError, setExtractionError] = useState<string | null>(null);
+  const [smartExtractionData, setSmartExtractionData] = useState<any>(null);
 
   // Verification state
   const [verifiedFacilities, setVerifiedFacilities] = useState<PLFacility[]>([]);
@@ -336,6 +338,9 @@ export function VisionExtractionVerification({
         });
 
         setExtractionResult(data.data);
+        if (data.smartExtraction) {
+          setSmartExtractionData(data.smartExtraction);
+        }
         setCurrentStage('verify');
 
         // Update file statuses
@@ -422,6 +427,7 @@ export function VisionExtractionVerification({
     onComplete({
       facilities: verifiedFacilities,
       verified: true,
+      smartExtraction: smartExtractionData || undefined,
     });
   };
 

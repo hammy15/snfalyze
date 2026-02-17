@@ -943,9 +943,10 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
   const handleVisionExtractionComplete = useCallback((data: {
     facilities: PLFacility[];
     verified: boolean;
+    smartExtraction?: any;
   }) => {
-    // Save the extracted and verified facilities
-    updateStageData({
+    // Build the stage data update
+    const stageUpdate: Partial<WizardStageData> = {
       visionExtraction: {
         facilities: data.facilities,
         verified: data.verified,
@@ -963,7 +964,14 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
           isVerified: false,
         })),
       },
-    });
+    };
+
+    // If smart extraction data is available, populate analysis result
+    if (data.smartExtraction?.analysisResult) {
+      stageUpdate.analysisResult = data.smartExtraction.analysisResult;
+    }
+
+    updateStageData(stageUpdate);
 
     // Auto-advance to next stage
     navigateStage('next');

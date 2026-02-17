@@ -3,6 +3,8 @@ import { db, documents } from '@/db';
 import { eq, inArray } from 'drizzle-orm';
 import { type VisionExtractionResult } from '@/lib/extraction/vision-extractor';
 import { getRouter } from '@/lib/ai';
+import type { SheetExtraction } from '@/lib/extraction/excel-extractor';
+import { extractSmartExcel, isStructuredExcelData, smartResultToStageData } from '@/lib/extraction/smart-excel';
 
 // Allow up to 300s for AI extraction (Vercel Pro)
 export const maxDuration = 300;
@@ -341,6 +343,147 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+
+    // ========================================================================
+    // SMART EXCEL EXTRACTION — Try structured parsing first for Excel files
+    // ========================================================================
+    const excelDocs = docs.filter(d => {
+      const ext = d.filename?.split('.').pop()?.toLowerCase();
+      return (ext === 'xlsx' || ext === 'xls') && d.extractedData;
+    });
+
+    if (excelDocs.length > 0) {
+      try {
+        console.log('='.repeat(60));
+        console.log('SMART EXCEL EXTRACTION — Direct cell parsing');
+        console.log(`Attempting structured extraction on ${excelDocs.length} Excel file(s)`);
+        console.log('='.repeat(60));
+
+        // Convert stored sheet data to SheetExtraction format
+        const smartFiles = excelDocs.map(doc => {
+          const extracted = doc.extractedData as Record<string, any>;
+          const sheetsData = extracted?.sheets || {};
+          const sheetNames = extracted?.sheetNames || Object.keys(sheetsData);
+
+          const sheets: SheetExtraction[] = sheetNames.map((name: string) => {
+            const data = (sheetsData[name] || []) as (string | number | null)[][];
+            const headers = data.length > 0
+              ? data[0].map(c => c != null ? String(c) : '')
+              : [];
+
+            return {
+              sheetName: name,
+              sheetType: 'unknown' as const,
+              rowCount: data.length,
+              columnCount: headers.length,
+              headers,
+              data,
+              facilitiesDetected: [],
+              periodsDetected: [],
+              metadata: { hasFormulas: false, hasMergedCells: false, firstDataRow: 1 },
+            };
+          });
+
+          return { documentId: doc.id, filename: doc.filename || 'unknown.xlsx', sheets };
+        });
+
+        // Check if any file has structured financial data
+        const hasStructuredData = smartFiles.some(f => isStructuredExcelData(f.sheets));
+
+        if (hasStructuredData) {
+          const smartResult = await extractSmartExcel({ files: smartFiles });
+
+          console.log(`Smart extraction: confidence=${(smartResult.confidence * 100).toFixed(0)}%, ` +
+            `facilities=${smartResult.facilityClassifications.length}, ` +
+            `method=${smartResult.extractionMethod}`);
+          console.log(`Warnings: ${smartResult.warnings.join('; ')}`);
+
+          if (smartResult.confidence >= 0.5 && smartResult.facilityClassifications.length > 0) {
+            console.log('Smart extraction succeeded — returning structured data');
+
+            // Convert to stage data format
+            const stageData = smartResultToStageData(smartResult);
+
+            // Update doc status
+            for (const doc of excelDocs) {
+              await db
+                .update(documents)
+                .set({
+                  status: 'complete',
+                  processedAt: new Date(),
+                  extractedData: {
+                    ...(doc.extractedData as Record<string, any>),
+                    method: 'smart_excel',
+                    facilitiesCount: smartResult.facilityClassifications.length,
+                    confidence: smartResult.confidence,
+                    processingTimeMs: smartResult.processingTimeMs,
+                  },
+                })
+                .where(eq(documents.id, doc.id));
+            }
+
+            return NextResponse.json({
+              success: true,
+              extractionMethod: 'smart_excel',
+              data: {
+                facilities: stageData.visionExtraction.facilities.map(f => ({
+                  name: f.name,
+                  state: f.state,
+                  city: f.city,
+                  beds: f.beds,
+                  periods: f.periods.map(p => ({
+                    label: p, startDate: '', endDate: '', type: 'annual' as const,
+                  })),
+                  lineItems: f.lineItems.map(li => ({
+                    category: li.category,
+                    subcategory: li.subcategory,
+                    label: li.label,
+                    values: li.values,
+                    annual: li.annual,
+                    ppd: li.ppd,
+                    percentRevenue: li.percentRevenue,
+                    confidence: li.confidence,
+                  })),
+                  census: f.census,
+                  confidence: f.confidence,
+                })),
+                sheets: smartFiles.flatMap(f => f.sheets.map((s, i) => ({
+                  name: s.sheetName,
+                  index: i,
+                  type: s.sheetType,
+                  facilitiesFound: s.facilitiesDetected,
+                  periodsFound: s.periodsDetected,
+                  confidence: smartResult.confidence,
+                }))),
+                summary: {
+                  totalFacilities: stageData.visionExtraction.facilities.length,
+                  totalLineItems: stageData.visionExtraction.facilities.reduce(
+                    (sum, f) => sum + f.lineItems.length, 0
+                  ),
+                  totalSheets: smartFiles.reduce((sum, f) => sum + f.sheets.length, 0),
+                  overallConfidence: smartResult.confidence,
+                  processingTimeMs: smartResult.processingTimeMs,
+                  hasCensusData: stageData.visionExtraction.facilities.some(f => !!f.census),
+                  hasPayerRates: false,
+                },
+                warnings: smartResult.warnings,
+                errors: [],
+              },
+              // Include full smart extraction data for downstream use
+              smartExtraction: stageData,
+            });
+          } else {
+            console.log(`Smart extraction low confidence (${(smartResult.confidence * 100).toFixed(0)}%) — falling through to AI extraction`);
+          }
+        }
+      } catch (smartError) {
+        console.warn('Smart extraction failed, falling through to AI extraction:', smartError);
+      }
+    }
+
+    // ========================================================================
+    // AI VISION EXTRACTION — Fallback for non-Excel or low-confidence Excel
+    // ========================================================================
 
     console.log('='.repeat(60));
     console.log('AI VISION EXTRACTION — SHEET-BY-SHEET');

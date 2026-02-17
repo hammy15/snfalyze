@@ -399,7 +399,9 @@ export async function POST(request: NextRequest) {
     if (processingErrors.length > 0) console.log(`  Errors: ${processingErrors.length}`);
     console.log('='.repeat(60));
 
-    const allFacilities = results.flatMap(r => r.facilities);
+    // Cross-document merge: same facility from different docs should combine data
+    const allFacilitiesRaw = results.flatMap(r => r.facilities);
+    const allFacilities = mergeChunkFacilities(allFacilitiesRaw, 'cross-sheet');
     const allSheets = results.flatMap(r => r.sheets);
     const overallConfidence = results.length > 0
       ? results.reduce((sum, r) => sum + r.confidence, 0) / results.length
@@ -751,24 +753,31 @@ async function extractFromImage(
 // ============================================================================
 
 /** Merge facilities from multiple chunks of the same sheet */
-function mergeChunkFacilities(chunkFacilities: any[]): any[] {
+function mergeChunkFacilities(chunkFacilities: any[], mode: 'within-sheet' | 'cross-sheet' = 'within-sheet'): any[] {
   if (chunkFacilities.length === 0) return [];
 
-  // Group by facility identity: CCN (most reliable) > name+city+state > name only
+  // Filter out summary/aggregate rows that aren't real facilities
+  const SUMMARY_PATTERNS = /^(total\s+portfolio|snf\s*[-\/]|alf\s*[-\/]|all\s+facilities|grand\s+total|subtotal|combined|consolidated|total\s+(?:owned|leased|managed))/i;
+  const filtered = chunkFacilities.filter((f) => {
+    const name = (f.name || '').trim();
+    if (!name || SUMMARY_PATTERNS.test(name)) return false;
+    return true;
+  });
+
+  // Group by facility identity
+  // within-sheet: merge by name only (same facility from different chunks)
+  // cross-sheet: merge by name (same doc's sheets often have different detail levels)
+  //   but prefer entries with more location/line item data
   const byIdentity = new Map<string, any[]>();
-  for (const f of chunkFacilities) {
+  for (const f of filtered) {
     let key: string;
     if (f.ccn && f.ccn.trim()) {
-      // CCN is a unique facility identifier — best match
       key = `ccn:${f.ccn.trim()}`;
     } else {
-      // Use name + city + state for disambiguation
+      // Always group by normalized name — within a single document,
+      // the same facility appears across P&L, Census, and Valuation sheets
       const name = (f.name || 'Unknown').toLowerCase().trim();
-      const city = (f.city || '').toLowerCase().trim();
-      const state = (f.state || '').toLowerCase().trim();
-      key = city || state
-        ? `loc:${name}|${city}|${state}`
-        : `name:${name}`;
+      key = `name:${name}`;
     }
     if (!byIdentity.has(key)) byIdentity.set(key, []);
     byIdentity.get(key)!.push(f);
@@ -782,7 +791,20 @@ function mergeChunkFacilities(chunkFacilities: any[]): any[] {
     }
 
     // Merge multiple entries for the same facility
-    const base = { ...group[0] };
+    // Pick the entry with the most data as base (prefer one with city, more line items)
+    const ranked = [...group].sort((a, b) => {
+      const scoreA = (a.lineItems?.length || 0) * 10 + (a.city && a.city !== 'Unknown' ? 5 : 0) + (a.state ? 2 : 0) + (a.beds ? 1 : 0);
+      const scoreB = (b.lineItems?.length || 0) * 10 + (b.city && b.city !== 'Unknown' ? 5 : 0) + (b.state ? 2 : 0) + (b.beds ? 1 : 0);
+      return scoreB - scoreA;
+    });
+    const base = { ...ranked[0] };
+    // Fill in missing location data from other entries
+    for (const entry of ranked) {
+      if (!base.city || base.city === 'Unknown') base.city = entry.city;
+      if (!base.state) base.state = entry.state;
+      if (!base.beds && entry.beds) base.beds = entry.beds;
+      if (!base.ccn && entry.ccn) base.ccn = entry.ccn;
+    }
     const allLineItems = group.flatMap((f: any) => f.lineItems || []);
     const allPeriods = group.flatMap((f: any) => f.periods || []);
 

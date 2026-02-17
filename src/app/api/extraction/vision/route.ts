@@ -754,16 +754,28 @@ async function extractFromImage(
 function mergeChunkFacilities(chunkFacilities: any[]): any[] {
   if (chunkFacilities.length === 0) return [];
 
-  // Group by facility name (case-insensitive)
-  const byName = new Map<string, any[]>();
+  // Group by facility identity: CCN (most reliable) > name+city+state > name only
+  const byIdentity = new Map<string, any[]>();
   for (const f of chunkFacilities) {
-    const key = (f.name || 'Unknown').toLowerCase().trim();
-    if (!byName.has(key)) byName.set(key, []);
-    byName.get(key)!.push(f);
+    let key: string;
+    if (f.ccn && f.ccn.trim()) {
+      // CCN is a unique facility identifier — best match
+      key = `ccn:${f.ccn.trim()}`;
+    } else {
+      // Use name + city + state for disambiguation
+      const name = (f.name || 'Unknown').toLowerCase().trim();
+      const city = (f.city || '').toLowerCase().trim();
+      const state = (f.state || '').toLowerCase().trim();
+      key = city || state
+        ? `loc:${name}|${city}|${state}`
+        : `name:${name}`;
+    }
+    if (!byIdentity.has(key)) byIdentity.set(key, []);
+    byIdentity.get(key)!.push(f);
   }
 
   const merged: any[] = [];
-  for (const [, group] of byName) {
+  for (const [, group] of byIdentity) {
     if (group.length === 1) {
       merged.push(group[0]);
       continue;

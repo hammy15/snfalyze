@@ -109,14 +109,28 @@ export async function PATCH(
     if (stageData) {
       if (mergeStageData) {
         // Deep merge stage data - merge each section individually
+        // IMPORTANT: Arrays within nested objects are REPLACED, not merged,
+        // to prevent data loss (e.g., visionExtraction.facilities)
         newStageData = { ...newStageData };
         for (const key of Object.keys(stageData)) {
           if (typeof stageData[key] === 'object' && stageData[key] !== null && !Array.isArray(stageData[key])) {
-            // Deep merge objects
-            newStageData[key] = {
-              ...(newStageData[key] as Record<string, unknown> || {}),
-              ...stageData[key],
-            };
+            // Deep merge objects, but replace arrays within them
+            const existing = (newStageData[key] as Record<string, unknown>) || {};
+            const incoming = stageData[key] as Record<string, unknown>;
+            const merged: Record<string, unknown> = { ...existing };
+            for (const nestedKey of Object.keys(incoming)) {
+              // Arrays and primitives: always replace with incoming
+              // Objects: shallow merge
+              if (typeof incoming[nestedKey] === 'object' && incoming[nestedKey] !== null && !Array.isArray(incoming[nestedKey])) {
+                merged[nestedKey] = {
+                  ...(existing[nestedKey] as Record<string, unknown> || {}),
+                  ...(incoming[nestedKey] as Record<string, unknown>),
+                };
+              } else {
+                merged[nestedKey] = incoming[nestedKey];
+              }
+            }
+            newStageData[key] = merged;
           } else {
             // Replace arrays and primitives
             newStageData[key] = stageData[key];

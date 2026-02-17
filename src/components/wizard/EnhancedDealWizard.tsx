@@ -735,7 +735,8 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
   }, [debouncedSave]);
 
   // Navigate to next/previous stage
-  const navigateStage = async (direction: 'next' | 'back') => {
+  // stageDataOverride: pass merged data when state hasn't settled yet (e.g. right after updateStageData)
+  const navigateStage = async (direction: 'next' | 'back', stageDataOverride?: WizardStageData) => {
     if (!session) {
       console.error('No session available for navigation');
       return;
@@ -745,12 +746,15 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
     setSaving(true);
 
     try {
+      // Use override if provided (avoids stale closure when called right after setState)
+      const dataToSave = stageDataOverride || localStageData;
+
       // First save the current local state
       const response = await fetch(`/api/wizard/session/${session.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          stageData: localStageData,
+          stageData: dataToSave,
           mergeStageData: true,
           [direction === 'next' ? 'advanceStage' : 'goBack']: true,
         }),
@@ -971,11 +975,14 @@ export function EnhancedDealWizard({ sessionId, dealId, onComplete }: EnhancedDe
       stageUpdate.analysisResult = data.smartExtraction.analysisResult;
     }
 
+    // Merge update with current state so navigateStage gets the latest data
+    // (setLocalStageData is async, so localStageData is stale within this callback)
+    const mergedData: WizardStageData = { ...localStageData, ...stageUpdate } as WizardStageData;
     updateStageData(stageUpdate);
 
-    // Auto-advance to next stage
-    navigateStage('next');
-  }, [updateStageData, navigateStage]);
+    // Auto-advance to next stage with merged data to avoid stale closure
+    navigateStage('next', mergedData);
+  }, [updateStageData, navigateStage, localStageData]);
 
   // Render current stage component
   const renderStage = () => {

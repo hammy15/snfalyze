@@ -17,7 +17,7 @@ export async function GET() {
   } catch (error) {
     console.error('Error fetching historical deals:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch historical deals' },
+      { success: false, error: `Failed to fetch historical deals: ${error instanceof Error ? error.message : String(error)}` },
       { status: 500 }
     );
   }
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error creating historical deal:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to create historical deal' },
+      { success: false, error: `Failed to create historical deal: ${error instanceof Error ? error.message : String(error)}` },
       { status: 500 }
     );
   }

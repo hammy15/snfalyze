@@ -42,10 +42,28 @@ export function parseCompletedProforma(
   const warnings: string[] = [];
   const facilities: ProformaFacilityData[] = [];
 
+  // Detect T12/T24/T36 format: multiple sheets named after facilities/locations
+  const isMultiSheetPortfolio = sheets.length > 1 &&
+    sheets.some(s => s.name.toLowerCase() === 'rollup' || s.name.toLowerCase() === 'summary' || s.name.toLowerCase() === 'consolidated');
+
   for (const sheet of sheets) {
     // Skip sheets that are clearly not proformas
     const sheetNameLower = sheet.name.toLowerCase();
     if (sheetNameLower.includes('mapping') || sheetNameLower.includes('instructions')) {
+      continue;
+    }
+
+    // Skip rollup/summary sheets when we have individual facility sheets
+    if (isMultiSheetPortfolio && (sheetNameLower === 'rollup' || sheetNameLower === 'summary' || sheetNameLower === 'consolidated')) {
+      continue;
+    }
+
+    // For multi-sheet portfolios (T12/T24/T36), each sheet IS a facility
+    if (isMultiSheetPortfolio) {
+      const singleFacility = parseSingleFacilitySheet(sheet.data, sheet.name);
+      if (singleFacility) {
+        facilities.push(singleFacility);
+      }
       continue;
     }
 
@@ -169,35 +187,51 @@ function parseFacilitySection(
   const valueCol = findValueColumn(data);
   if (valueCol < 0) return null;
 
+  let mgmtFee = 0;
+  let agencyExpense = 0;
+  let rentExpense = 0;
+
   for (const row of data) {
     if (!row || row.length === 0) continue;
 
-    const label = String(row[0] || '').trim().toLowerCase();
+    const rawLabel = String(row[0] || '').trim();
+    const label = rawLabel.toLowerCase();
     if (!label) continue;
 
     const value = parseNumericValue(row[valueCol]);
     if (value === null) continue;
 
-    // Classify the line item
-    if (matchesAny(label, REVENUE_INDICATORS)) {
+    // Classify the line item — use trimmed labels for specificity
+    // For T12/T36 hierarchical format, prefer "Total Operating Revenue/Expense"
+    const stripped = label.replace(/^\s+/, '');
+    if (stripped.startsWith('total operating revenue') || stripped === 'total revenue' || stripped === 'net revenue' || stripped === 'gross revenue') {
       revenue = value;
-    } else if (matchesAny(label, EXPENSE_INDICATORS)) {
+    } else if (stripped.startsWith('total operating expense') || stripped === 'total expenses' || stripped === 'total expense') {
       expenses = Math.abs(value);
-    } else if (matchesAny(label, EBITDAR_INDICATORS)) {
+    } else if (stripped === 'ebitdar' || stripped.startsWith('total ebitdar')) {
       ebitdar = value;
-    } else if (matchesAny(label, EBITDA_INDICATORS)) {
+    } else if (stripped === 'ebitda' || stripped.startsWith('total ebitda')) {
       ebitda = value;
-    } else if (matchesAny(label, NET_INCOME_INDICATORS)) {
+    } else if (stripped === 'net income' || stripped.startsWith('net income') || stripped === 'noi' || stripped === 'net operating income') {
       netIncome = value;
-    } else if (matchesAny(label, OCCUPANCY_INDICATORS)) {
-      occupancy = value > 1 ? value / 100 : value; // Normalize to decimal
+    } else if (matchesAny(stripped, OCCUPANCY_INDICATORS)) {
+      occupancy = value > 1 ? value / 100 : value;
+    }
+
+    // Track specific expense line items for normalization detection
+    if (matchesAny(stripped, MGMT_FEE_INDICATORS) && stripped.startsWith('total ')) {
+      mgmtFee = Math.abs(value);
+    } else if (matchesAny(stripped, AGENCY_INDICATORS) && !stripped.includes('salary')) {
+      agencyExpense = Math.abs(value);
+    } else if (matchesAny(stripped, RENT_INDICATORS) && stripped.startsWith('total ')) {
+      rentExpense = Math.abs(value);
     }
 
     // Determine line item category
     const category = categorizeLineItem(label);
     if (category) {
       lineItems.push({
-        label: String(row[0] || '').trim(),
+        label: rawLabel,
         category,
         annualValue: value,
       });
@@ -272,8 +306,28 @@ function detectAssumptions(
 // ============================================================================
 
 function findValueColumn(data: (string | number | null)[][]): number {
-  // Scan first 20 rows to find the first column with numeric values
-  for (let col = 1; col < 20; col++) {
+  // Find max column width from the data
+  let maxCols = 0;
+  for (let r = 0; r < Math.min(50, data.length); r++) {
+    if (data[r]) maxCols = Math.max(maxCols, data[r].length);
+  }
+
+  // For multi-column files (T12/T24/T36), prefer the LAST column with data
+  // This gives us the most recent trailing period
+  if (maxCols > 5) {
+    for (let col = maxCols - 1; col >= 1; col--) {
+      let numericCount = 0;
+      for (let r = 0; r < Math.min(50, data.length); r++) {
+        if (data[r] && parseNumericValue(data[r][col]) !== null) {
+          numericCount++;
+        }
+      }
+      if (numericCount >= 3) return col;
+    }
+  }
+
+  // For narrow files, scan left-to-right for first numeric column
+  for (let col = 1; col < Math.min(20, maxCols); col++) {
     let numericCount = 0;
     for (let r = 0; r < Math.min(20, data.length); r++) {
       if (data[r] && parseNumericValue(data[r][col]) !== null) {
@@ -303,8 +357,16 @@ function isFinancialLineItem(text: string): boolean {
   return REVENUE_INDICATORS.some(r => lower.includes(r)) ||
     EXPENSE_INDICATORS.some(e => lower.includes(e)) ||
     EBITDAR_INDICATORS.some(e => lower.includes(e)) ||
+    EBITDA_INDICATORS.some(e => lower.includes(e)) ||
+    NET_INCOME_INDICATORS.some(e => lower.includes(e)) ||
     lower.includes('salary') || lower.includes('wage') ||
-    lower.includes('insurance') || lower.includes('tax');
+    lower.includes('insurance') || lower.includes('tax') ||
+    lower.includes('resident care') || lower.includes('nursing') ||
+    lower.includes('dietary') || lower.includes('pharmacy') ||
+    lower.includes('therapy') || lower.includes('ancillary') ||
+    lower.includes('medicare') || lower.includes('medicaid') ||
+    lower.includes('depreciation') || lower.includes('rent') ||
+    lower.includes('interest') || lower.includes('total ');
 }
 
 function isNumericValue(cell: string | number | null | undefined): boolean {
@@ -312,14 +374,32 @@ function isNumericValue(cell: string | number | null | undefined): boolean {
 }
 
 function looksLikeFacilityName(text: string): boolean {
+  const lower = text.toLowerCase().trim();
+
+  // Exclude P&L line items, section headers, and financial categories
+  const excludePatterns = [
+    'resident care', 'snf', 'alf', 'medicare', 'medicaid', 'hmo', 'private',
+    'ancillary', 'revenue', 'expense', 'salary', 'payroll', 'operating',
+    'total ', 'net income', 'ebitda', 'ebitdar', 'depreciation', 'rent ',
+    'interest', 'dietary', 'laundry', 'housekeeping', 'plant operation',
+    'social service', 'medical record', 'activit', 'administration',
+    'management fee', 'nursing -', 'pharmacy', 'therapy', 'laboratory',
+    'x-ray', 'physician', 'cost report', 'covid', 'miscellaneous',
+    'supplies', 'insurance', 'profit & loss', 'reporting book',
+    'as of ', 'entity group', 'month ending', 'actual', 'budget',
+    'rental income', 'va -', 'veteran', 'commercial', 'bariatr',
+    'hospice', 'complex', 'restorative', 'oxygen', 'iv solution',
+    'equipment rental', 'otc ', 'non-operating',
+  ];
+  if (excludePatterns.some(p => lower.includes(p))) return false;
+
   // Facility names typically contain location-related words or proper nouns
   const indicators = [
-    'center', 'care', 'living', 'health', 'nursing', 'manor', 'gardens',
-    'home', 'court', 'place', 'village', 'ridge', 'pointe', 'crossing',
+    'center', 'living', 'health', 'manor', 'gardens',
+    'court', 'place', 'village', 'ridge', 'pointe', 'crossing',
     'sapphire', 'gateway', 'firwood', 'bridgecreek', 'brighton', 'cedar',
-    'liberty', 'gresham', 'ridgeview',
+    'liberty', 'gresham', 'ridgeview', 'opco', 'propco',
   ];
-  const lower = text.toLowerCase();
   return indicators.some(ind => lower.includes(ind)) ||
     /^[A-Z][a-z]+ (at |of |at the )?[A-Z]/.test(text);
 }
@@ -355,6 +435,9 @@ function cleanFacilityName(name: string): string {
     .replace(/\(ALF.*?\)/gi, '')
     .replace(/\(MC.*?\)/gi, '')
     .replace(/\(IL.*?\)/gi, '')
+    .replace(/\s*Opco\/Propco\s*/gi, '')
+    .replace(/\s*opco\s*/gi, '')
+    .replace(/\s*propco\s*/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
 }

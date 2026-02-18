@@ -61,10 +61,10 @@ export function VisualCard({ type, data, title, style = 'professional', classNam
   return (
     <>
       <div className={cn(
-        'bg-white rounded-xl border border-[#E2DFD8] overflow-hidden',
+        'neu-card !p-0 overflow-hidden',
         className
       )}>
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#E2DFD8]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-surface-200 dark:border-surface-700">
           <div className="flex items-center gap-2">
             <Image className="w-4 h-4 text-primary-500" />
             <h4 className="text-sm font-semibold text-surface-800">

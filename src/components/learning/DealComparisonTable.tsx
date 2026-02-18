@@ -82,7 +82,7 @@ function FacilitySection({ facility }: { facility: FacilityComparison }) {
     : null;
 
   return (
-    <div className="border border-[#E2DFD8] rounded-lg overflow-hidden">
+    <div className="border border-surface-200 dark:border-surface-700 rounded-2xl overflow-hidden">
       {/* Facility Header */}
       <button
         onClick={() => setExpanded(!expanded)}

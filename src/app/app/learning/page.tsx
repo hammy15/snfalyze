@@ -28,12 +28,12 @@ interface HistoricalDeal {
 }
 
 const STATUS_CONFIG: Record<string, { icon: typeof Clock; color: string; label: string }> = {
-  uploading: { icon: Upload, color: 'text-blue-500 bg-blue-50', label: 'Uploading' },
-  extracting: { icon: Loader2, color: 'text-amber-500 bg-amber-50', label: 'Extracting' },
-  comparing: { icon: BarChart3, color: 'text-purple-500 bg-purple-50', label: 'Comparing' },
-  learning: { icon: Brain, color: 'text-primary-500 bg-primary-50', label: 'Learning' },
-  complete: { icon: CheckCircle2, color: 'text-emerald-500 bg-emerald-50', label: 'Complete' },
-  error: { icon: AlertCircle, color: 'text-red-500 bg-red-50', label: 'Error' },
+  uploading: { icon: Upload, color: 'text-blue-500 bg-blue-50 dark:bg-blue-900/20', label: 'Uploading' },
+  extracting: { icon: Loader2, color: 'text-amber-500 bg-amber-50 dark:bg-amber-900/20', label: 'Extracting' },
+  comparing: { icon: BarChart3, color: 'text-purple-500 bg-purple-50 dark:bg-purple-900/20', label: 'Comparing' },
+  learning: { icon: Brain, color: 'text-primary-500 bg-primary-50 dark:bg-primary-900/20', label: 'Learning' },
+  complete: { icon: CheckCircle2, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20', label: 'Complete' },
+  error: { icon: AlertCircle, color: 'text-red-500 bg-red-50 dark:bg-red-900/20', label: 'Error' },
 };
 
 function formatCurrency(value: string | null): string {
@@ -98,11 +98,11 @@ export default function LearningPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-surface-900">Deal Learning</h1>
+          <h1 className="text-xl font-bold text-surface-900 dark:text-white">Deal Learning</h1>
           <p className="text-sm text-surface-500">
             {completedCount} completed deal{completedCount !== 1 ? 's' : ''} analyzed
             {totalBeds > 0 && ` · ${totalBeds.toLocaleString()} total beds`}
@@ -110,51 +110,45 @@ export default function LearningPage() {
         </div>
         <button
           onClick={() => setActiveTab('upload')}
-          className="px-4 py-2 rounded-lg bg-primary-500 text-white font-medium text-sm hover:bg-primary-600 flex items-center gap-2 transition-colors"
+          className="neu-button-primary text-sm py-1.5 px-3 flex items-center gap-1.5"
         >
-          <Upload className="w-4 h-4" />
+          <Upload className="w-3.5 h-3.5" />
           Upload Deal
         </button>
       </div>
 
       {/* Stats Row */}
       {deals.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="bg-white rounded-xl border border-[#E2DFD8] p-4">
-            <div className="flex items-center gap-2 mb-1">
+        <div className="neu-card p-3">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <div className="flex items-center gap-2">
               <FileSpreadsheet className="w-4 h-4 text-primary-500" />
+              <span className="text-lg font-bold text-surface-900 dark:text-white">{deals.length}</span>
               <span className="text-xs text-surface-500">Total Deals</span>
             </div>
-            <span className="text-2xl font-bold text-surface-800">{deals.length}</span>
-          </div>
-          <div className="bg-white rounded-xl border border-[#E2DFD8] p-4">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              <span className="text-lg font-bold text-surface-900 dark:text-white">{completedCount}</span>
               <span className="text-xs text-surface-500">Processed</span>
             </div>
-            <span className="text-2xl font-bold text-surface-800">{completedCount}</span>
-          </div>
-          <div className="bg-white rounded-xl border border-[#E2DFD8] p-4">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2">
               <Building2 className="w-4 h-4 text-blue-500" />
+              <span className="text-lg font-bold text-surface-900 dark:text-white">{totalBeds.toLocaleString()}</span>
               <span className="text-xs text-surface-500">Total Beds</span>
             </div>
-            <span className="text-2xl font-bold text-surface-800">{totalBeds.toLocaleString()}</span>
-          </div>
-          <div className="bg-white rounded-xl border border-[#E2DFD8] p-4">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2">
               <Brain className="w-4 h-4 text-purple-500" />
+              <span className="text-lg font-bold text-surface-900 dark:text-white">
+                {completedCount >= 5 ? 'High' : completedCount >= 2 ? 'Medium' : 'Low'}
+              </span>
               <span className="text-xs text-surface-500">Confidence</span>
             </div>
-            <span className="text-2xl font-bold text-surface-800">
-              {completedCount >= 5 ? 'High' : completedCount >= 2 ? 'Medium' : 'Low'}
-            </span>
           </div>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-surface-100 rounded-lg p-1">
+      <div className="inline-flex h-10 items-center justify-center rounded-xl bg-surface-100 dark:bg-surface-800 p-1 text-surface-500 w-full">
         {tabs.map(tab => {
           const Icon = tab.icon;
           return (
@@ -162,10 +156,10 @@ export default function LearningPage() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all',
+                'flex-1 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-all',
                 activeTab === tab.id
-                  ? 'bg-white text-surface-800 shadow-sm'
-                  : 'text-surface-500 hover:text-surface-700'
+                  ? 'bg-white dark:bg-surface-900 text-surface-900 dark:text-surface-50 shadow-sm'
+                  : 'text-surface-500 dark:text-surface-400 hover:text-surface-900 dark:hover:text-surface-50'
               )}
             >
               <Icon className="w-4 h-4" />
@@ -179,22 +173,24 @@ export default function LearningPage() {
       {activeTab === 'deals' && (
         <div className="space-y-3">
           {loading ? (
-            <div className="bg-white rounded-xl border border-[#E2DFD8] p-8 text-center">
+            <div className="neu-card p-8 text-center">
               <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-primary-500" />
               <p className="text-sm text-surface-500">Loading historical deals...</p>
             </div>
           ) : deals.length === 0 ? (
-            <div className="bg-white rounded-xl border border-[#E2DFD8] p-8 text-center">
-              <FileSpreadsheet className="w-10 h-10 text-surface-300 mx-auto mb-3" />
-              <h3 className="font-semibold text-surface-700 mb-1">No Historical Deals</h3>
-              <p className="text-sm text-surface-400 mb-4">
+            <div className="neu-card p-8 text-center">
+              <div className="mx-auto w-12 h-12 rounded-full bg-surface-100 dark:bg-surface-800 flex items-center justify-center mb-3">
+                <FileSpreadsheet className="w-6 h-6 text-surface-400" />
+              </div>
+              <h3 className="font-semibold text-surface-900 dark:text-white mb-1">No Historical Deals</h3>
+              <p className="text-sm text-surface-500 mb-4">
                 Upload your first completed deal package to start learning your evaluation patterns
               </p>
               <button
                 onClick={() => setActiveTab('upload')}
-                className="px-4 py-2 rounded-lg bg-primary-500 text-white text-sm font-medium hover:bg-primary-600 inline-flex items-center gap-2 transition-colors"
+                className="neu-button-primary text-sm py-1.5 px-3 inline-flex items-center gap-1.5 mx-auto"
               >
-                <Upload className="w-4 h-4" />
+                <Upload className="w-3.5 h-3.5" />
                 Upload Your First Deal
               </button>
             </div>
@@ -206,21 +202,21 @@ export default function LearningPage() {
                 <Link
                   key={deal.id}
                   href={`/app/learning/${deal.id}`}
-                  className="block bg-white rounded-xl border border-[#E2DFD8] p-4 hover:border-primary-300 hover:shadow-md transition-all group"
+                  className="block neu-card !p-4 hover:!shadow-lg transition-all group"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4 min-w-0 flex-1">
-                      <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0', statusCfg.color)}>
+                      <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0', statusCfg.color)}>
                         <StatusIcon className={cn('w-5 h-5', deal.status === 'extracting' && 'animate-spin')} />
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-surface-800 truncate">{deal.name}</h3>
-                          <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-surface-100 text-surface-500 font-medium">
+                          <h3 className="font-semibold text-surface-800 dark:text-surface-100 truncate">{deal.name}</h3>
+                          <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-surface-100 dark:bg-surface-700 text-surface-500 dark:text-surface-400 font-medium">
                             {deal.assetType}
                           </span>
                           {deal.primaryState && (
-                            <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-surface-100 text-surface-500">
+                            <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-surface-100 dark:bg-surface-700 text-surface-500 dark:text-surface-400">
                               {deal.primaryState}
                             </span>
                           )}
@@ -247,7 +243,7 @@ export default function LearningPage() {
                           handleDelete(deal.id);
                         }}
                         disabled={deleting === deal.id}
-                        className="p-1.5 rounded-lg text-surface-300 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                        className="p-1.5 rounded-lg text-surface-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors opacity-0 group-hover:opacity-100"
                       >
                         {deleting === deal.id ? (
                           <Loader2 className="w-4 h-4 animate-spin" />

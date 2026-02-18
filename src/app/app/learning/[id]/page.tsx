@@ -230,7 +230,7 @@ export default function DealDetailPage() {
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-surface-900">{deal.name}</h1>
+              <h1 className="text-xl font-bold text-surface-900 dark:text-white">{deal.name}</h1>
               <span className="text-xs px-2 py-0.5 rounded bg-surface-100 text-surface-500 font-medium">
                 {deal.assetType}
               </span>
@@ -258,7 +258,7 @@ export default function DealDetailPage() {
           <button
             onClick={handleReprocess}
             disabled={reprocessing}
-            className="px-4 py-2 rounded-lg border border-[#E2DFD8] text-sm font-medium text-surface-600 hover:bg-surface-50 flex items-center gap-2 transition-colors disabled:opacity-50"
+            className="neu-button text-sm py-1.5 px-3 flex items-center gap-2 disabled:opacity-50"
           >
             {reprocessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
             Reprocess
@@ -267,7 +267,7 @@ export default function DealDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-[#E2DFD8]">
+      <div className="flex gap-1 border-b border-surface-200 dark:border-surface-700">
         {tabs.map(tab => {
           const Icon = tab.icon;
           return (
@@ -295,7 +295,7 @@ export default function DealDetailPage() {
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Files */}
-          <div className="lg:col-span-2 bg-white rounded-xl border border-[#E2DFD8] p-5">
+          <div className="lg:col-span-2 neu-card !p-5">
             <h3 className="text-sm font-semibold text-surface-700 mb-3">Uploaded Files</h3>
             <div className="space-y-2">
               {deal.files.map(file => (
@@ -322,7 +322,7 @@ export default function DealDetailPage() {
           </div>
 
           {/* Processing Status */}
-          <div className="bg-white rounded-xl border border-[#E2DFD8] p-5">
+          <div className="neu-card !p-5">
             <h3 className="text-sm font-semibold text-surface-700 mb-3">Processing Pipeline</h3>
             <div className="space-y-3">
               {[
@@ -371,7 +371,7 @@ export default function DealDetailPage() {
 
           {/* Facilities */}
           {deal.facilities.length > 0 && (
-            <div className="lg:col-span-3 bg-white rounded-xl border border-[#E2DFD8] p-5">
+            <div className="lg:col-span-3 neu-card !p-5">
               <h3 className="text-sm font-semibold text-surface-700 mb-3">
                 Facilities ({deal.facilities.length})
               </h3>
@@ -424,7 +424,7 @@ export default function DealDetailPage() {
 
       {activeTab === 'valuation' && comparison && (
         <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-[#E2DFD8] p-5">
+          <div className="neu-card !p-5">
             <h3 className="text-sm font-semibold text-surface-700 mb-4">Valuation Analysis</h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -484,7 +484,7 @@ export default function DealDetailPage() {
 
       {activeTab === 'patterns' && comparison && (
         <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-[#E2DFD8] p-5">
+          <div className="neu-card !p-5">
             <h3 className="text-sm font-semibold text-surface-700 mb-4 flex items-center gap-2">
               <Brain className="w-4 h-4 text-primary-500" />
               Extracted Patterns

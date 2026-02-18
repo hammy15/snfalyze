@@ -56,7 +56,7 @@ export function SuggestionBadge({
       </button>
 
       {expanded && (
-        <div className="absolute top-full left-0 mt-1 w-64 bg-white rounded-lg border border-[#E2DFD8] shadow-xl z-50 p-3 space-y-2 animate-scale-in">
+        <div className="absolute top-full left-0 mt-1 w-64 bg-white dark:bg-surface-800 rounded-xl border border-surface-200 dark:border-surface-700 shadow-xl z-50 p-3 space-y-2 animate-scale-in">
           <div className="text-[10px] uppercase tracking-wider text-surface-400 font-medium">
             {preferenceKey.replace(/_/g, ' ')}
           </div>

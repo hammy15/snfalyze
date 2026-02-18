@@ -121,7 +121,7 @@ export function PreferencesPanel({ assetTypeFilter, stateFilter, className }: Pr
 
   if (loading) {
     return (
-      <div className={cn('bg-white rounded-xl border border-[#E2DFD8] p-6', className)}>
+      <div className={cn('neu-card !p-6', className)}>
         <div className="flex items-center gap-2 mb-4">
           <Brain className="w-5 h-5 text-primary-500" />
           <h3 className="text-lg font-semibold text-surface-800">Learned Preferences</h3>
@@ -137,7 +137,7 @@ export function PreferencesPanel({ assetTypeFilter, stateFilter, className }: Pr
 
   if (preferences.length === 0) {
     return (
-      <div className={cn('bg-white rounded-xl border border-[#E2DFD8] p-6 text-center', className)}>
+      <div className={cn('neu-card !p-6 text-center', className)}>
         <Brain className="w-10 h-10 text-surface-300 mx-auto mb-3" />
         <h3 className="text-sm font-semibold text-surface-700 mb-1">No Learned Preferences Yet</h3>
         <p className="text-xs text-surface-400">
@@ -156,7 +156,7 @@ export function PreferencesPanel({ assetTypeFilter, stateFilter, className }: Pr
   }, {});
 
   return (
-    <div className={cn('bg-white rounded-xl border border-[#E2DFD8] p-6', className)}>
+    <div className={cn('neu-card !p-6', className)}>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Brain className="w-5 h-5 text-primary-500" />

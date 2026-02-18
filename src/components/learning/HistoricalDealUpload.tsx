@@ -112,8 +112,8 @@ export function HistoricalDealUpload({ onComplete }: HistoricalDealUploadProps) 
   return (
     <div className="space-y-6">
       {/* Metadata Form */}
-      <div className="bg-white rounded-xl border border-[#E2DFD8] p-6">
-        <h3 className="text-lg font-semibold text-surface-800 mb-4">Deal Information</h3>
+      <div className="neu-card !p-6">
+        <h3 className="text-lg font-semibold text-surface-800 dark:text-surface-100 mb-4">Deal Information</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="col-span-2">
             <label className="block text-sm font-medium text-surface-600 mb-1">Deal Name *</label>
@@ -122,7 +122,7 @@ export function HistoricalDealUpload({ onComplete }: HistoricalDealUploadProps) 
               value={metadata.name}
               onChange={e => setMetadata(m => ({ ...m, name: e.target.value }))}
               placeholder="e.g., Sapphire Portfolio"
-              className="w-full px-3 py-2 rounded-lg border border-[#E2DFD8] bg-white text-surface-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+              className="w-full px-3 py-2 rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 text-surface-800 dark:text-surface-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
             />
           </div>
           <div>
@@ -130,7 +130,7 @@ export function HistoricalDealUpload({ onComplete }: HistoricalDealUploadProps) 
             <select
               value={metadata.assetType}
               onChange={e => setMetadata(m => ({ ...m, assetType: e.target.value as DealMetadata['assetType'] }))}
-              className="w-full px-3 py-2 rounded-lg border border-[#E2DFD8] bg-white text-surface-800 text-sm"
+              className="w-full px-3 py-2 rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 text-surface-800 dark:text-surface-100 text-sm"
             >
               <option value="SNF">SNF</option>
               <option value="ALF">ALF / Memory Care</option>
@@ -145,7 +145,7 @@ export function HistoricalDealUpload({ onComplete }: HistoricalDealUploadProps) 
               onChange={e => setMetadata(m => ({ ...m, primaryState: e.target.value.toUpperCase().slice(0, 2) }))}
               placeholder="OR"
               maxLength={2}
-              className="w-full px-3 py-2 rounded-lg border border-[#E2DFD8] bg-white text-surface-800 text-sm"
+              className="w-full px-3 py-2 rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 text-surface-800 dark:text-surface-100 text-sm"
             />
           </div>
           <div>
@@ -154,7 +154,7 @@ export function HistoricalDealUpload({ onComplete }: HistoricalDealUploadProps) 
               type="date"
               value={metadata.dealDate}
               onChange={e => setMetadata(m => ({ ...m, dealDate: e.target.value }))}
-              className="w-full px-3 py-2 rounded-lg border border-[#E2DFD8] bg-white text-surface-800 text-sm"
+              className="w-full px-3 py-2 rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 text-surface-800 dark:text-surface-100 text-sm"
             />
           </div>
           <div>
@@ -164,7 +164,7 @@ export function HistoricalDealUpload({ onComplete }: HistoricalDealUploadProps) 
               value={metadata.askingPrice}
               onChange={e => setMetadata(m => ({ ...m, askingPrice: e.target.value }))}
               placeholder="400000000"
-              className="w-full px-3 py-2 rounded-lg border border-[#E2DFD8] bg-white text-surface-800 text-sm"
+              className="w-full px-3 py-2 rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 text-surface-800 dark:text-surface-100 text-sm"
             />
           </div>
           <div>
@@ -174,7 +174,7 @@ export function HistoricalDealUpload({ onComplete }: HistoricalDealUploadProps) 
               value={metadata.finalPrice}
               onChange={e => setMetadata(m => ({ ...m, finalPrice: e.target.value }))}
               placeholder="380000000"
-              className="w-full px-3 py-2 rounded-lg border border-[#E2DFD8] bg-white text-surface-800 text-sm"
+              className="w-full px-3 py-2 rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 text-surface-800 dark:text-surface-100 text-sm"
             />
           </div>
           <div>
@@ -184,7 +184,7 @@ export function HistoricalDealUpload({ onComplete }: HistoricalDealUploadProps) 
               value={metadata.beds}
               onChange={e => setMetadata(m => ({ ...m, beds: e.target.value }))}
               placeholder="1300"
-              className="w-full px-3 py-2 rounded-lg border border-[#E2DFD8] bg-white text-surface-800 text-sm"
+              className="w-full px-3 py-2 rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 text-surface-800 dark:text-surface-100 text-sm"
             />
           </div>
         </div>
@@ -245,7 +245,7 @@ export function HistoricalDealUpload({ onComplete }: HistoricalDealUploadProps) 
         <button
           onClick={handleSubmit}
           disabled={!metadata.name || files.length === 0 || uploading}
-          className="px-6 py-2.5 rounded-lg bg-primary-500 text-white font-medium text-sm hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+          className="neu-button-primary text-sm py-2 px-4 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {uploading ? (
             <>
@@ -323,7 +323,7 @@ function DropZone({ role, icon, title, description, files, onDrop, onFileSelect,
       {files.length > 0 && (
         <div className="mt-3 space-y-1">
           {files.map((f, i) => (
-            <div key={i} className="flex items-center gap-2 text-xs bg-white rounded-lg px-3 py-1.5 border border-[#E2DFD8]">
+            <div key={i} className="flex items-center gap-2 text-xs bg-white dark:bg-surface-800 rounded-lg px-3 py-1.5 border border-surface-200 dark:border-surface-700">
               <FileSpreadsheet className="w-3 h-3 flex-shrink-0" />
               <span className="truncate flex-1 text-left text-surface-700">{f.file.name}</span>
               <button onClick={() => onRemove(i)} className="text-red-400 hover:text-red-600">&times;</button>

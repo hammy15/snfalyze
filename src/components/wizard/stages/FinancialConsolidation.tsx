@@ -440,8 +440,11 @@ export function FinancialConsolidation({ stageData, onUpdate, dealId }: Financia
   const generateProforma = async () => {
     setGeneratingProforma(true);
     try {
-      // If we have a dealId, use the API
-      if (dealId) {
+      // Prefer local facilityPnl data when available (wizard context has it from extraction)
+      // Only fall back to API when facilityPnl is empty and dealId exists
+      const hasLocalData = facilityPnl.length > 0 && facilityPnl.some(f => f.revenue > 0 || f.expenses > 0);
+
+      if (dealId && !hasLocalData) {
         const response = await fetch(`/api/deals/${dealId}/financial/proforma`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

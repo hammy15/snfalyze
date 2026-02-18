@@ -1869,3 +1869,191 @@ export const userActivityLog = pgTable('user_activity_log', {
   metadata: jsonb('metadata').default({}),
   createdAt: timestamp('created_at').defaultNow(),
 });
+
+// ============================================================================
+// Deal Learning System Tables
+// ============================================================================
+
+export const historicalDealStatusEnum = pgEnum('historical_deal_status', [
+  'uploading',
+  'extracting',
+  'comparing',
+  'learning',
+  'complete',
+  'error',
+]);
+
+export const fileRoleEnum = pgEnum('file_role', [
+  'raw_source',
+  'completed_proforma',
+  'value_assessment',
+]);
+
+export const historicalDeals = pgTable(
+  'historical_deals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: varchar('name', { length: 255 }).notNull(),
+    status: historicalDealStatusEnum('status').default('uploading'),
+    assetType: assetTypeEnum('asset_type').notNull(),
+    primaryState: varchar('primary_state', { length: 2 }),
+    dealDate: date('deal_date'),
+    askingPrice: decimal('asking_price', { precision: 15, scale: 2 }),
+    finalPrice: decimal('final_price', { precision: 15, scale: 2 }),
+    beds: integer('beds'),
+    facilityCount: integer('facility_count').default(1),
+    dealStructure: dealStructureEnum('deal_structure').default('purchase'),
+
+    // Extracted data snapshots
+    rawExtraction: jsonb('raw_extraction'),
+    proformaExtraction: jsonb('proforma_extraction'),
+    valuationExtraction: jsonb('valuation_extraction'),
+    comparisonResult: jsonb('comparison_result'),
+
+    notes: text('notes'),
+    tags: text('tags').array(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (table) => ({
+    statusIdx: index('idx_historical_deals_status').on(table.status),
+    assetTypeIdx: index('idx_historical_deals_asset_type').on(table.assetType),
+    stateIdx: index('idx_historical_deals_state').on(table.primaryState),
+  })
+);
+
+export const historicalDealFiles = pgTable(
+  'historical_deal_files',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    historicalDealId: uuid('historical_deal_id')
+      .references(() => historicalDeals.id, { onDelete: 'cascade' })
+      .notNull(),
+    filename: varchar('filename', { length: 255 }).notNull(),
+    fileRole: fileRoleEnum('file_role').notNull(),
+    fileSize: integer('file_size'),
+    mimeType: varchar('mime_type', { length: 100 }),
+    storagePath: text('storage_path'),
+    extractedData: jsonb('extracted_data'),
+    extractionStatus: extractionStageEnum('extraction_status').default('pending'),
+    extractionError: text('extraction_error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    dealIdIdx: index('idx_historical_files_deal_id').on(table.historicalDealId),
+    roleIdx: index('idx_historical_files_role').on(table.fileRole),
+  })
+);
+
+export const historicalDealFacilities = pgTable(
+  'historical_deal_facilities',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    historicalDealId: uuid('historical_deal_id')
+      .references(() => historicalDeals.id, { onDelete: 'cascade' })
+      .notNull(),
+    facilityName: varchar('facility_name', { length: 255 }).notNull(),
+    assetType: assetTypeEnum('asset_type'),
+    state: varchar('state', { length: 2 }),
+    beds: integer('beds'),
+    propertyType: varchar('property_type', { length: 50 }),
+
+    // Raw data (from extraction)
+    rawFinancials: jsonb('raw_financials'),
+    rawEbitdar: decimal('raw_ebitdar', { precision: 15, scale: 2 }),
+    rawOccupancy: decimal('raw_occupancy', { precision: 5, scale: 4 }),
+
+    // Proforma data (from user's completed proforma)
+    proformaFinancials: jsonb('proforma_financials'),
+    proformaEbitdar: decimal('proforma_ebitdar', { precision: 15, scale: 2 }),
+    proformaOccupancy: decimal('proforma_occupancy', { precision: 5, scale: 4 }),
+
+    // Valuation data (from user's value assessment)
+    userValuation: decimal('user_valuation', { precision: 15, scale: 2 }),
+    userCapRate: decimal('user_cap_rate', { precision: 5, scale: 4 }),
+    userMultiplier: decimal('user_multiplier', { precision: 5, scale: 2 }),
+    userPricePerBed: decimal('user_price_per_bed', { precision: 15, scale: 2 }),
+
+    // System-calculated for comparison
+    systemValuation: decimal('system_valuation', { precision: 15, scale: 2 }),
+    systemCapRate: decimal('system_cap_rate', { precision: 5, scale: 4 }),
+    valuationDelta: decimal('valuation_delta', { precision: 15, scale: 2 }),
+    valuationDeltaPercent: decimal('valuation_delta_percent', { precision: 5, scale: 4 }),
+
+    // Detected normalization preferences
+    mgmtFeePercent: decimal('mgmt_fee_percent', { precision: 5, scale: 4 }),
+    agencyPercent: decimal('agency_percent', { precision: 5, scale: 4 }),
+    capexReservePercent: decimal('capex_reserve_percent', { precision: 5, scale: 4 }),
+    revenueGrowthRate: decimal('revenue_growth_rate', { precision: 5, scale: 4 }),
+    expenseGrowthRate: decimal('expense_growth_rate', { precision: 5, scale: 4 }),
+    occupancyAssumption: decimal('occupancy_assumption', { precision: 5, scale: 4 }),
+
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    dealIdIdx: index('idx_hist_facilities_deal_id').on(table.historicalDealId),
+    assetTypeIdx: index('idx_hist_facilities_asset_type').on(table.assetType),
+  })
+);
+
+export const aggregatedPreferences = pgTable(
+  'aggregated_preferences',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+
+    // Dimensions
+    assetType: assetTypeEnum('asset_type'),
+    state: varchar('state', { length: 2 }),
+    region: varchar('region', { length: 50 }),
+    qualityTier: varchar('quality_tier', { length: 20 }),
+    dealSizeRange: varchar('deal_size_range', { length: 50 }),
+    dealStructure: dealStructureEnum('deal_structure'),
+
+    // Preference key
+    preferenceKey: varchar('preference_key', { length: 100 }).notNull(),
+
+    // Aggregated statistics
+    avgValue: decimal('avg_value', { precision: 10, scale: 6 }),
+    medianValue: decimal('median_value', { precision: 10, scale: 6 }),
+    minValue: decimal('min_value', { precision: 10, scale: 6 }),
+    maxValue: decimal('max_value', { precision: 10, scale: 6 }),
+    stdDev: decimal('std_dev', { precision: 10, scale: 6 }),
+    sampleCount: integer('sample_count').default(0),
+
+    sourceDealIds: uuid('source_deal_ids').array(),
+    confidence: decimal('confidence', { precision: 5, scale: 4 }),
+
+    lastUpdatedAt: timestamp('last_updated_at', { withTimezone: true }).defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    dimensionIdx: index('idx_agg_prefs_dimensions').on(
+      table.assetType,
+      table.state,
+      table.preferenceKey
+    ),
+    keyIdx: index('idx_agg_prefs_key').on(table.preferenceKey),
+    confidenceIdx: index('idx_agg_prefs_confidence').on(table.confidence),
+  })
+);
+
+// Deal Learning Relations
+export const historicalDealsRelations = relations(historicalDeals, ({ many }) => ({
+  files: many(historicalDealFiles),
+  facilities: many(historicalDealFacilities),
+}));
+
+export const historicalDealFilesRelations = relations(historicalDealFiles, ({ one }) => ({
+  historicalDeal: one(historicalDeals, {
+    fields: [historicalDealFiles.historicalDealId],
+    references: [historicalDeals.id],
+  }),
+}));
+
+export const historicalDealFacilitiesRelations = relations(historicalDealFacilities, ({ one }) => ({
+  historicalDeal: one(historicalDeals, {
+    fields: [historicalDealFacilities.historicalDealId],
+    references: [historicalDeals.id],
+  }),
+}));

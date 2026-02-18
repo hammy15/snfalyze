@@ -74,6 +74,12 @@ export interface CascadiaValuationInput {
   t13Facilities: T13FacilitySection[];
   assetValuationEntries?: AssetValuationEntry[];
   overrides?: CascadiaOverrides;
+  /** Learned preferences from historical deal analysis — applied as fallback when no explicit overrides set */
+  learnedOverrides?: {
+    snfCapRate?: number;
+    leasedMultiplier?: number;
+    alfCapRates?: { noSNC?: number; lowSNC?: number; highSNC?: number };
+  };
   /** State for geographic cap rate adjustment (e.g., 'OR', 'WA') */
   state?: string;
 }
@@ -97,7 +103,15 @@ export interface CascadiaOverrides {
 }
 
 export function runCascadiaValuation(input: CascadiaValuationInput): CascadiaValuationResult {
-  const { classifications, t13Facilities, assetValuationEntries, overrides, state } = input;
+  const { classifications, t13Facilities, assetValuationEntries, overrides: rawOverrides, learnedOverrides, state } = input;
+
+  // Merge learned overrides as fallback behind explicit overrides
+  const overrides: CascadiaOverrides | undefined = rawOverrides || learnedOverrides ? {
+    snfCapRate: rawOverrides?.snfCapRate ?? learnedOverrides?.snfCapRate,
+    leasedMultiplier: rawOverrides?.leasedMultiplier ?? learnedOverrides?.leasedMultiplier,
+    alfCapRates: rawOverrides?.alfCapRates ?? learnedOverrides?.alfCapRates,
+    facilityOverrides: rawOverrides?.facilityOverrides,
+  } : undefined;
 
   // Build lookup maps
   const t13Lookup = new Map<string, T13FacilitySection>();

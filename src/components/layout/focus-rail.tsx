@@ -17,6 +17,7 @@ import {
   Search,
   Sparkles,
   Users,
+  Brain,
 } from 'lucide-react';
 
 interface NavItem {
@@ -30,6 +31,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/app/macro', icon: Radar, label: 'Portfolio Radar' },
   { href: '/app/deals', icon: Crosshair, label: 'Deal Pipeline' },
   { href: '/app/facilities', icon: Building2, label: 'Facilities' },
+  { href: '/app/learning', icon: Brain, label: 'Deal Learning' },
   { href: '/app/partners', icon: Handshake, label: 'Partners', roles: ['admin', 'vp', 'analyst'] },
 ];
 

@@ -671,3 +671,92 @@ export class FinancialNormalizer {
 // =============================================================================
 
 export const financialNormalizer = new FinancialNormalizer();
+
+// =============================================================================
+// NORMALIZATION DIFF DETECTION (for Deal Learning reverse engineering)
+// =============================================================================
+
+export interface NormalizationDiffItem {
+  field: string;
+  rawValue: number;
+  proformaValue: number;
+  changeAmount: number;
+  changePercent: number;
+  changeType: 'increase' | 'decrease' | 'unchanged';
+}
+
+/**
+ * Detect normalization differences between raw and proforma financials.
+ * Used by the learning system to understand how users adjust raw data.
+ */
+export function detectNormalizationDiff(
+  raw: { revenueLines: { label: string; amount: number }[]; expenseLines: { label: string; amount: number }[] },
+  proforma: { revenueLines: { label: string; amount: number }[]; expenseLines: { label: string; amount: number }[] },
+): NormalizationDiffItem[] {
+  const diffs: NormalizationDiffItem[] = [];
+
+  // Build lookup maps
+  const rawRevMap = new Map<string, number>();
+  for (const line of raw.revenueLines) {
+    const key = line.label.toLowerCase().trim();
+    rawRevMap.set(key, (rawRevMap.get(key) || 0) + line.amount);
+  }
+
+  const proRevMap = new Map<string, number>();
+  for (const line of proforma.revenueLines) {
+    const key = line.label.toLowerCase().trim();
+    proRevMap.set(key, (proRevMap.get(key) || 0) + line.amount);
+  }
+
+  // Compare revenue lines
+  const allRevKeys = new Set([...rawRevMap.keys(), ...proRevMap.keys()]);
+  for (const key of allRevKeys) {
+    const rawVal = rawRevMap.get(key) || 0;
+    const proVal = proRevMap.get(key) || 0;
+    if (Math.abs(rawVal - proVal) > 1) {
+      const changeAmount = proVal - rawVal;
+      const changePercent = rawVal !== 0 ? changeAmount / Math.abs(rawVal) : 0;
+      diffs.push({
+        field: key,
+        rawValue: rawVal,
+        proformaValue: proVal,
+        changeAmount,
+        changePercent,
+        changeType: changePercent > 0.001 ? 'increase' : changePercent < -0.001 ? 'decrease' : 'unchanged',
+      });
+    }
+  }
+
+  // Compare expense lines
+  const rawExpMap = new Map<string, number>();
+  for (const line of raw.expenseLines) {
+    const key = line.label.toLowerCase().trim();
+    rawExpMap.set(key, (rawExpMap.get(key) || 0) + line.amount);
+  }
+
+  const proExpMap = new Map<string, number>();
+  for (const line of proforma.expenseLines) {
+    const key = line.label.toLowerCase().trim();
+    proExpMap.set(key, (proExpMap.get(key) || 0) + line.amount);
+  }
+
+  const allExpKeys = new Set([...rawExpMap.keys(), ...proExpMap.keys()]);
+  for (const key of allExpKeys) {
+    const rawVal = rawExpMap.get(key) || 0;
+    const proVal = proExpMap.get(key) || 0;
+    if (Math.abs(rawVal - proVal) > 1) {
+      const changeAmount = proVal - rawVal;
+      const changePercent = rawVal !== 0 ? changeAmount / Math.abs(rawVal) : 0;
+      diffs.push({
+        field: key,
+        rawValue: rawVal,
+        proformaValue: proVal,
+        changeAmount,
+        changePercent,
+        changeType: changePercent > 0.001 ? 'increase' : changePercent < -0.001 ? 'decrease' : 'unchanged',
+      });
+    }
+  }
+
+  return diffs.sort((a, b) => Math.abs(b.changeAmount) - Math.abs(a.changeAmount));
+}

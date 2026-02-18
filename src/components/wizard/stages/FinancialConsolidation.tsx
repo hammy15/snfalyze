@@ -887,13 +887,12 @@ export function FinancialConsolidation({ stageData, onUpdate, dealId }: Financia
                         </td>
                       ))}
                       <td className="text-right py-2 px-3 font-mono text-primary-600">
-                        {proformaData.projections.length >= 2
-                          ? ((Math.pow(
-                              proformaData.projections[proformaData.projections.length - 1].portfolio.noi /
-                                Math.max(proformaData.projections[0].portfolio.noi, 1),
-                              1 / 5
-                            ) - 1) * 100).toFixed(1)
-                          : '-'}%
+                        {(() => {
+                          const baseNoi = proformaData.projections[0]?.portfolio.noi;
+                          const endNoi = proformaData.projections[proformaData.projections.length - 1]?.portfolio.noi;
+                          if (!baseNoi || !endNoi || baseNoi <= 0 || endNoi <= 0) return '-';
+                          return ((Math.pow(endNoi / baseNoi, 1 / 5) - 1) * 100).toFixed(1) + '%';
+                        })()}
                       </td>
                     </tr>
                     {/* NOI Margin Row */}

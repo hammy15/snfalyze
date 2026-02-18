@@ -81,7 +81,7 @@ interface MarketAdjustment {
 
 const DEFAULT_CAP_RATE_SETTINGS: Record<AssetType, CapRateSettings> = {
   SNF: {
-    baseCapRate: 0.10, // 10% base cap rate
+    baseCapRate: 0.125, // 12.5% base cap rate (EBITDAR)
     adjustments: {
       quality: {
         enabled: true,

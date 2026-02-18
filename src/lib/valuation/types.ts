@@ -135,7 +135,7 @@ export interface MarketData {
 // Default market assumptions by asset type
 export const DEFAULT_MARKET_DATA: Record<AssetType, Partial<MarketData>> = {
   SNF: {
-    avgCapRate: 0.10,
+    avgCapRate: 0.125,
     avgPricePerBed: 85000,
     avgOccupancy: 0.82,
   },

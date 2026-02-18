@@ -131,7 +131,7 @@ export const DEFAULT_VALUATION_SETTINGS: ValuationSettings = {
   capRates: {
     SNF: {
       external: { low: 0.12, base: 0.125, high: 0.14 },
-      cascadia: { low: 0.105, base: 0.11, high: 0.12 },
+      cascadia: { low: 0.115, base: 0.125, high: 0.135 },
     },
     ALF: {
       external: { low: 0.08, base: 0.085, high: 0.10 },

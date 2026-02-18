@@ -37,7 +37,7 @@ export interface FileClassification {
 
 export type CascadiaPropertyType = 'SNF-Owned' | 'Leased' | 'ALF/SNC-Owned';
 
-export type ValuationMethodType = 'ebitda_cap_rate' | 'ni_multiplier';
+export type ValuationMethodType = 'ebitdar_cap_rate' | 'ebitda_cap_rate' | 'ebit_multiplier' | 'ni_multiplier';
 
 export interface FacilityClassification {
   facilityName: string;
@@ -139,8 +139,12 @@ export interface AssetValuationEntry {
   sncPercent?: number;
   capRate?: number;
   multiplier?: number;
+  ebitdar2025?: number;
+  ebitdar2026?: number;
   ebitda2025?: number;
   ebitda2026?: number;
+  ebit2025?: number;
+  ebit2026?: number;
   netIncome2025?: number;
   netIncome2026?: number;
   value2025?: number;
@@ -235,7 +239,7 @@ export interface CascadiaFacilityValuation {
   facilityName: string;
   propertyType: CascadiaPropertyType;
   beds: number;
-  metricUsed: 'EBITDA' | 'Net Income';
+  metricUsed: 'EBITDAR' | 'EBITDA' | 'EBIT' | 'Net Income';
   metricValue: number;
   rateOrMultiplier: number;
   rateLabel: string; // e.g., "10% Cap Rate" or "5.0x Multiplier"
@@ -269,6 +273,12 @@ export interface CascadiaValuationResult {
     cascadiaValue: number;
     externalValue: number;
     valueRange: { low: number; mid: number; high: number };
+  };
+  reimbursementUpside?: {
+    pdpmUpside: { low: number; high: number };
+    qualityBonusUpside: { low: number; high: number };
+    totalUpside: { low: number; high: number };
+    totalUpsidePercent: { low: number; high: number };
   };
 }
 

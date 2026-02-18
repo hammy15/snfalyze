@@ -253,7 +253,7 @@ export function parseAssetValuation(sheets: SheetExtraction[]): AssetValuationRe
       totalBeds,
       totalValue,
       avgValuePerBed: totalBeds > 0 ? totalValue / totalBeds : 0,
-      valuationMethod: type === 'Leased' ? 'NI × Multiplier' : 'EBITDA / Cap Rate',
+      valuationMethod: type === 'Leased' ? 'EBIT × Multiplier' : 'EBITDAR / Cap Rate',
     };
   });
 
@@ -389,7 +389,7 @@ function detectValuationColumns(data: (string | number | null)[][]): ValuationCo
 function autoDetectPropertyType(entry: AssetValuationEntry): CascadiaPropertyType {
   if (entry.multiplier && entry.multiplier > 1) return 'Leased';
   if (entry.capRate) {
-    if (entry.capRate >= 0.095 && entry.capRate <= 0.105) return 'SNF-Owned';
+    if (entry.capRate >= 0.11 && entry.capRate <= 0.14) return 'SNF-Owned';
     if (entry.capRate >= 0.07 && entry.capRate <= 0.13) return 'ALF/SNC-Owned';
   }
   return 'SNF-Owned';

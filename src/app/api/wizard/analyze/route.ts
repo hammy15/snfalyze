@@ -227,12 +227,12 @@ Return ONLY valid JSON.`;
   // ===================================================================
   // VALUATIONS — real purchase price recommendations
   // ===================================================================
-  // Cascadia cap rates: SNF 12.0-12.5%, ALF 6.5-7.5%
+  // Cascadia cap rates: SNF 12.5% on EBITDAR, ALF 6.5-7.5%
   const assetType = stageData.dealStructure?.assetType || 'SNF';
   const isSnf = assetType === 'SNF' || assetType === 'snf';
-  const lowCapRate = isSnf ? 0.125 : 0.075;     // Conservative (lender)
-  const midCapRate = isSnf ? 0.115 : 0.070;     // Mid-market
-  const highCapRate = isSnf ? 0.105 : 0.065;    // Aggressive (Cascadia execution)
+  const lowCapRate = isSnf ? 0.14 : 0.075;      // Conservative (lender: 14%)
+  const midCapRate = isSnf ? 0.125 : 0.070;     // Mid-market (Cascadia: 12.5%)
+  const highCapRate = isSnf ? 0.115 : 0.065;    // Aggressive (Cascadia execution)
 
   // Normalized NOI: adjust management fee to 5%, agency to 3%
   const totalNursing = facilityMetrics.reduce((s: number, m: any) => s + m.nursing, 0);

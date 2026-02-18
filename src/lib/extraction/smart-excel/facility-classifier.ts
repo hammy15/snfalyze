@@ -4,9 +4,9 @@
  * Determines property type and valuation method for each facility based on
  * Cascadia's three-method valuation methodology:
  *
- * 1. SNF-Owned: EBITDA / Cap Rate (10%)
- * 2. Leased: Net Income × Multiplier (5.0x)
- * 3. ALF/SNC-Owned: EBITDA / Cap Rate (8%, 9%, or 12% based on SNC%)
+ * 1. SNF-Owned: EBITDAR / Cap Rate (12.5%)
+ * 2. Leased: EBIT × Multiplier (2.0–3.0x, midpoint 2.5x)
+ * 3. ALF/SNC-Owned: EBITDAR / Cap Rate (8%, 9%, or 12% based on SNC%)
  */
 
 import type {
@@ -85,7 +85,7 @@ function classifySingleFacility(
       valuationMethod: method,
       sncPercent,
       applicableRate: avEntry.propertyType === 'Leased'
-        ? (avEntry.multiplier || 5.0)
+        ? (avEntry.multiplier || 2.5)
         : capRate,
       beds,
       confidence: 0.95,
@@ -107,7 +107,7 @@ function classifySingleFacility(
     propertyType,
     valuationMethod: valMethod,
     sncPercent,
-    applicableRate: propertyType === 'Leased' ? 5.0 : capRate,
+    applicableRate: propertyType === 'Leased' ? 2.5 : capRate,
     beds,
     confidence: detectionIndicators.length > 1 ? 0.8 : 0.6,
     indicators,
@@ -124,7 +124,7 @@ function classifyFromAssetValuation(entry: AssetValuationEntry): FacilityClassif
     valuationMethod: method,
     sncPercent: entry.sncPercent,
     applicableRate: entry.propertyType === 'Leased'
-      ? (entry.multiplier || 5.0)
+      ? (entry.multiplier || 2.5)
       : capRate,
     beds: entry.beds,
     confidence: 0.9,
@@ -157,7 +157,7 @@ function detectFromPL(facility: T13FacilitySection): PLDetectionResult {
 
       return {
         propertyType: 'ALF/SNC-Owned',
-        method: 'ebitda_cap_rate',
+        method: 'ebitdar_cap_rate',
         sncPercent,
         detectionIndicators: indicators,
       };
@@ -183,7 +183,7 @@ function detectFromPL(facility: T13FacilitySection): PLDetectionResult {
     indicators.push('Has lease expense, no property tax → Leased');
     return {
       propertyType: 'Leased',
-      method: 'ni_multiplier',
+      method: 'ebit_multiplier',
       detectionIndicators: indicators,
     };
   }
@@ -201,7 +201,7 @@ function detectFromPL(facility: T13FacilitySection): PLDetectionResult {
     const sncPercent = detectSNCPercent(lineItems);
     return {
       propertyType: 'ALF/SNC-Owned',
-      method: 'ebitda_cap_rate',
+      method: 'ebitdar_cap_rate',
       sncPercent,
       detectionIndicators: indicators,
     };
@@ -220,7 +220,7 @@ function detectFromPL(facility: T13FacilitySection): PLDetectionResult {
   indicators.push('Default classification: SNF-Owned');
   return {
     propertyType: 'SNF-Owned',
-    method: 'ebitda_cap_rate',
+    method: 'ebitdar_cap_rate',
     detectionIndicators: indicators,
   };
 }
@@ -260,19 +260,19 @@ function detectSNCPercent(lineItems: { label: string; annualValue: number; glCod
 // ============================================================================
 
 function determineValuationMethod(propertyType: CascadiaPropertyType): ValuationMethodType {
-  return propertyType === 'Leased' ? 'ni_multiplier' : 'ebitda_cap_rate';
+  return propertyType === 'Leased' ? 'ebit_multiplier' : 'ebitdar_cap_rate';
 }
 
 /**
  * Cascadia cap rate schedule:
- * - SNF-Owned: 10%
- * - Leased: N/A (uses 5.0x multiplier instead)
+ * - SNF-Owned: 12.5% (on EBITDAR)
+ * - Leased: N/A (uses 2.0–3.0x multiplier on EBIT instead)
  * - ALF/SNC-Owned 0% SNC: 8%
  * - ALF/SNC-Owned >0% to ≤33% SNC: 9%
  * - ALF/SNC-Owned >33% SNC: 12%
  */
 function determineCapRate(propertyType: CascadiaPropertyType, sncPercent?: number): number {
-  if (propertyType === 'SNF-Owned') return 0.10;
+  if (propertyType === 'SNF-Owned') return 0.125;
   if (propertyType === 'Leased') return 0; // Not used (multiplier instead)
 
   // ALF/SNC-Owned

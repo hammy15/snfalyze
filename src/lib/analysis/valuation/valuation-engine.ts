@@ -470,10 +470,10 @@ export class ValuationEngine {
     marketData?: MarketData
   ): ValuationEngineOutput['sensitivity'] {
     const noi = financials?.normalized.metrics.noi || 0;
-    const baseValue = noi > 0 ? noi / 0.10 : 0; // Assume 10% cap rate as base
+    const baseValue = noi > 0 ? noi / 0.125 : 0; // 12.5% cap rate on EBITDAR
 
-    // Cap rate sensitivity (8% to 12%)
-    const capRateSensitivity = [0.08, 0.085, 0.09, 0.095, 0.10, 0.105, 0.11, 0.115, 0.12].map(
+    // Cap rate sensitivity (10% to 15%)
+    const capRateSensitivity = [0.10, 0.105, 0.11, 0.115, 0.12, 0.125, 0.13, 0.135, 0.14].map(
       (capRate) => ({
         capRate,
         value: noi > 0 ? noi / capRate : 0,

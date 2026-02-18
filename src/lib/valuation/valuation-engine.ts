@@ -179,7 +179,7 @@ export function runValuation(
 
   if (capRateResult && input.noi) {
     const capRateInputs = capRateResult.inputsUsed;
-    const baseCapRate = 0.10; // Default or extract from result
+    const baseCapRate = 0.125; // 12.5% Cascadia base on EBITDAR
     const sensitivity = capRateSensitivity(input.noi, baseCapRate);
 
     sensitivityAnalysis = {

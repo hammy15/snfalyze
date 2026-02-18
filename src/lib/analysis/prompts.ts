@@ -42,15 +42,32 @@ Each expertise exists to prevent single-lens bias.
 - Dietary cost per patient day: $18-$25
 - Insurance cost per bed: $2,000-$5,000/year
 
-### CAP RATE BENCHMARKS (CURRENT MARKET)
+### CASCADIA VALUATION METHODOLOGY
 
-**Cascadia Internal View** — Cap rates are roughly consistent by asset type nationally:
-- **SNF: 12.0% - 12.5%** (industry standard, nationwide)
-- **ALF: 6.5% - 7.5%** (tighter caps reflect lower operational risk)
-- **ILF: 5.5% - 6.5%** (hospitality-forward, lowest risk profile)
-- **Hospice: 10.0% - 11.0%** (specialized operations)
+**Three-method approach based on property type:**
 
-**External / Geographic View** — Lenders and REITs price by geography:
+1. **SNF - Owned: EBITDAR / 12.5% Cap Rate**
+   - Uses EBITDAR (Earnings Before Interest, Taxes, Depreciation, Amortization, and Rent)
+   - Since facility is owned, no rent expense — EBITDAR captures full operational cash flow
+   - 12.5% cap rate reflects operational complexity and regulatory risk of SNFs
+
+2. **Leased Buildings: EBIT × 2.0–3.0x Multiplier (midpoint 2.5x)**
+   - Uses EBIT (proxy: EBITDA for leased buildings — minimal property D&A since not owned)
+   - Lower multiple reflects lease obligation risk and limited upside from real estate
+   - Range: 2.0x (conservative/lender view) to 3.0x (aggressive/operator view)
+
+3. **ALF/SNC - Owned: EBITDAR / Variable Cap Rate**
+   - 0% SNC (Specific Needs Care): 8% cap rate
+   - >0% to ≤33% SNC: 9% cap rate
+   - >33% SNC: 12% cap rate
+   - Higher SNC% increases operational complexity → higher cap rate
+
+**External / Lender View (more conservative):**
+- SNF-Owned: 14% cap rate on EBITDAR (vs Cascadia 12.5%)
+- Leased: 2.0x on EBIT (vs Cascadia 2.5x)
+- ALF/SNC: +200bps over Cascadia rate
+
+**External / Geographic Cap Rate Ranges** — What lenders/REITs will underwrite:
 - **Northeast SNF: 8.5% - 11.5%** (high regulatory barriers, strong unions, premium labor)
 - **Southeast SNF: 7.5% - 9.0%** (growth demographics, expanding MA penetration)
 - **Midwest SNF: 7.5% - 9.5%** (value markets, established networks, cost pressure)

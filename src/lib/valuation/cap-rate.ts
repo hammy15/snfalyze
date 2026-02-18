@@ -60,7 +60,7 @@ export function determineCapRate(
 
   // Fall back to asset type defaults
   const defaults = DEFAULT_MARKET_DATA[input.assetType];
-  const rate = defaults.avgCapRate || 0.10;
+  const rate = defaults.avgCapRate || 0.125;
   return {
     rate,
     low: rate - 0.015,

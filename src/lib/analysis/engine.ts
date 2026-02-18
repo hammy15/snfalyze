@@ -173,7 +173,7 @@ export function getMarketCapRates(
 ): { low: number; base: number; high: number } {
   // Cascadia internal view: asset-type based (operational opportunity pricing)
   const cascadiaRates: Record<string, { low: number; base: number; high: number }> = {
-    SNF: { low: 0.105, base: 0.115, high: 0.125 },
+    SNF: { low: 0.115, base: 0.125, high: 0.135 },
     ALF: { low: 0.06, base: 0.065, high: 0.07 },
     ILF: { low: 0.05, base: 0.055, high: 0.06 },
     HOSPICE: { low: 0.09, base: 0.095, high: 0.10 },
@@ -194,7 +194,7 @@ export function getMarketCapRates(
 
   // Fallback to national rates if no geographic data
   const fallbackExternal: Record<string, { low: number; base: number; high: number }> = {
-    SNF: { low: 0.12, base: 0.125, high: 0.13 },
+    SNF: { low: 0.13, base: 0.14, high: 0.15 },
     ALF: { low: 0.065, base: 0.07, high: 0.075 },
     ILF: { low: 0.055, base: 0.06, high: 0.065 },
     HOSPICE: { low: 0.10, base: 0.105, high: 0.11 },

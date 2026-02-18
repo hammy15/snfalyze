@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, deals, facilities } from '@/db';
 import { eq } from 'drizzle-orm';
+import { isValidUUID, invalidIdResponse } from '@/lib/validate-uuid';
 import {
   calculateRentSuggestion,
   calculatePortfolioRent,
@@ -23,6 +24,7 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id: dealId } = await params;
+    if (!isValidUUID(dealId)) return invalidIdResponse();
 
     // Parse query params for custom assumptions
     const searchParams = request.nextUrl.searchParams;

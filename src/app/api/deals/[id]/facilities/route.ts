@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, facilities, deals, facilityCensusPeriods, facilityPayerRates, financialPeriods } from '@/db';
 import { eq, desc, sql, and, gte } from 'drizzle-orm';
+import { isValidUUID, invalidIdResponse } from '@/lib/validate-uuid';
 
 export async function GET(
   request: NextRequest,
@@ -8,6 +9,7 @@ export async function GET(
 ) {
   try {
     const { id: dealId } = await params;
+    if (!isValidUUID(dealId)) return invalidIdResponse();
 
     // Verify deal exists
     const deal = await db.query.deals.findFirst({

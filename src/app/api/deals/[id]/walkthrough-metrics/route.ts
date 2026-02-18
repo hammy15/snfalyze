@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, deals, facilities, financialPeriods, facilityCensusPeriods, dealCoaMappings } from '@/db';
 import { eq, desc, and } from 'drizzle-orm';
+import { isValidUUID, invalidIdResponse } from '@/lib/validate-uuid';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -19,6 +20,7 @@ interface WalkthroughMetrics {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id: dealId } = await params;
+    if (!isValidUUID(dealId)) return invalidIdResponse();
 
     // Verify deal exists
     const deal = await db.query.deals.findFirst({

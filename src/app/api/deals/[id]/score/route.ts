@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { deals, facilities } from '@/db/schema';
 import { eq, sql } from 'drizzle-orm';
+import { isValidUUID, invalidIdResponse } from '@/lib/validate-uuid';
 
 interface FacilityScoreSummary {
   facilityId: string;
@@ -52,6 +53,7 @@ export async function GET(
 ) {
   try {
     const { id: dealId } = await params;
+    if (!isValidUUID(dealId)) return invalidIdResponse();
 
     // Fetch deal data
     const [deal] = await db

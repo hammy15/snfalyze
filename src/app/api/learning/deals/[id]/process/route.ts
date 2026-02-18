@@ -9,6 +9,7 @@ import { parseCompletedProforma } from '@/lib/learning/proforma-parser';
 import { reverseEngineer } from '@/lib/learning/reverse-engineer';
 import { extractPreferenceDataPoints, aggregatePreferences as aggPrefs } from '@/lib/learning/pattern-aggregator';
 import type { SmartExtractionResult } from '@/lib/extraction/smart-excel/types';
+import type { ComparisonResult, FacilityComparison, DetectedPreferences } from '@/lib/learning/types';
 import { readFile } from 'fs/promises';
 
 /**
@@ -96,15 +97,170 @@ export async function POST(
       await db.update(historicalDeals).set({ valuationExtraction: valuationData as unknown as Record<string, unknown> }).where(eq(historicalDeals.id, id));
     }
 
-    // Phase 4: Compare (Reverse Engineer)
+    // Phase 3.5: Parse raw source files with proforma parser as fallback
+    // SmartExcel is designed for T13/asset valuation extraction, not per-facility P&L.
+    // When raw files have the same multi-sheet P&L format, parse them the same way.
+    let rawParsedData = null;
+    if (rawFiles.length > 0 && rawFiles[0].storagePath) {
+      const rawBuffer = await readFile(rawFiles[0].storagePath);
+      const rawWorkbook = XLSX.read(rawBuffer, { type: 'buffer' });
+      const rawSheets = rawWorkbook.SheetNames.map(name => ({
+        name,
+        data: XLSX.utils.sheet_to_json(rawWorkbook.Sheets[name], { header: 1 }) as (string | number | null)[][],
+      }));
+      rawParsedData = parseCompletedProforma(rawSheets);
+    }
+
+    // Phase 4: Compare (Reverse Engineer) — direct facility-level comparison
     await db.update(historicalDeals).set({ status: 'comparing' }).where(eq(historicalDeals.id, id));
 
-    let comparisonResult = null;
-    if (rawExtraction && proformaData) {
-      comparisonResult = reverseEngineer(rawExtraction, proformaData, valuationData, id);
+    let comparisonResult: ComparisonResult | null = null;
+
+    // Prefer direct proforma-parser comparison (raw parsed vs proforma parsed)
+    if (rawParsedData && proformaData && rawParsedData.facilities.length > 0 && proformaData.facilities.length > 0) {
+      // Direct facility matching using proforma-parsed data from both sides
+      const facilities = [];
+      const warnings: string[] = [];
+
+      for (const pfFacility of proformaData.facilities) {
+        // Find matching raw facility by name (fuzzy)
+        const pfNameLower = pfFacility.facilityName.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const rawMatch = rawParsedData.facilities.find(rf => {
+          const rawNameLower = rf.facilityName.toLowerCase().replace(/[^a-z0-9]/g, '');
+          return rawNameLower === pfNameLower ||
+            rawNameLower.includes(pfNameLower) ||
+            pfNameLower.includes(rawNameLower);
+        });
+
+        if (!rawMatch) {
+          warnings.push(`No raw data match found for proforma facility: ${pfFacility.facilityName}`);
+        }
+
+        const rawRev = rawMatch?.revenue || 0;
+        const rawExp = rawMatch?.expenses || 0;
+        const rawEbitdar = rawMatch?.ebitdar || 0;
+        const pfRev = pfFacility.revenue;
+        const pfExp = pfFacility.expenses;
+        const pfEbitdar = pfFacility.ebitdar;
+
+        // Detect normalization preferences
+        const detectedPreferences: DetectedPreferences = {};
+
+        if (rawRev > 0 && pfRev > 0) {
+          const revGrowth = (pfRev - rawRev) / rawRev;
+          if (Math.abs(revGrowth) > 0.001) detectedPreferences.revenueGrowthRate = revGrowth;
+        }
+        if (rawExp > 0 && pfExp > 0) {
+          const expGrowth = (pfExp - rawExp) / rawExp;
+          if (Math.abs(expGrowth) > 0.001) detectedPreferences.expenseGrowthRate = expGrowth;
+        }
+        if (rawMatch?.occupancy && pfFacility.occupancy && pfFacility.occupancy !== rawMatch.occupancy) {
+          detectedPreferences.occupancyAssumption = pfFacility.occupancy;
+        }
+
+        // Detect mgmt fee % from proforma line items
+        const mgmtItem = pfFacility.lineItems.find(li => li.label.toLowerCase().includes('management fee'));
+        if (mgmtItem && pfRev > 0) {
+          detectedPreferences.managementFeePercent = Math.abs(mgmtItem.annualValue) / pfRev;
+        }
+
+        const rawEbitda = rawMatch?.ebitda || rawEbitdar;
+        const rawNI = rawMatch?.netIncome || rawEbitda;
+        const pfEbitda = pfFacility.ebitda || pfEbitdar;
+        const pfNI = pfFacility.netIncome || pfEbitda;
+
+        const facility: FacilityComparison = {
+          facilityName: pfFacility.facilityName,
+          assetType: deal.assetType,
+          state: deal.primaryState ?? undefined,
+          beds: pfFacility.beds || rawMatch?.beds,
+          propertyType: 'SNF-Owned',
+          raw: {
+            revenue: rawRev,
+            expenses: rawExp,
+            ebitdar: rawEbitdar,
+            ebitda: rawEbitda,
+            netIncome: rawNI,
+            occupancy: rawMatch?.occupancy,
+            lineItems: [],
+          },
+          proforma: {
+            revenue: pfRev,
+            expenses: pfExp,
+            ebitdar: pfEbitdar,
+            ebitda: pfEbitda,
+            netIncome: pfNI,
+            occupancy: pfFacility.occupancy,
+            lineItems: [],
+          },
+          adjustments: [],
+          valuation: {
+            userValue: 0,
+            systemValue: 0,
+            userCapRate: undefined,
+            impliedCapRate: pfEbitdar > 0 ? 0.125 : undefined,
+            userMultiplier: undefined,
+            delta: 0,
+            deltaPercent: 0,
+          },
+          detectedPreferences,
+        };
+        facilities.push(facility);
+      }
+
+      comparisonResult = {
+        historicalDealId: id,
+        facilities,
+        portfolioSummary: {
+          totalRawRevenue: facilities.reduce((s, f) => s + f.raw.revenue, 0),
+          totalProformaRevenue: facilities.reduce((s, f) => s + f.proforma.revenue, 0),
+          totalRawEbitdar: facilities.reduce((s, f) => s + f.raw.ebitdar, 0),
+          totalProformaEbitdar: facilities.reduce((s, f) => s + f.proforma.ebitdar, 0),
+          totalUserValuation: 0,
+          totalSystemValuation: 0,
+          totalBeds: facilities.reduce((s, f) => s + (f.beds || 0), 0),
+          facilityCount: facilities.length,
+        },
+        confidence: Math.min(0.9, 0.5 + facilities.length * 0.05),
+        warnings,
+      } satisfies ComparisonResult;
       await db.update(historicalDeals).set({ comparisonResult: comparisonResult as unknown as Record<string, unknown> }).where(eq(historicalDeals.id, id));
 
       // Store per-facility data
+      for (const fc of comparisonResult.facilities) {
+        await db.insert(historicalDealFacilities).values({
+          historicalDealId: id,
+          facilityName: fc.facilityName,
+          assetType: fc.assetType || deal.assetType,
+          state: fc.state || deal.primaryState,
+          beds: fc.beds,
+          propertyType: fc.propertyType,
+          rawFinancials: fc.raw as unknown as Record<string, unknown>,
+          rawEbitdar: fc.raw.ebitdar?.toString(),
+          rawOccupancy: fc.raw.occupancy?.toString(),
+          proformaFinancials: fc.proforma as unknown as Record<string, unknown>,
+          proformaEbitdar: fc.proforma.ebitdar?.toString(),
+          proformaOccupancy: fc.proforma.occupancy?.toString(),
+          userValuation: fc.valuation.userValue?.toString(),
+          userCapRate: fc.valuation.userCapRate?.toString(),
+          userMultiplier: fc.valuation.userMultiplier?.toString(),
+          systemValuation: fc.valuation.systemValue?.toString(),
+          systemCapRate: fc.valuation.impliedCapRate?.toString(),
+          valuationDelta: fc.valuation.delta?.toString(),
+          valuationDeltaPercent: fc.valuation.deltaPercent?.toString(),
+          mgmtFeePercent: fc.detectedPreferences.managementFeePercent?.toString(),
+          agencyPercent: fc.detectedPreferences.agencyTargetPercent?.toString(),
+          capexReservePercent: fc.detectedPreferences.capexReservePercent?.toString(),
+          revenueGrowthRate: fc.detectedPreferences.revenueGrowthRate?.toString(),
+          expenseGrowthRate: fc.detectedPreferences.expenseGrowthRate?.toString(),
+          occupancyAssumption: fc.detectedPreferences.occupancyAssumption?.toString(),
+        });
+      }
+    } else if (rawExtraction && proformaData) {
+      // Fallback: use SmartExcel extraction for raw side (original approach)
+      comparisonResult = reverseEngineer(rawExtraction, proformaData, valuationData, id);
+      await db.update(historicalDeals).set({ comparisonResult: comparisonResult as unknown as Record<string, unknown> }).where(eq(historicalDeals.id, id));
+
       for (const fc of comparisonResult.facilities) {
         await db.insert(historicalDealFacilities).values({
           historicalDealId: id,

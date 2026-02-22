@@ -17,7 +17,7 @@ export default function WorkspacePage() {
         const res = await fetch(`/api/deals/${dealId}`);
         if (res.ok) {
           const data = await res.json();
-          setDealName(data.name || data.deal?.name || 'Untitled Deal');
+          setDealName(data.data?.name || data.name || data.deal?.name || 'Untitled Deal');
         }
       } catch {
         setDealName('Deal');

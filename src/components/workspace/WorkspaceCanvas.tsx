@@ -28,6 +28,7 @@ interface WorkspaceCanvasProps {
   onUpdateStageData: (data: Record<string, unknown>) => void;
   onAdvance: () => void;
   onGoBack: () => void;
+  onComplete?: () => void;
 }
 
 export function WorkspaceCanvas({
@@ -37,6 +38,7 @@ export function WorkspaceCanvas({
   onUpdateStageData,
   onAdvance,
   onGoBack,
+  onComplete,
 }: WorkspaceCanvasProps) {
   const config = WORKSPACE_STAGES.find(s => s.id === currentStage);
   const stageData = (stageRecord?.stageData || {}) as Record<string, unknown>;
@@ -105,8 +107,8 @@ export function WorkspaceCanvas({
             ← Previous Stage
           </button>
           <button
-            onClick={onAdvance}
-            disabled={isLastStage}
+            onClick={isLastStage ? onComplete : onAdvance}
+            disabled={isLastStage && !onComplete}
             className="px-5 py-2.5 text-sm font-medium bg-primary-500 hover:bg-primary-600 text-white rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
           >
             {isLastStage ? 'Complete Workspace' : 'Continue →'}

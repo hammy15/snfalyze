@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useWorkspace } from '@/hooks/use-workspace';
 import { WorkspaceStageRail } from './WorkspaceStageRail';
 import { WorkspaceCanvas } from './WorkspaceCanvas';
@@ -23,6 +24,7 @@ export function WorkspaceShell({
   initialStages,
   initialCurrentStage,
 }: WorkspaceShellProps) {
+  const router = useRouter();
   const [cilCollapsed, setCilCollapsed] = useState(false);
   const workspace = useWorkspace({
     dealId,
@@ -34,6 +36,19 @@ export function WorkspaceShell({
   const cilInsights = workspace.stages.flatMap(s =>
     Array.isArray(s.cilInsights) ? s.cilInsights : []
   );
+
+  const completeWorkspace = useCallback(async () => {
+    // Mark final stage as completed
+    await workspace.updateStageData({ status: 'completed' });
+    // Mark workspace as completed via PATCH
+    await fetch(`/api/deals/${dealId}/workspace`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stage: 'investment_memo', status: 'completed' }),
+    });
+    // Navigate back to deal page
+    router.push(`/app/deals/${dealId}`);
+  }, [dealId, workspace, router]);
 
   if (workspace.isLoading) {
     return (
@@ -160,6 +175,7 @@ export function WorkspaceShell({
             onUpdateStageData={workspace.updateStageData}
             onAdvance={workspace.advanceStage}
             onGoBack={workspace.goBackStage}
+            onComplete={completeWorkspace}
           />
         </div>
 

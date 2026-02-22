@@ -114,8 +114,33 @@ export function WorkspaceShell({
         </div>
       </header>
 
+      {/* Mobile stage selector — above the flex row so it doesn't consume horizontal space */}
+      <div className="lg:hidden border-b border-surface-200 dark:border-surface-700 px-4 py-2 bg-surface-50 dark:bg-surface-900 overflow-x-auto">
+        <div className="flex gap-2">
+          {workspace.stages.map((stage, i) => {
+            const isCurrent = stage.stage === workspace.currentStage;
+            return (
+              <button
+                key={stage.stage}
+                onClick={() => workspace.isStageAccessible(stage.stage) && workspace.navigateToStage(stage.stage)}
+                className={cn(
+                  'px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-colors',
+                  isCurrent
+                    ? 'bg-primary-500 text-white'
+                    : stage.status === 'completed'
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
+                    : 'bg-surface-200 dark:bg-surface-700 text-surface-600 dark:text-surface-400'
+                )}
+              >
+                {i + 1}. {stage.stage.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* 3-panel layout */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden min-h-0">
         {/* Left rail - Stage navigation */}
         <div className="w-[220px] shrink-0 border-r border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-900 overflow-y-auto hidden lg:block">
           <WorkspaceStageRail
@@ -124,31 +149,6 @@ export function WorkspaceShell({
             onStageClick={workspace.navigateToStage}
             isStageAccessible={workspace.isStageAccessible}
           />
-        </div>
-
-        {/* Mobile stage selector */}
-        <div className="lg:hidden border-b border-surface-200 dark:border-surface-700 px-4 py-2 bg-surface-50 dark:bg-surface-900 overflow-x-auto">
-          <div className="flex gap-2">
-            {workspace.stages.map((stage, i) => {
-              const isCurrent = stage.stage === workspace.currentStage;
-              return (
-                <button
-                  key={stage.stage}
-                  onClick={() => workspace.isStageAccessible(stage.stage) && workspace.navigateToStage(stage.stage)}
-                  className={cn(
-                    'px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-colors',
-                    isCurrent
-                      ? 'bg-primary-500 text-white'
-                      : stage.status === 'completed'
-                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
-                      : 'bg-surface-200 dark:bg-surface-700 text-surface-600 dark:text-surface-400'
-                  )}
-                >
-                  {i + 1}. {stage.stage.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                </button>
-              );
-            })}
-          </div>
         </div>
 
         {/* Center canvas - Stage content */}

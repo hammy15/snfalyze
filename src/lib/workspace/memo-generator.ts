@@ -84,23 +84,32 @@ Key Cascadia principles:
 DEAL CONTEXT:
 ${context}
 
-Generate each section with the following format. Separate sections with "---SECTION_BREAK---".
+CRITICAL FORMATTING RULES:
+- Output EXACTLY 8 sections separated by "---SECTION_BREAK---"
+- Do NOT include any preamble, header, title page, or introductory text before the first section
+- Do NOT include section numbers or section titles at the start of each section (e.g., do NOT write "Section 1 - Executive Summary" or "**Executive Summary**")
+- Start IMMEDIATELY with the content of Section 1
+- Each section should contain ONLY the body text — no section labels
 
-Section 1 - Executive Summary: Deal thesis, key metrics (asking price, beds, cap rate, EBITDA), and top-level recommendation (2-3 paragraphs).
+The 8 sections in order:
 
-Section 2 - Facility Overview: Physical plant, CMS ratings, survey history, staffing metrics, census data, SFF status if applicable (2-3 paragraphs).
+1. Executive Summary: Deal thesis, key metrics (asking price, beds, cap rate, EBITDA), and top-level recommendation (2-3 paragraphs).
+---SECTION_BREAK---
+2. Facility Overview: Physical plant, CMS ratings, survey history, staffing metrics, census data, SFF status if applicable (2-3 paragraphs).
+---SECTION_BREAK---
+3. Market Analysis: Demographics, competition, occupancy trends, regulatory environment (CON status), reimbursement outlook (2-3 paragraphs).
+---SECTION_BREAK---
+4. Financial Analysis: Historical performance, pro forma projections for base/bull/bear cases, revenue build by payer, expense benchmarking, valuation summary (3-4 paragraphs).
+---SECTION_BREAK---
+5. Risk Assessment: Composite risk score, top risk categories, deal-breaker flags, mitigants, risk-adjusted valuation (2-3 paragraphs).
+---SECTION_BREAK---
+6. Investment Thesis & Value Creation: Primary value levers (CMI optimization, occupancy recovery, agency reduction, payer mix improvement, operational efficiencies), estimated financial impact, timeline (3-4 paragraphs).
+---SECTION_BREAK---
+7. Due Diligence Checklist: Bulleted list of 15-20 due diligence items organized by category (regulatory, financial, operational, legal, environmental).
+---SECTION_BREAK---
+8. Recommendation: Final recommendation (proceed/conditional/pass), key conditions, suggested offer range, next steps (2-3 paragraphs).
 
-Section 3 - Market Analysis: Demographics, competition, occupancy trends, regulatory environment (CON status), reimbursement outlook (2-3 paragraphs).
-
-Section 4 - Financial Analysis: Historical performance, pro forma projections for base/bull/bear cases, revenue build by payer, expense benchmarking, valuation summary (3-4 paragraphs).
-
-Section 5 - Risk Assessment: Composite risk score, top risk categories, deal-breaker flags, mitigants, risk-adjusted valuation (2-3 paragraphs).
-
-Section 6 - Investment Thesis & Value Creation: Primary value levers (CMI optimization, occupancy recovery, agency reduction, payer mix improvement, operational efficiencies), estimated financial impact, timeline (3-4 paragraphs).
-
-Section 7 - Due Diligence Checklist: Bulleted list of 15-20 due diligence items organized by category (regulatory, financial, operational, legal, environmental).
-
-Section 8 - Recommendation: Final recommendation (proceed/conditional/pass), key conditions, suggested offer range, next steps (2-3 paragraphs).`;
+Remember: NO preamble before section 1. NO section titles/headers within sections. Start immediately with content.`;
 
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
@@ -114,10 +123,32 @@ Section 8 - Recommendation: Final recommendation (proceed/conditional/pass), key
   // Parse sections from response
   const rawSections = responseText.split('---SECTION_BREAK---').map(s => s.trim()).filter(Boolean);
 
+  // Strip section labels/headers that the AI may have included
+  const cleanedSections = rawSections.map(s => {
+    // Remove lines like "**Section 1 - Executive Summary**" or "## Executive Summary" or "Section 1:" etc.
+    return s
+      .replace(/^\*{0,2}(?:Section\s+\d+\s*[-–:]\s*)?(?:Executive Summary|Facility Overview|Market Analysis|Financial Analysis|Risk Assessment|Investment Thesis[^*\n]*|Due Diligence[^*\n]*|Recommendation)\*{0,2}\s*\n*/i, '')
+      .replace(/^#{1,3}\s.*?\n+/, '')
+      .trim();
+  });
+
+  // Detect if first section is a preamble (very short or contains "MEMORANDUM" / "Date:" header-like content)
+  let sectionOffset = 0;
+  if (cleanedSections.length > 8) {
+    // AI likely added a preamble — skip it
+    sectionOffset = cleanedSections.length - 8;
+  } else if (cleanedSections.length > 0 && cleanedSections[0].length < 200) {
+    // Check if first section looks like a preamble (title block, not real content)
+    const first = cleanedSections[0].toLowerCase();
+    if (first.includes('memorandum') || first.includes('date:') || first.includes('analyst:') || first.includes('prepared')) {
+      sectionOffset = 1;
+    }
+  }
+
   const sections: MemoSection[] = MEMO_SECTION_IDS.map((id, idx) => ({
     id,
     title: SECTION_LABELS[id],
-    content: rawSections[idx] || `[${SECTION_LABELS[id]} - content pending]`,
+    content: cleanedSections[idx + sectionOffset] || `[${SECTION_LABELS[id]} - content pending]`,
     isGenerated: true,
     isEdited: false,
     generatedAt: new Date().toISOString(),

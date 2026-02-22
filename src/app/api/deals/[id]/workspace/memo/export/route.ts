@@ -188,7 +188,13 @@ function generateMemoPDF(
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
 
-    const lines = doc.splitTextToSize(section.content, contentWidth);
+    // Strip markdown formatting (jsPDF can't render it)
+    const cleanContent = section.content
+      .replace(/\*\*(.*?)\*\*/g, '$1')  // **bold** → bold
+      .replace(/\*(.*?)\*/g, '$1')      // *italic* → italic
+      .replace(/^#{1,3}\s+/gm, '')      // ### headers → plain text
+      .replace(/^[-•]\s*/gm, '  - ');   // normalize bullets
+    const lines = doc.splitTextToSize(cleanContent, contentWidth);
     for (const line of lines) {
       if (y > 275) {
         doc.addPage();
@@ -224,9 +230,14 @@ function generateMemoPDF(
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
 
-    const checklistContent = typeof memo.dueDiligenceChecklist === 'object'
+    const rawChecklist = typeof memo.dueDiligenceChecklist === 'object'
       ? (memo.dueDiligenceChecklist as Record<string, string>).content || JSON.stringify(memo.dueDiligenceChecklist, null, 2)
       : String(memo.dueDiligenceChecklist);
+    const checklistContent = rawChecklist
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/^#{1,3}\s+/gm, '')
+      .replace(/^[-•]\s*/gm, '  - ');
 
     const checklistLines = doc.splitTextToSize(checklistContent, contentWidth);
     for (const line of checklistLines) {

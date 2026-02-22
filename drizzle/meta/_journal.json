@@ -22,6 +22,13 @@
       "when": 1771422290707,
       "tag": "0002_breezy_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1771797603076,
+      "tag": "0003_typical_longshot",
+      "breakpoints": true
     }
   ]
 }

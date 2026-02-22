@@ -768,6 +768,17 @@ export default function DealDetailPage() {
       riskCount={risks.length}
       hasFinancials={documents.some(d => d.category === 'financials')}
     >
+      {/* Workspace Entry Button */}
+      <div className="mb-4">
+        <Link
+          href={`/app/deals/${dealId}/workspace`}
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary-500 hover:bg-primary-600 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+        >
+          <ListChecks className="w-4 h-4" />
+          Open Deal Workspace
+        </Link>
+      </div>
+
       {/* Tabs Content (now inside workbench canvas) */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full justify-start mb-4 bg-surface-800/30 border border-surface-700/50">

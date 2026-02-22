@@ -177,6 +177,15 @@ export const analysisStageStatusEnum = pgEnum('analysis_stage_status', [
   'blocked',
 ]);
 
+// Workspace Stage Types (5-stage deal workspace pipeline)
+export const workspaceStageTypeEnum = pgEnum('workspace_stage_type', [
+  'deal_intake',
+  'comp_pull',
+  'pro_forma',
+  'risk_score',
+  'investment_memo',
+]);
+
 // Tables
 export const deals = pgTable(
   'deals',
@@ -204,6 +213,8 @@ export const deals = pgTable(
     isAllOrNothing: boolean('is_all_or_nothing').default(true),
     buyerPartnerId: uuid('buyer_partner_id'),
     specialCircumstances: text('special_circumstances'),
+    // Workspace Fields
+    workspaceCurrentStage: workspaceStageTypeEnum('workspace_current_stage'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
     analyzedAt: timestamp('analyzed_at', { withTimezone: true }),
@@ -1252,6 +1263,10 @@ export const dealsRelations = relations(deals, ({ one, many }) => ({
   wizardSessions: many(wizardSessions),
   documentFolders: many(documentFolders),
   coaMappings: many(dealCoaMappings),
+  // Workspace Relations
+  workspaceStages: many(dealWorkspaceStages),
+  investmentMemos: many(investmentMemos),
+  dealComps: many(dealComps),
 }));
 
 export const facilitiesRelations = relations(facilities, ({ one, many }) => ({
@@ -2055,5 +2070,117 @@ export const historicalDealFacilitiesRelations = relations(historicalDealFacilit
   historicalDeal: one(historicalDeals, {
     fields: [historicalDealFacilities.historicalDealId],
     references: [historicalDeals.id],
+  }),
+}));
+
+// ============================================================================
+// 5-Stage Deal Workspace Tables
+// ============================================================================
+
+export const dealWorkspaceStages = pgTable(
+  'deal_workspace_stages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    dealId: uuid('deal_id')
+      .references(() => deals.id, { onDelete: 'cascade' })
+      .notNull(),
+    stage: workspaceStageTypeEnum('stage').notNull(),
+    order: integer('order').notNull(),
+    status: analysisStageStatusEnum('status').default('pending'),
+    stageData: jsonb('stage_data').default('{}'),
+    completionScore: integer('completion_score').default(0),
+    validationErrors: jsonb('validation_errors').default('[]'),
+    cilInsights: jsonb('cil_insights'),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    dealIdIdx: index('idx_workspace_stages_deal_id').on(table.dealId),
+    stageIdx: index('idx_workspace_stages_stage').on(table.stage),
+    dealStageUnique: uniqueIndex('idx_workspace_deal_stage').on(table.dealId, table.stage),
+  })
+);
+
+export const investmentMemos = pgTable(
+  'investment_memos',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    dealId: uuid('deal_id')
+      .references(() => deals.id, { onDelete: 'cascade' })
+      .notNull(),
+    version: integer('version').default(1),
+    status: varchar('status', { length: 20 }).default('draft'),
+    executiveSummary: text('executive_summary'),
+    facilityOverview: text('facility_overview'),
+    marketAnalysis: text('market_analysis'),
+    financialAnalysis: text('financial_analysis'),
+    operationalAssessment: text('operational_assessment'),
+    riskAssessment: text('risk_assessment'),
+    investmentThesis: text('investment_thesis'),
+    recommendation: text('recommendation'),
+    dueDiligenceChecklist: jsonb('due_diligence_checklist'),
+    generatedBy: varchar('generated_by', { length: 50 }).default('ai'),
+    generatedAt: timestamp('generated_at', { withTimezone: true }),
+    lastExportedAt: timestamp('last_exported_at', { withTimezone: true }),
+    exportFormat: varchar('export_format', { length: 10 }),
+    metadata: jsonb('metadata'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    dealIdIdx: index('idx_investment_memos_deal_id').on(table.dealId),
+    versionIdx: index('idx_investment_memos_version').on(table.dealId, table.version),
+  })
+);
+
+export const dealComps = pgTable(
+  'deal_comps',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    dealId: uuid('deal_id')
+      .references(() => deals.id, { onDelete: 'cascade' })
+      .notNull(),
+    compId: uuid('comp_id')
+      .references(() => comparableSales.id, { onDelete: 'cascade' })
+      .notNull(),
+    compType: varchar('comp_type', { length: 20 }).notNull(),
+    relevanceScore: integer('relevance_score'),
+    relevanceNotes: text('relevance_notes'),
+    isSelected: boolean('is_selected').default(true),
+    addedBy: varchar('added_by', { length: 50 }).default('auto'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    dealIdIdx: index('idx_deal_comps_deal_id').on(table.dealId),
+    compIdIdx: index('idx_deal_comps_comp_id').on(table.compId),
+    dealCompUnique: uniqueIndex('idx_deal_comp_unique').on(table.dealId, table.compId),
+  })
+);
+
+// Workspace Relations
+export const dealWorkspaceStagesRelations = relations(dealWorkspaceStages, ({ one }) => ({
+  deal: one(deals, {
+    fields: [dealWorkspaceStages.dealId],
+    references: [deals.id],
+  }),
+}));
+
+export const investmentMemosRelations = relations(investmentMemos, ({ one }) => ({
+  deal: one(deals, {
+    fields: [investmentMemos.dealId],
+    references: [deals.id],
+  }),
+}));
+
+export const dealCompsRelations = relations(dealComps, ({ one }) => ({
+  deal: one(deals, {
+    fields: [dealComps.dealId],
+    references: [deals.id],
+  }),
+  comp: one(comparableSales, {
+    fields: [dealComps.compId],
+    references: [comparableSales.id],
   }),
 }));

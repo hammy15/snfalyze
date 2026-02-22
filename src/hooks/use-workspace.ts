@@ -213,14 +213,21 @@ export function useWorkspace({ dealId, initialStages, initialCurrentStage }: Use
   const isStageAccessible = useCallback((stage: WorkspaceStageType): boolean => {
     const stageOrder: WorkspaceStageType[] = ['deal_intake', 'comp_pull', 'pro_forma', 'risk_score', 'investment_memo'];
     const targetIdx = stageOrder.indexOf(stage);
-    const currentIdx = stageOrder.indexOf(state.currentStage);
 
-    // Can always go back
-    if (targetIdx <= currentIdx) return true;
+    // Current stage is always accessible
+    if (stage === state.currentStage) return true;
 
-    // Can advance if current is completed
-    const currentRecord = state.stages.find(s => s.stage === state.currentStage);
-    return targetIdx === currentIdx + 1 && currentRecord?.status === 'completed';
+    // Any stage that's been started or completed is accessible
+    const targetRecord = state.stages.find(s => s.stage === stage);
+    if (targetRecord && (targetRecord.status === 'completed' || targetRecord.status === 'in_progress')) return true;
+
+    // Can advance to the next unstarted stage if ALL prior stages are completed or in_progress
+    const priorStages = stageOrder.slice(0, targetIdx);
+    const allPriorReached = priorStages.every(ps => {
+      const record = state.stages.find(s => s.stage === ps);
+      return record && (record.status === 'completed' || record.status === 'in_progress');
+    });
+    return allPriorReached;
   }, [state.currentStage, state.stages]);
 
   // Cleanup on unmount

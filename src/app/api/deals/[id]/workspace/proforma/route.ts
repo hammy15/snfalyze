@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { dealWorkspaceStages, proformaScenarios } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { generateProForma } from '@/lib/workspace/proforma-generator';
+import { generateProForma, type ProFormaResult } from '@/lib/workspace/proforma-generator';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -71,11 +71,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const result = await generateProForma({ dealId });
 
-    // Store full result in stage data
+    // Transform generator output → UI-expected shape
+    const transformed = transformForUI(result, dealId);
+
+    // Store transformed result in stage data
     await db
       .update(dealWorkspaceStages)
       .set({
-        stageData: result as unknown as Record<string, unknown>,
+        stageData: transformed as unknown as Record<string, unknown>,
         completionScore: 75,
         status: 'in_progress',
         startedAt: new Date(),
@@ -88,7 +91,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         )
       );
 
-    return NextResponse.json({ success: true, ...result });
+    return NextResponse.json({ success: true, ...transformed });
   } catch (error) {
     console.error('ProForma POST error:', error);
     return NextResponse.json({ error: 'Failed to generate pro forma' }, { status: 500 });
@@ -161,4 +164,93 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     console.error('ProForma PATCH error:', error);
     return NextResponse.json({ error: 'Failed to update pro forma' }, { status: 500 });
   }
+}
+
+// ── Transform generator output → UI shape ────────────────────────────
+
+function transformForUI(result: ProFormaResult, _dealId: string) {
+  const { revenueModel, expenseModel, scenarios, valuationOutput } = result;
+
+  // Transform revenue model → censusProjections + enhancementOpportunities
+  const censusProjections = revenueModel.projections.map(p => {
+    const totalAdc = p.adc;
+    const medicarePct = revenueModel.payerMixRevenue.medicare.adc / (revenueModel.payerMixRevenue.medicare.adc + revenueModel.payerMixRevenue.medicaid.adc + revenueModel.payerMixRevenue.privatePay.adc);
+    const medicaidPct = revenueModel.payerMixRevenue.medicaid.adc / (revenueModel.payerMixRevenue.medicare.adc + revenueModel.payerMixRevenue.medicaid.adc + revenueModel.payerMixRevenue.privatePay.adc);
+    return {
+      year: p.year,
+      occupancy: p.occupancy / 100,
+      adc: p.adc,
+      medicareAdc: Math.round(totalAdc * medicarePct),
+      medicaidAdc: Math.round(totalAdc * medicaidPct),
+      privatPayAdc: Math.round(totalAdc * (1 - medicarePct - medicaidPct)),
+    };
+  });
+
+  const enhancementOpportunities = revenueModel.enhancements.map(e =>
+    `${e.description} (+$${Math.round(e.annualImpact / 1000)}K/yr, ${e.timeline}, ${e.confidence} confidence)`
+  );
+
+  // Transform expense model → otherOpex
+  const otherOpex = expenseModel.categories.map(c => ({
+    category: c.name,
+    benchmarkPercent: { low: c.benchmark ? c.benchmark - 1 : c.percentOfRevenue - 1, high: c.benchmark ? c.benchmark + 1 : c.percentOfRevenue + 1 },
+    projectedAmount: Math.round(c.amount),
+  }));
+
+  // Transform scenarios → ScenarioResult shape
+  const transformScenario = (s: typeof scenarios.base) => {
+    const baseOcc = censusProjections[0]?.occupancy || 0.82;
+    return {
+      label: s.name,
+      assumptions: {
+        occupancyChange: s.assumptions.occupancyTarget - baseOcc,
+        cmiChange: s.type === 'upside' ? 0.15 : s.type === 'downside' ? -0.05 : 0.05,
+        medicaidRateChange: s.assumptions.revenueGrowthRate - 0.01,
+        laborCostChange: s.assumptions.expenseGrowthRate,
+      },
+      year3Ebitda: s.yearlyProjections[2]?.ebitda || 0,
+      year5Ebitda: s.yearlyProjections[4]?.ebitda || 0,
+      impliedValue: Math.round((s.yearlyProjections[4]?.noi || 0) / s.assumptions.exitCapRate),
+      irr: s.irr,
+    };
+  };
+
+  // Transform valuation output
+  const transformedValuation = {
+    askingPrice: null as number | null,
+    capRateValuation: valuationOutput.capRateValue,
+    ebitdaMultipleValuation: valuationOutput.ebitdaMultipleValue,
+    dcfValuation: valuationOutput.dcfValue,
+    pricePerBed: valuationOutput.pricePerBed,
+    cilAssessment: valuationOutput.impliedCapRate
+      ? (valuationOutput.impliedCapRate > 0.14 ? 'PRICED_BELOW' : valuationOutput.impliedCapRate < 0.10 ? 'ABOVE' : 'AT')
+      : 'AT' as 'PRICED_BELOW' | 'AT' | 'ABOVE',
+    negotiationRange: valuationOutput.negotiationRange
+      ? { low: valuationOutput.negotiationRange.low, high: valuationOutput.negotiationRange.high }
+      : null,
+  };
+
+  return {
+    revenueModel: {
+      currentRevenue: revenueModel.currentRevenue,
+      censusProjections,
+      payerMixRevenue: revenueModel.payerMixRevenue,
+      enhancementOpportunities,
+    },
+    expenseModel: {
+      totalExpenses: expenseModel.totalExpenses,
+      laborCost: expenseModel.laborCost,
+      laborPercent: expenseModel.laborPercent,
+      agencySpend: expenseModel.agencySpend,
+      otherOpex,
+    },
+    scenarios: {
+      base: transformScenario(scenarios.base),
+      bull: transformScenario(scenarios.bull),
+      bear: transformScenario(scenarios.bear),
+    },
+    valuationOutput: transformedValuation,
+    sensitivityMatrix: scenarios.sensitivityMatrix,
+    yearlyProjections: scenarios.base.yearlyProjections,
+  };
 }

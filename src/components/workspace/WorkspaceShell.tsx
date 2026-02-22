@@ -37,7 +37,7 @@ export function WorkspaceShell({
 
   if (workspace.isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
           <p className="text-sm text-surface-500">Loading workspace...</p>
@@ -48,7 +48,7 @@ export function WorkspaceShell({
 
   if (workspace.error) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <p className="text-sm text-red-500 mb-3">{workspace.error}</p>
           <button
@@ -63,7 +63,7 @@ export function WorkspaceShell({
   }
 
   return (
-    <div className="flex flex-col h-screen bg-white dark:bg-surface-950">
+    <div className="flex flex-col h-full bg-white dark:bg-surface-950">
       {/* Top bar */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-900">
         <div className="flex items-center gap-3">

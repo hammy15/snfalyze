@@ -24,6 +24,9 @@ export function AppShellNew({ children }: AppShellNewProps) {
     return <>{children}</>;
   }
 
+  // Workspace pages need full-bleed layout (no padding wrapper)
+  const isWorkspacePage = pathname.includes('/workspace');
+
   // App pages - Focus Rail + Context Breadcrumb + Command Bar
   if (isAppPage) {
     return (
@@ -32,11 +35,17 @@ export function AppShellNew({ children }: AppShellNewProps) {
         <ContextBreadcrumb />
         <CommandBar />
 
-        <main className="pl-14 pt-12 min-h-screen">
-          <div className="p-6">
+        {isWorkspacePage ? (
+          <main className="pl-14 pt-12 h-screen">
             {children}
-          </div>
-        </main>
+          </main>
+        ) : (
+          <main className="pl-14 pt-12 min-h-screen">
+            <div className="p-6">
+              {children}
+            </div>
+          </main>
+        )}
       </div>
     );
   }

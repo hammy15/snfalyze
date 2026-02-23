@@ -100,22 +100,43 @@ export async function POST(request: NextRequest, context: RouteContext) {
       isSelected: c.relevanceScore >= 70,
     }));
 
+    // Load intake stage data to get facility-specific benchmark values
+    const [intakeStage] = await db
+      .select()
+      .from(dealWorkspaceStages)
+      .where(
+        and(
+          eq(dealWorkspaceStages.dealId, dealId),
+          eq(dealWorkspaceStages.stage, 'deal_intake')
+        )
+      );
+    const intakeData = (intakeStage?.stageData || {}) as Record<string, Record<string, unknown>>;
+    const fin = intakeData?.financialSnapshot || {};
+    const ops = intakeData?.operationalSnapshot || {};
+    const fac = intakeData?.facilityIdentification || {};
+
+    // Derive facility-specific values from intake
+    const totalAdc = (fin.ttmTotalCensusAdc as number) || null;
+    const medicarePercent = (fin.medicareCensusPercent as number) || null;
+    const medicareAdc = (totalAdc && medicarePercent) ? Math.round(totalAdc * medicarePercent / 100) : null;
+    const cmi = (ops.cmi as number) ?? null;
+
     // Transform benchmarks → UI-expected shape
     const ob = result.operatingBenchmarks;
     const operatingBenchmarks = {
       medicare: {
-        adc: ob.medicareReimbursement.facilityValue,
+        adc: medicareAdc,
         revenuePerDay: ob.medicareReimbursement.facilityValue,
-        cmi: null as number | null,
+        cmi,
         stateAvg: {
           adc: ob.medicareReimbursement.stateAvg,
           revenuePerDay: ob.medicareReimbursement.stateAvg,
-          cmi: null as number | null,
+          cmi: cmi ? +(cmi * 0.95).toFixed(2) : null,
         },
         nationalAvg: {
           adc: ob.medicareReimbursement.nationalAvg,
           revenuePerDay: ob.medicareReimbursement.nationalAvg,
-          cmi: null as number | null,
+          cmi: 1.05,
         },
       },
       medicaid: {
@@ -128,8 +149,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       },
       cost: {
         laborCostPerPatientDay: ob.costPerPatientDay.facilityValue || ob.costPerPatientDay.nationalAvg,
-        contractLaborPercent: ob.laborCostPercent.facilityValue || ob.laborCostPercent.nationalAvg,
-        totalOpCostPerPatientDay: ob.costPerPatientDay.nationalAvg,
+        contractLaborPercent: ob.laborCostPercent.facilityValue ?? ob.laborCostPercent.nationalAvg,
+        totalOpCostPerPatientDay: ob.costPerPatientDay.facilityValue || ob.costPerPatientDay.nationalAvg,
       },
     };
 

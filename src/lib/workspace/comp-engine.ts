@@ -1,7 +1,8 @@
 import { db } from '@/db';
-import { comparableSales, deals, facilities, dealComps } from '@/db/schema';
+import { comparableSales, deals, facilities, dealComps, dealWorkspaceStages } from '@/db/schema';
 import { eq, and, gte, sql, desc } from 'drizzle-orm';
 import { getGeographicCapRate, getMarketTier } from '@/lib/analysis/knowledge/benchmarks';
+import type { IntakeStageData } from '@/types/workspace';
 
 export interface ScoredComp {
   id: string;
@@ -135,8 +136,20 @@ export async function pullCompsForDeal(dealId: string): Promise<CompPullResult> 
       .onConflictDoNothing();
   }
 
+  // Load intake stage data for facility-specific benchmark values
+  const [intakeStage] = await db
+    .select()
+    .from(dealWorkspaceStages)
+    .where(
+      and(
+        eq(dealWorkspaceStages.dealId, dealId),
+        eq(dealWorkspaceStages.stage, 'deal_intake')
+      )
+    );
+  const intakeData = (intakeStage?.stageData || {}) as Partial<IntakeStageData>;
+
   // Build operating benchmarks
-  const operatingBenchmarks = buildOperatingBenchmarks(facility, state, assetType);
+  const operatingBenchmarks = buildOperatingBenchmarks(facility, state, assetType, intakeData);
 
   // Build market summary
   const marketBenchmarkSummary = buildMarketSummary(topComps, deal, state, assetType);
@@ -216,7 +229,8 @@ function calculateRelevance(
 function buildOperatingBenchmarks(
   facility: typeof facilities.$inferSelect | null,
   state: string | null,
-  assetType: string
+  assetType: string,
+  intakeData?: Partial<IntakeStageData>
 ): OperatingBenchmarks {
   // National averages based on asset type (from benchmarks.ts knowledge)
   const snfNationalAvgs = {
@@ -242,12 +256,49 @@ function buildOperatingBenchmarks(
   // State averages approximate a ~5% variance from national
   const stateVariance = state ? (state.charCodeAt(0) % 10 - 5) / 100 : 0;
 
+  // Extract facility-specific values from intake data
+  const fin = intakeData?.financialSnapshot;
+  const ops = intakeData?.operationalSnapshot;
+  const fac = intakeData?.facilityIdentification;
+
+  // Derive facility metrics from intake financial/operational data
+  const totalAdc = fin?.ttmTotalCensusAdc || null;
+  const medicarePercent = fin?.medicareCensusPercent || null;
+  const beds = fac?.licensedBeds || facility?.licensedBeds || null;
+
+  // Medicare ADC = total ADC × medicare%
+  const medicareAdc = (totalAdc && medicarePercent) ? Math.round(totalAdc * medicarePercent / 100) : null;
+
+  // Revenue per patient day = TTM revenue / 365 / ADC
+  const revenuePerDay = (fin?.ttmRevenue && totalAdc && totalAdc > 0)
+    ? Math.round(fin.ttmRevenue / 365 / totalAdc)
+    : null;
+
+  // CMI from operational snapshot
+  const cmi = ops?.cmi ?? null;
+
+  // Quality star rating from operational snapshot or facility table
+  const starRating = ops?.cmsOverallRating ?? facility?.cmsRating ?? null;
+
+  // Cost per patient day = (TTM Revenue - TTM EBITDA) / 365 / ADC ≈ total opex per patient day
+  const costPerPatientDay = (fin?.ttmRevenue && fin?.ttmEbitda && totalAdc && totalAdc > 0)
+    ? Math.round((fin.ttmRevenue - fin.ttmEbitda) / 365 / totalAdc)
+    : null;
+
+  // Agency staff % as proxy for contract labor
+  const agencyPercent = ops?.agencyStaffPercent ?? null;
+
+  // Occupancy = ADC / beds
+  const occupancyRate = (totalAdc && beds && beds > 0)
+    ? +((totalAdc / beds) * 100).toFixed(1)
+    : null;
+
   return {
     medicareReimbursement: {
-      facilityValue: null,
+      facilityValue: revenuePerDay,
       stateAvg: Math.round(nationals.medicareReimbursement * (1 + stateVariance)),
       nationalAvg: nationals.medicareReimbursement,
-      percentile: null,
+      percentile: revenuePerDay ? Math.min(99, Math.max(1, Math.round((revenuePerDay / (nationals.medicareReimbursement * 1.5)) * 100))) : null,
     },
     medicaidRate: {
       facilityValue: null,
@@ -256,28 +307,28 @@ function buildOperatingBenchmarks(
       percentile: null,
     },
     qualityScore: {
-      facilityValue: facility?.cmsRating ?? null,
+      facilityValue: starRating,
       stateAvg: +(nationals.qualityScore * (1 + stateVariance * 0.3)).toFixed(1),
       nationalAvg: nationals.qualityScore,
-      percentile: facility?.cmsRating ? Math.round((facility.cmsRating / 5) * 100) : null,
+      percentile: starRating ? Math.round((starRating / 5) * 100) : null,
     },
     costPerPatientDay: {
-      facilityValue: null,
+      facilityValue: costPerPatientDay,
       stateAvg: Math.round(nationals.costPerPatientDay * (1 + stateVariance)),
       nationalAvg: nationals.costPerPatientDay,
-      percentile: null,
+      percentile: costPerPatientDay ? Math.min(99, Math.max(1, Math.round((costPerPatientDay / (nationals.costPerPatientDay * 1.3)) * 100))) : null,
     },
     laborCostPercent: {
-      facilityValue: null,
+      facilityValue: agencyPercent,
       stateAvg: +(nationals.laborCostPercent * (1 + stateVariance * 0.5)).toFixed(1),
       nationalAvg: nationals.laborCostPercent,
-      percentile: null,
+      percentile: agencyPercent ? Math.min(99, Math.max(1, Math.round((agencyPercent / (nationals.laborCostPercent * 1.3)) * 100))) : null,
     },
     occupancyRate: {
-      facilityValue: null,
+      facilityValue: occupancyRate,
       stateAvg: +(nationals.occupancyRate * (1 + stateVariance * 0.3)).toFixed(1),
       nationalAvg: nationals.occupancyRate,
-      percentile: null,
+      percentile: occupancyRate ? Math.min(99, Math.max(1, Math.round((occupancyRate / 100) * 100))) : null,
     },
   };
 }

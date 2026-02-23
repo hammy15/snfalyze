@@ -1,15 +1,54 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, Component } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWorkspace } from '@/hooks/use-workspace';
 import { WorkspaceStageRail } from './WorkspaceStageRail';
 import { WorkspaceCanvas } from './WorkspaceCanvas';
 import { CILPanel } from './CILPanel';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, Save, Loader2, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, PanelRightClose, PanelRightOpen, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import type { WorkspaceStageRecord, CILInsight } from '@/types/workspace';
+
+// Error boundary to catch lazy-load crashes gracefully
+class WorkspaceErrorBoundary extends Component<
+  { children: React.ReactNode; onReset: () => void },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode; onReset: () => void }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: Error) {
+    console.error('[WorkspaceErrorBoundary]', error.message);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <p className="text-sm text-surface-500 mb-3">Something went wrong loading this stage.</p>
+            <button
+              onClick={() => {
+                this.setState({ hasError: false });
+                this.props.onReset();
+              }}
+              className="px-4 py-2 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors inline-flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Reload
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 interface WorkspaceShellProps {
   dealId: string;
@@ -37,23 +76,32 @@ export function WorkspaceShell({
     workspace.stages.flatMap(s => Array.isArray(s.cilInsights) ? s.cilInsights : [])
   );
   const cilTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const mountedRef = useRef(true);
+  const [errorBoundaryKey, setErrorBoundaryKey] = useState(0);
 
-  // Auto-refresh CIL insights when stage changes or data is saved
+  // Track mounted state
   useEffect(() => {
-    // Debounce CIL fetch to avoid hammering API on every keystroke
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // Auto-refresh CIL insights when stage changes (only on stage transitions, not saves)
+  useEffect(() => {
     if (cilTimerRef.current) clearTimeout(cilTimerRef.current);
     cilTimerRef.current = setTimeout(async () => {
+      if (!mountedRef.current) return;
       try {
         const res = await fetch(`/api/deals/${dealId}/cil`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ stage: workspace.currentStage }),
         });
+        if (!mountedRef.current) return;
         if (res.ok) {
           const data = await res.json();
+          if (!mountedRef.current) return;
           if (data.insights && Array.isArray(data.insights)) {
             setCilInsights(prev => {
-              // Merge: keep insights from other stages, replace current stage
               const otherStage = prev.filter(i => i.stage !== workspace.currentStage);
               return [...otherStage, ...data.insights];
             });
@@ -62,12 +110,13 @@ export function WorkspaceShell({
       } catch {
         // CIL fetch is non-critical — silently fail
       }
-    }, 3000);
+    }, 5000);
 
     return () => {
       if (cilTimerRef.current) clearTimeout(cilTimerRef.current);
     };
-  }, [dealId, workspace.currentStage, workspace.isSaving]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dealId, workspace.currentStage]);
 
   const completeWorkspace = useCallback(async () => {
     // Mark final stage as completed
@@ -207,15 +256,20 @@ export function WorkspaceShell({
 
         {/* Center canvas - Stage content */}
         <div className="flex-1 overflow-hidden">
-          <WorkspaceCanvas
-            dealId={dealId}
-            currentStage={workspace.currentStage}
-            stageRecord={currentRecord}
-            onUpdateStageData={workspace.updateStageData}
-            onAdvance={workspace.advanceStage}
-            onGoBack={workspace.goBackStage}
-            onComplete={completeWorkspace}
-          />
+          <WorkspaceErrorBoundary
+            key={errorBoundaryKey}
+            onReset={() => setErrorBoundaryKey(k => k + 1)}
+          >
+            <WorkspaceCanvas
+              dealId={dealId}
+              currentStage={workspace.currentStage}
+              stageRecord={currentRecord}
+              onUpdateStageData={workspace.updateStageData}
+              onAdvance={workspace.advanceStage}
+              onGoBack={workspace.goBackStage}
+              onComplete={completeWorkspace}
+            />
+          </WorkspaceErrorBoundary>
         </div>
 
         {/* Right panel - CIL */}

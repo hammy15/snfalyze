@@ -180,11 +180,52 @@ export function useWorkspace({ dealId, initialStages, initialCurrentStage }: Use
     });
   }, [dealId, state.currentStage, state.isDirty, getCurrentStageRecord, saveToApi]);
 
+  // Validate stage has minimum data before advancing
+  const validateStage = useCallback((stage: WorkspaceStageType): { valid: boolean; message?: string } => {
+    const record = state.stages.find(s => s.stage === stage);
+    const data = (record?.stageData || {}) as Record<string, unknown>;
+    const hasData = Object.keys(data).length > 0;
+
+    switch (stage) {
+      case 'deal_intake': {
+        const fi = data.facilityIdentification as Record<string, unknown> | undefined;
+        if (!fi || !fi.facilityName) return { valid: false, message: 'Enter at least a facility name in Deal Intake' };
+        return { valid: true };
+      }
+      case 'comp_pull': {
+        const comps = data.transactionComps as unknown[] | undefined;
+        if (!comps || comps.length === 0) return { valid: false, message: 'Pull comps before advancing' };
+        return { valid: true };
+      }
+      case 'pro_forma': {
+        const scenarios = data.scenarios as Record<string, unknown> | undefined;
+        if (!scenarios) return { valid: false, message: 'Generate a pro forma before advancing' };
+        return { valid: true };
+      }
+      case 'risk_score': {
+        const score = data.compositeScore as number | undefined;
+        if (score === undefined && score !== 0) return { valid: false, message: 'Run risk assessment before advancing' };
+        return { valid: true };
+      }
+      default:
+        return { valid: hasData || true };
+    }
+  }, [state.stages]);
+
   // Advance to next stage
   const advanceStage = useCallback(async () => {
     const stageOrder: WorkspaceStageType[] = ['deal_intake', 'comp_pull', 'pro_forma', 'risk_score', 'investment_memo'];
     const currentIdx = stageOrder.indexOf(state.currentStage);
     if (currentIdx < stageOrder.length - 1) {
+      // Validate current stage before advancing
+      const validation = validateStage(state.currentStage);
+      if (!validation.valid) {
+        setState(s => ({ ...s, error: validation.message || 'Complete this stage before advancing' }));
+        // Auto-clear the error after 4 seconds
+        setTimeout(() => setState(s => ({ ...s, error: null })), 4000);
+        return;
+      }
+
       // Mark current as completed
       setState(s => ({
         ...s,
@@ -198,7 +239,7 @@ export function useWorkspace({ dealId, initialStages, initialCurrentStage }: Use
       const nextStage = stageOrder[currentIdx + 1];
       await navigateToStage(nextStage);
     }
-  }, [state.currentStage, navigateToStage]);
+  }, [state.currentStage, navigateToStage, validateStage]);
 
   // Go to previous stage
   const goBackStage = useCallback(async () => {
@@ -246,6 +287,7 @@ export function useWorkspace({ dealId, initialStages, initialCurrentStage }: Use
     advanceStage,
     goBackStage,
     isStageAccessible,
+    validateStage,
     reload: loadWorkspace,
   };
 }

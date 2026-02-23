@@ -704,9 +704,12 @@ export default function DealsPage() {
         actions={
           selectedDeal && (
             <>
-              <button className="btn btn-primary btn-sm flex-1">
-                Update Stage
-              </button>
+              <Link href={`/app/deals/${selectedDeal.id}/workspace`} className="flex-1">
+                <button className="btn btn-primary btn-sm w-full flex items-center justify-center gap-1.5">
+                  <Target className="w-3.5 h-3.5" />
+                  Open Workspace
+                </button>
+              </Link>
               <button className="btn btn-secondary btn-sm flex-1">
                 <Plus className="w-4 h-4" />
                 Add Note

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWorkspace } from '@/hooks/use-workspace';
 import { WorkspaceStageRail } from './WorkspaceStageRail';
@@ -9,7 +9,7 @@ import { CILPanel } from './CILPanel';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, Save, Loader2, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import Link from 'next/link';
-import type { WorkspaceStageRecord } from '@/types/workspace';
+import type { WorkspaceStageRecord, CILInsight } from '@/types/workspace';
 
 interface WorkspaceShellProps {
   dealId: string;
@@ -33,9 +33,41 @@ export function WorkspaceShell({
   });
 
   const currentRecord = workspace.getCurrentStageRecord();
-  const cilInsights = workspace.stages.flatMap(s =>
-    Array.isArray(s.cilInsights) ? s.cilInsights : []
+  const [cilInsights, setCilInsights] = useState<CILInsight[]>(() =>
+    workspace.stages.flatMap(s => Array.isArray(s.cilInsights) ? s.cilInsights : [])
   );
+  const cilTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-refresh CIL insights when stage changes or data is saved
+  useEffect(() => {
+    // Debounce CIL fetch to avoid hammering API on every keystroke
+    if (cilTimerRef.current) clearTimeout(cilTimerRef.current);
+    cilTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/deals/${dealId}/cil`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stage: workspace.currentStage }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.insights && Array.isArray(data.insights)) {
+            setCilInsights(prev => {
+              // Merge: keep insights from other stages, replace current stage
+              const otherStage = prev.filter(i => i.stage !== workspace.currentStage);
+              return [...otherStage, ...data.insights];
+            });
+          }
+        }
+      } catch {
+        // CIL fetch is non-critical — silently fail
+      }
+    }, 3000);
+
+    return () => {
+      if (cilTimerRef.current) clearTimeout(cilTimerRef.current);
+    };
+  }, [dealId, workspace.currentStage, workspace.isSaving]);
 
   const completeWorkspace = useCallback(async () => {
     // Mark final stage as completed
@@ -128,6 +160,13 @@ export function WorkspaceShell({
           </button>
         </div>
       </header>
+
+      {/* Validation error banner */}
+      {workspace.error && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-4 py-2">
+          <p className="text-xs font-medium text-amber-700 dark:text-amber-400">{workspace.error}</p>
+        </div>
+      )}
 
       {/* Mobile stage selector — above the flex row so it doesn't consume horizontal space */}
       <div className="lg:hidden border-b border-surface-200 dark:border-surface-700 px-4 py-2 bg-surface-50 dark:bg-surface-900 overflow-x-auto">

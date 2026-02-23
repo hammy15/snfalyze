@@ -470,9 +470,14 @@ function calculateSimpleDCF(projections: YearlyProjection[], discountRate: numbe
   return pv;
 }
 
-// ── IRR estimation (Newton-Raphson) ─────────────────────────────────
+// ── IRR estimation (Newton-Raphson with bisection fallback) ─────────
+
+function npvAtRate(cashFlows: number[], rate: number): number {
+  return cashFlows.reduce((sum, cf, t) => sum + cf / Math.pow(1 + rate, t), 0);
+}
 
 function estimateIRR(cashFlows: number[], guess = 0.10, maxIter = 100, tolerance = 0.0001): number | null {
+  // Try Newton-Raphson first
   let rate = guess;
   for (let i = 0; i < maxIter; i++) {
     let npv = 0;
@@ -483,8 +488,29 @@ function estimateIRR(cashFlows: number[], guess = 0.10, maxIter = 100, tolerance
     }
     if (Math.abs(dnpv) < 1e-10) break;
     const newRate = rate - npv / dnpv;
+    if (newRate < -0.99 || newRate > 10) break; // Diverging — fall through to bisection
     if (Math.abs(newRate - rate) < tolerance) return +(newRate * 100).toFixed(2);
     rate = newRate;
   }
-  return rate > -1 && rate < 10 ? +(rate * 100).toFixed(2) : null;
+  if (rate > -0.99 && rate < 10 && Math.abs(npvAtRate(cashFlows, rate)) < tolerance * 1e6) {
+    return +(rate * 100).toFixed(2);
+  }
+
+  // Bisection fallback — more robust for bear/edge cases
+  let lo = -0.50;
+  let hi = 5.0;
+  const npvLo = npvAtRate(cashFlows, lo);
+  const npvHi = npvAtRate(cashFlows, hi);
+  if (npvLo * npvHi > 0) return null; // No sign change — no real IRR
+
+  for (let i = 0; i < 200; i++) {
+    const mid = (lo + hi) / 2;
+    const npvMid = npvAtRate(cashFlows, mid);
+    if (Math.abs(npvMid) < tolerance * 100) return +(mid * 100).toFixed(2);
+    if (npvMid * npvLo < 0) hi = mid;
+    else lo = mid;
+  }
+
+  const finalRate = (lo + hi) / 2;
+  return finalRate > -1 && finalRate < 10 ? +(finalRate * 100).toFixed(2) : null;
 }

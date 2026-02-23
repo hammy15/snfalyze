@@ -2258,3 +2258,78 @@ export const dealCommentsRelations = relations(dealComments, ({ one }) => ({
     references: [deals.id],
   }),
 }));
+
+// ============================================================================
+// Facility Watchlist & Alerts
+// ============================================================================
+
+export const facilityWatchlist = pgTable(
+  'facility_watchlist',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ccn: varchar('ccn', { length: 20 }).notNull(),
+    facilityName: varchar('facility_name', { length: 255 }),
+    state: varchar('state', { length: 2 }),
+    beds: integer('beds'),
+    lastKnownRating: integer('last_known_rating'),
+    lastKnownSff: boolean('last_known_sff').default(false),
+    notes: text('notes'),
+    addedBy: varchar('added_by', { length: 100 }).default('analyst'),
+    isActive: boolean('is_active').default(true),
+    lastCheckedAt: timestamp('last_checked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    ccnIdx: uniqueIndex('idx_watchlist_ccn').on(table.ccn),
+    stateIdx: index('idx_watchlist_state').on(table.state),
+    activeIdx: index('idx_watchlist_active').on(table.isActive),
+  })
+);
+
+export const facilityAlertTypeEnum = pgEnum('facility_alert_type', [
+  'rating_change',
+  'sff_added',
+  'sff_removed',
+  'new_deficiency',
+  'ownership_change',
+  'penalty_issued',
+  'bed_count_change',
+]);
+
+export const facilityAlerts = pgTable(
+  'facility_alerts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    watchlistId: uuid('watchlist_id')
+      .references(() => facilityWatchlist.id, { onDelete: 'cascade' })
+      .notNull(),
+    ccn: varchar('ccn', { length: 20 }).notNull(),
+    type: facilityAlertTypeEnum('type').notNull(),
+    title: varchar('title', { length: 255 }).notNull(),
+    description: text('description'),
+    previousValue: varchar('previous_value', { length: 100 }),
+    newValue: varchar('new_value', { length: 100 }),
+    severity: varchar('severity', { length: 20 }).default('info'),
+    isRead: boolean('is_read').default(false),
+    metadata: jsonb('metadata').default('{}'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    watchlistIdIdx: index('idx_alerts_watchlist_id').on(table.watchlistId),
+    ccnIdx: index('idx_alerts_ccn').on(table.ccn),
+    typeIdx: index('idx_alerts_type').on(table.type),
+    isReadIdx: index('idx_alerts_is_read').on(table.isRead),
+    createdAtIdx: index('idx_alerts_created_at').on(table.createdAt),
+  })
+);
+
+export const facilityWatchlistRelations = relations(facilityWatchlist, ({ many }) => ({
+  alerts: many(facilityAlerts),
+}));
+
+export const facilityAlertsRelations = relations(facilityAlerts, ({ one }) => ({
+  watchlistEntry: one(facilityWatchlist, {
+    fields: [facilityAlerts.watchlistId],
+    references: [facilityWatchlist.id],
+  }),
+}));

@@ -27,9 +27,14 @@ import {
   Heart,
   AlertTriangle,
   Award,
+  Zap,
+  Search,
+  Eye,
+  Map,
+  LineChart,
 } from 'lucide-react';
 
-type ToolCategory = 'all' | 'financial' | 'quality';
+type ToolCategory = 'all' | 'financial' | 'quality' | 'intelligence';
 
 interface Tool {
   id: string;
@@ -39,7 +44,7 @@ interface Tool {
   href: string;
   color: string;
   bgColor: string;
-  category: 'financial' | 'quality';
+  category: 'financial' | 'quality' | 'intelligence';
   isNew?: boolean;
   isFavorite?: boolean;
 }
@@ -235,6 +240,65 @@ const tools: Tool[] = [
     category: 'quality',
     isNew: true,
   },
+
+  // Intelligence & Monitoring Tools
+  {
+    id: 'quick-screen',
+    name: 'Quick Screen Calculator',
+    description: 'Cascadia valuation rules — instant GO/PASS signal with cap rate adjustments',
+    icon: Zap,
+    href: '/app/tools/quick-screen',
+    color: 'text-amber-500',
+    bgColor: 'bg-amber-50 dark:bg-amber-900/20',
+    category: 'intelligence',
+    isNew: true,
+    isFavorite: true,
+  },
+  {
+    id: 'bulk-ccn',
+    name: 'Bulk CCN Profiler',
+    description: 'Paste CCNs from a broker package — get instant portfolio summary',
+    icon: Search,
+    href: '/app/tools/bulk-ccn',
+    color: 'text-blue-500',
+    bgColor: 'bg-blue-50 dark:bg-blue-900/20',
+    category: 'intelligence',
+    isNew: true,
+  },
+  {
+    id: 'watchlist',
+    name: 'Facility Watchlist',
+    description: 'Monitor facilities for CMS rating changes, SFF status, and penalties',
+    icon: Eye,
+    href: '/app/tools/watchlist',
+    color: 'text-purple-500',
+    bgColor: 'bg-purple-50 dark:bg-purple-900/20',
+    category: 'intelligence',
+    isNew: true,
+    isFavorite: true,
+  },
+  {
+    id: 'market-map',
+    name: 'Market Intelligence Map',
+    description: 'Visualize deal pipeline, Cascadia portfolio, and market opportunity',
+    icon: Map,
+    href: '/app/tools/market-map',
+    color: 'text-teal-500',
+    bgColor: 'bg-teal-50 dark:bg-teal-900/20',
+    category: 'intelligence',
+    isNew: true,
+  },
+  {
+    id: 'rates',
+    name: 'Reimbursement Rate Tracker',
+    description: 'State Medicaid rates, trends, and projections across target markets',
+    icon: LineChart,
+    href: '/app/tools/rates',
+    color: 'text-green-500',
+    bgColor: 'bg-green-50 dark:bg-green-900/20',
+    category: 'intelligence',
+    isNew: true,
+  },
 ];
 
 export default function ToolsPage() {
@@ -262,6 +326,7 @@ export default function ToolsPage() {
 
   const financialCount = tools.filter((t) => t.category === 'financial').length;
   const qualityCount = tools.filter((t) => t.category === 'quality').length;
+  const intelligenceCount = tools.filter((t) => t.category === 'intelligence').length;
 
   return (
     <div className="space-y-4">
@@ -294,6 +359,11 @@ export default function ToolsPage() {
             <span className="text-xs text-surface-500">Quality</span>
           </div>
           <div className="flex items-center gap-2">
+            <Eye className="w-4 h-4 text-amber-500" />
+            <span className="text-lg font-bold">{intelligenceCount}</span>
+            <span className="text-xs text-surface-500">Intelligence</span>
+          </div>
+          <div className="flex items-center gap-2">
             <Star className="w-4 h-4 text-amber-500" />
             <span className="text-lg font-bold">{favorites.length}</span>
             <span className="text-xs text-surface-500">Favorites</span>
@@ -307,6 +377,7 @@ export default function ToolsPage() {
           { id: 'all', label: 'All Tools', count: tools.length },
           { id: 'financial', label: 'Financial', count: financialCount },
           { id: 'quality', label: 'Quality', count: qualityCount },
+          { id: 'intelligence', label: 'Intelligence', count: intelligenceCount },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -411,10 +482,12 @@ export default function ToolsPage() {
                         'inline-block mt-2 text-[10px] font-medium px-2 py-0.5 rounded-full',
                         tool.category === 'financial'
                           ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
-                          : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                          : tool.category === 'quality'
+                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                            : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
                       )}
                     >
-                      {tool.category === 'financial' ? 'Financial' : 'Quality'}
+                      {tool.category === 'financial' ? 'Financial' : tool.category === 'quality' ? 'Quality' : 'Intelligence'}
                     </span>
                   </div>
                 </div>

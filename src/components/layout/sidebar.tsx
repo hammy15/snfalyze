@@ -21,6 +21,8 @@ import {
   Users,
   FolderKanban,
   Brain,
+  Eye,
+  Wrench,
 } from 'lucide-react';
 
 interface NavItem {
@@ -34,11 +36,12 @@ const mainNavItems: NavItem[] = [
   { name: 'Dashboard', href: '/app', icon: LayoutDashboard },
   { name: 'Deal Pipeline', href: '/app/deals', icon: FolderKanban },
   { name: 'Facilities', href: '/app/facilities', icon: Building2 },
+  { name: 'Watchlist', href: '/app/tools/watchlist', icon: Eye },
   { name: 'Partners', href: '/partners', icon: Users },
   { name: 'Sandbox', href: '/app/sandbox', icon: Calculator },
   { name: 'Deal Memory', href: '/app/deals/memory', icon: Brain },
-  { name: 'Map', href: '/map', icon: Map },
-  { name: 'Tools', href: '/app/tools', icon: Calculator },
+  { name: 'Market Map', href: '/app/tools/market-map', icon: Map },
+  { name: 'Tools', href: '/app/tools', icon: Wrench },
 ];
 
 const bottomNavItems: NavItem[] = [

@@ -91,6 +91,15 @@ const stageToStatusMap: Record<DealStage, DealStatus> = {
   dead: 'passed',
 };
 
+interface WorkspaceInfo {
+  currentStage: string | null;
+  completedStages: number;
+  totalStages: number;
+  completionPercent: number;
+  riskScore: number | null;
+  riskRating: string | null;
+}
+
 interface Deal {
   id: string;
   name: string;
@@ -109,6 +118,7 @@ interface Deal {
   assetType?: string;
   primaryState?: string;
   confidenceScore?: number;
+  workspace?: WorkspaceInfo | null;
 }
 
 const stageConfig: { stage: DealStage; label: string; color: string }[] = [
@@ -192,6 +202,8 @@ export default function DealsPage() {
                 passed: 0,
               };
 
+              const wsRaw = deal.workspace as WorkspaceInfo | null | undefined;
+
               return {
                 id: deal.id as string,
                 name: deal.name as string,
@@ -207,6 +219,7 @@ export default function DealsPage() {
                 assetType: deal.assetType as string,
                 primaryState: deal.primaryState as string,
                 confidenceScore: deal.confidenceScore as number,
+                workspace: wsRaw || null,
               };
             });
             setDeals(transformedDeals);
@@ -420,6 +433,67 @@ export default function DealsPage() {
       align: 'right',
       width: 80,
       cell: (value) => <span className="tabular-nums">{value}</span>,
+    },
+    {
+      id: 'workspaceStage',
+      header: 'Workspace',
+      accessor: 'name',
+      width: 130,
+      cell: (_value, row) => {
+        const ws = row.workspace;
+        if (!ws) return <span className="text-xs text-surface-400">—</span>;
+        const stageLabels: Record<string, string> = {
+          deal_intake: 'Intake',
+          comp_pull: 'Comps',
+          pro_forma: 'Pro Forma',
+          risk_score: 'Risk',
+          investment_memo: 'Memo',
+        };
+        return (
+          <div className="flex items-center gap-1.5">
+            <div className="flex gap-0.5">
+              {['deal_intake', 'comp_pull', 'pro_forma', 'risk_score', 'investment_memo'].map((s, i) => {
+                const stageInfo = (ws as WorkspaceInfo & { stages?: { stage: string; status: string }[] })?.stages;
+                const found = Array.isArray(stageInfo) ? stageInfo.find((st: { stage: string }) => st.stage === s) : null;
+                return (
+                  <div key={s} className={cn(
+                    'w-2 h-2 rounded-full',
+                    found?.status === 'completed' ? 'bg-emerald-500' :
+                    found?.status === 'in_progress' ? 'bg-primary-500' :
+                    'bg-surface-200 dark:bg-surface-700'
+                  )} title={`${stageLabels[s]}: ${found?.status || 'pending'}`} />
+                );
+              })}
+            </div>
+            <span className="text-[10px] text-surface-500">{ws.completionPercent}%</span>
+          </div>
+        );
+      },
+    },
+    {
+      id: 'riskScore',
+      header: 'Risk',
+      accessor: 'name',
+      width: 80,
+      cell: (_value, row) => {
+        const ws = row.workspace;
+        if (!ws?.riskScore) return <span className="text-xs text-surface-400">—</span>;
+        const ratingColors: Record<string, string> = {
+          LOW: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20',
+          MODERATE: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20',
+          ELEVATED: 'text-orange-600 bg-orange-50 dark:bg-orange-900/20',
+          HIGH: 'text-red-600 bg-red-50 dark:bg-red-900/20',
+          CRITICAL: 'text-red-700 bg-red-100 dark:bg-red-900/30',
+        };
+        return (
+          <span className={cn(
+            'text-[10px] font-bold px-1.5 py-0.5 rounded',
+            ratingColors[ws.riskRating || ''] || 'text-surface-500'
+          )}>
+            {Math.round(ws.riskScore)}
+          </span>
+        );
+      },
     },
     {
       id: 'assignee',

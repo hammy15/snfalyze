@@ -1,41 +1,74 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, deals, facilities, valuations, financialPeriods } from '@/db';
+import { db, deals, facilities, dealWorkspaceStages } from '@/db';
 import { eq, desc } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const status = searchParams.get('status');
-    const assetType = searchParams.get('assetType');
-
     // Fetch all deals
     const allDeals = await db.select().from(deals).orderBy(desc(deals.updatedAt));
 
-    // Fetch facilities for each deal
-    const dealsWithFacilities = await Promise.all(
+    // Fetch facilities + workspace stages for each deal
+    const dealsWithData = await Promise.all(
       allDeals.map(async (deal) => {
-        const dealFacilities = await db
-          .select({
-            id: facilities.id,
-            name: facilities.name,
-            licensedBeds: facilities.licensedBeds,
-            city: facilities.city,
-            state: facilities.state,
-            assetType: facilities.assetType,
-          })
-          .from(facilities)
-          .where(eq(facilities.dealId, deal.id));
+        const [dealFacilities, workspaceStages] = await Promise.all([
+          db
+            .select({
+              id: facilities.id,
+              name: facilities.name,
+              licensedBeds: facilities.licensedBeds,
+              city: facilities.city,
+              state: facilities.state,
+              assetType: facilities.assetType,
+              cmsRating: facilities.cmsRating,
+              isSff: facilities.isSff,
+            })
+            .from(facilities)
+            .where(eq(facilities.dealId, deal.id)),
+          db
+            .select({
+              stage: dealWorkspaceStages.stage,
+              status: dealWorkspaceStages.status,
+              completionScore: dealWorkspaceStages.completionScore,
+              stageData: dealWorkspaceStages.stageData,
+            })
+            .from(dealWorkspaceStages)
+            .where(eq(dealWorkspaceStages.dealId, deal.id)),
+        ]);
+
+        // Extract risk score from risk_score stage data
+        const riskStage = workspaceStages.find(s => s.stage === 'risk_score');
+        const riskData = riskStage?.stageData as Record<string, unknown> | null;
+        const riskScore = riskData?.compositeScore as number | null ?? null;
+        const riskRating = riskData?.rating as string | null ?? null;
+
+        // Calculate workspace completion
+        const completedStages = workspaceStages.filter(s => s.status === 'completed').length;
+        const totalStages = workspaceStages.length;
+        const workspaceCompletion = totalStages > 0 ? Math.round((completedStages / totalStages) * 100) : 0;
 
         return {
           ...deal,
           facilities: dealFacilities,
+          workspace: totalStages > 0 ? {
+            currentStage: deal.workspaceCurrentStage,
+            stages: workspaceStages.map(s => ({
+              stage: s.stage,
+              status: s.status,
+              completionScore: s.completionScore,
+            })),
+            completedStages,
+            totalStages,
+            completionPercent: workspaceCompletion,
+            riskScore,
+            riskRating,
+          } : null,
         };
       })
     );
 
     return NextResponse.json({
       success: true,
-      data: dealsWithFacilities,
+      data: dealsWithData,
     });
   } catch (error) {
     console.error('Error fetching deals:', error);

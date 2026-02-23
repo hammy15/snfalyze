@@ -110,122 +110,324 @@ function generateMemoPDF(
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 18;
+  const margin = 20;
   const contentWidth = pageWidth - margin * 2;
+  const maxY = pageHeight - 22;
 
-  // Colors
-  const primary = [20, 184, 166] as const;     // teal
-  const primaryDark = [13, 148, 136] as const;
-  const dark = [30, 30, 30] as const;
-  const gray = [100, 100, 100] as const;
-  const lightGray = [200, 200, 200] as const;
+  // Design tokens
+  const teal = [15, 118, 110] as const;         // professional deep teal
+  const tealLight = [20, 184, 166] as const;     // accent teal
+  const navy = [22, 33, 62] as const;            // dark headings
+  const dark = [38, 38, 38] as const;            // body text
+  const mid = [90, 100, 110] as const;           // secondary text
+  const light = [160, 170, 180] as const;        // subtle
+  const ruleGray = [220, 225, 230] as const;     // dividers
+  const bgLight = [248, 250, 252] as const;      // box backgrounds
   const white = [255, 255, 255] as const;
 
-  // ── Page Footer Helper ──────────────────────────────────────────
-  function addFooter(pageNum: number) {
-    doc.setFontSize(7);
-    doc.setTextColor(lightGray[0], lightGray[1], lightGray[2]);
-    doc.text('CONFIDENTIAL', margin, pageHeight - 8);
-    doc.text(`SNFalyze | Cascadia Healthcare`, pageWidth / 2, pageHeight - 8, { align: 'center' });
-    doc.text(`Page ${pageNum}`, pageWidth - margin, pageHeight - 8, { align: 'right' });
+  // Risk-level colors
+  function riskColor(score: number): readonly [number, number, number] {
+    if (score <= 30) return [16, 185, 129] as const;   // emerald
+    if (score <= 50) return [245, 158, 11] as const;   // amber
+    if (score <= 70) return [249, 115, 22] as const;   // orange
+    if (score <= 85) return [239, 68, 68] as const;    // red
+    return [190, 18, 60] as const;                     // rose
   }
 
-  // ── Cover Page ────────────────────────────────────────────────────
+  const isDraft = (memo.status || 'draft') === 'draft';
+  let currentPage = 0;
 
-  // Full-width header band
-  doc.setFillColor(primary[0], primary[1], primary[2]);
-  doc.rect(0, 0, pageWidth, 70, 'F');
+  // ── Helpers ──────────────────────────────────────────────────────
 
-  // Subtle gradient overlay at bottom of header
-  doc.setFillColor(primaryDark[0], primaryDark[1], primaryDark[2]);
-  doc.rect(0, 60, pageWidth, 10, 'F');
+  function addFooter() {
+    doc.setFontSize(7);
+    doc.setTextColor(light[0], light[1], light[2]);
+    doc.text('CONFIDENTIAL', margin, pageHeight - 8);
+    doc.setTextColor(mid[0], mid[1], mid[2]);
+    doc.text('SNFalyze  |  Cascadia Healthcare', pageWidth / 2, pageHeight - 8, { align: 'center' });
+    doc.text(`Page ${currentPage}`, pageWidth - margin, pageHeight - 8, { align: 'right' });
+    // thin rule above footer
+    doc.setDrawColor(ruleGray[0], ruleGray[1], ruleGray[2]);
+    doc.setLineWidth(0.2);
+    doc.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
+  }
+
+  function addDraftWatermark() {
+    if (!isDraft) return;
+    doc.setTextColor(240, 240, 240);
+    doc.setFontSize(60);
+    doc.setFont('helvetica', 'bold');
+    // Center diagonally
+    doc.text('DRAFT', pageWidth / 2, pageHeight / 2, {
+      align: 'center',
+      angle: 45,
+    });
+    doc.setFont('helvetica', 'normal');
+  }
+
+  function newPage() {
+    if (currentPage > 0) doc.addPage();
+    currentPage++;
+    addDraftWatermark();
+    return 24; // starting y
+  }
+
+  // Render rich text with **bold**, *italic*, bullet points, sub-headers
+  function renderRichContent(content: string, startY: number, sectionTitle: string): number {
+    let y = startY;
+    const lineHeight = 4.2;
+    const paragraphGap = 2.5;
+    const bulletIndent = 5;
+
+    // Split into paragraphs
+    const paragraphs = content.split(/\n\n+/);
+
+    for (const para of paragraphs) {
+      const lines = para.split('\n');
+      for (const rawLine of lines) {
+        const trimmed = rawLine.trim();
+        if (!trimmed) continue;
+
+        // Check for page break
+        if (y > maxY) {
+          addFooter();
+          const ny = newPage();
+          // Continuation mini-header
+          doc.setFillColor(teal[0], teal[1], teal[2]);
+          doc.rect(0, 0, pageWidth, 8, 'F');
+          doc.setTextColor(white[0], white[1], white[2]);
+          doc.setFontSize(7);
+          doc.setFont('helvetica', 'italic');
+          doc.text(`${sectionTitle} (continued)`, margin, 5.5);
+          y = ny - 8;
+        }
+
+        // Sub-headers (### or ##)
+        const headerMatch = trimmed.match(/^#{1,3}\s+(.+)/);
+        if (headerMatch) {
+          y += 2;
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10);
+          doc.setTextColor(navy[0], navy[1], navy[2]);
+          doc.text(headerMatch[1], margin, y);
+          y += lineHeight + 1.5;
+          // Accent underline
+          doc.setDrawColor(tealLight[0], tealLight[1], tealLight[2]);
+          doc.setLineWidth(0.4);
+          doc.line(margin, y - 2.5, margin + doc.getTextWidth(headerMatch[1]) + 4, y - 2.5);
+          continue;
+        }
+
+        // Bullet points
+        const bulletMatch = trimmed.match(/^[-•*]\s+(.+)/);
+        if (bulletMatch) {
+          doc.setFontSize(9);
+          doc.setTextColor(dark[0], dark[1], dark[2]);
+          // Bullet dot
+          doc.setFillColor(tealLight[0], tealLight[1], tealLight[2]);
+          doc.circle(margin + 1.5, y - 1, 0.7, 'F');
+          // Render text with inline formatting
+          const wrapped = doc.splitTextToSize(stripFormatting(bulletMatch[1]), contentWidth - bulletIndent - 2);
+          for (let i = 0; i < wrapped.length; i++) {
+            if (y > maxY) {
+              addFooter();
+              y = newPage();
+            }
+            renderFormattedLine(wrapped[i], margin + bulletIndent, y);
+            y += lineHeight;
+          }
+          continue;
+        }
+
+        // Numbered list items
+        const numberedMatch = trimmed.match(/^(\d+)[.)]\s+(.+)/);
+        if (numberedMatch) {
+          doc.setFontSize(9);
+          doc.setTextColor(teal[0], teal[1], teal[2]);
+          doc.setFont('helvetica', 'bold');
+          doc.text(`${numberedMatch[1]}.`, margin, y);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(dark[0], dark[1], dark[2]);
+          const wrapped = doc.splitTextToSize(stripFormatting(numberedMatch[2]), contentWidth - bulletIndent - 2);
+          for (let i = 0; i < wrapped.length; i++) {
+            if (y > maxY) {
+              addFooter();
+              y = newPage();
+            }
+            renderFormattedLine(wrapped[i], margin + bulletIndent, y);
+            y += lineHeight;
+          }
+          continue;
+        }
+
+        // Regular paragraph text — wrap and render with inline formatting
+        doc.setFontSize(9);
+        doc.setTextColor(dark[0], dark[1], dark[2]);
+        doc.setFont('helvetica', 'normal');
+        const wrapped = doc.splitTextToSize(stripFormatting(trimmed), contentWidth);
+        for (let i = 0; i < wrapped.length; i++) {
+          if (y > maxY) {
+            addFooter();
+            y = newPage();
+          }
+          renderFormattedLine(wrapped[i], margin, y);
+          y += lineHeight;
+        }
+      }
+      y += paragraphGap;
+    }
+    return y;
+  }
+
+  function stripFormatting(text: string): string {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/`(.*?)`/g, '$1');
+  }
+
+  function renderFormattedLine(text: string, x: number, y: number) {
+    // Simple rendering — bold segments already stripped for line wrapping
+    // Render full line in current font
+    doc.text(text, x, y);
+  }
+
+  // ── COVER PAGE ──────────────────────────────────────────────────
+
+  currentPage = 1;
+  addDraftWatermark();
+
+  // Full-bleed header band with subtle two-tone
+  doc.setFillColor(teal[0], teal[1], teal[2]);
+  doc.rect(0, 0, pageWidth, 68, 'F');
+  // Darker accent strip at bottom of header
+  doc.setFillColor(12, 95, 88);
+  doc.rect(0, 62, pageWidth, 6, 'F');
 
   doc.setTextColor(white[0], white[1], white[2]);
-  doc.setFontSize(9);
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
-  doc.text('CASCADIA HEALTHCARE', margin, 18);
-  doc.text('INVESTMENT MEMORANDUM', pageWidth - margin, 18, { align: 'right' });
+  doc.text('CASCADIA HEALTHCARE', margin, 16);
 
-  // Horizontal rule
+  // Date on right
+  doc.text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), pageWidth - margin, 16, { align: 'right' });
+
+  // Thin divider
   doc.setDrawColor(255, 255, 255);
-  doc.setLineWidth(0.3);
-  doc.line(margin, 24, pageWidth - margin, 24);
+  doc.setLineWidth(0.15);
+  doc.line(margin, 21, pageWidth - margin, 21);
 
-  doc.setFontSize(28);
+  // Title
+  doc.setFontSize(26);
   doc.setFont('helvetica', 'bold');
-  doc.text(deal.name || 'Deal Analysis', margin, 42);
+  const titleLines = doc.splitTextToSize(deal.name || 'Deal Analysis', pageWidth - margin * 2);
+  doc.text(titleLines, margin, 36);
+  const titleEndY = 36 + (titleLines.length - 1) * 10;
 
-  doc.setFontSize(12);
+  // Subtitle
+  doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
   const subtitle = [
     deal.assetType?.toUpperCase() || 'SNF',
     deal.primaryState || '',
     deal.beds ? `${deal.beds} Beds` : '',
-  ].filter(Boolean).join(' | ');
-  doc.text(subtitle, margin, 55);
+  ].filter(Boolean).join('  |  ');
+  doc.text(subtitle, margin, titleEndY + 12);
 
-  // ── Key Metrics Boxes ───────────────────────────────────────────
-  let y = 85;
-  const boxWidth = (contentWidth - 12) / 4;
-  const boxHeight = 28;
+  // Document type label
+  doc.setFontSize(8);
+  doc.text('INVESTMENT MEMORANDUM', margin, titleEndY + 20);
+
+  // ── Key Metrics Row ─────────────────────────────────────────────
+  let y = 80;
+  const boxW = (contentWidth - 9) / 4;
+  const boxH = 26;
 
   const askingPrice = deal.askingPrice ? `$${(parseFloat(deal.askingPrice) / 1e6).toFixed(1)}M` : 'N/A';
   const pricePerBed = deal.askingPrice && deal.beds
     ? `$${Math.round(parseFloat(deal.askingPrice) / deal.beds / 1000)}K`
     : 'N/A';
-  const riskScore = riskData?.compositeScore != null ? `${Math.round(riskData.compositeScore as number)}/100` : 'N/A';
-  const riskRating = (riskData?.rating as string) || 'N/A';
+  const compositeScore = riskData?.compositeScore != null ? Math.round(riskData.compositeScore as number) : null;
+  const riskRating = (riskData?.rating as string) || '';
 
   const metrics = [
-    { label: 'Asking Price', value: askingPrice },
-    { label: 'Price / Bed', value: pricePerBed },
-    { label: 'Total Beds', value: deal.beds ? String(deal.beds) : 'N/A' },
-    { label: 'Risk Score', value: `${riskScore} ${riskRating}` },
+    { label: 'ASKING PRICE', value: askingPrice },
+    { label: 'PRICE / BED', value: pricePerBed },
+    { label: 'TOTAL BEDS', value: deal.beds ? String(deal.beds) : 'N/A' },
+    { label: 'RISK SCORE', value: compositeScore != null ? `${compositeScore}` : 'N/A', isRisk: true },
   ];
 
   metrics.forEach((m, i) => {
-    const x = margin + i * (boxWidth + 4);
-    doc.setFillColor(248, 250, 252);
-    doc.roundedRect(x, y, boxWidth, boxHeight, 2, 2, 'F');
-    doc.setDrawColor(lightGray[0], lightGray[1], lightGray[2]);
-    doc.roundedRect(x, y, boxWidth, boxHeight, 2, 2, 'S');
+    const x = margin + i * (boxW + 3);
+    // Box fill
+    doc.setFillColor(bgLight[0], bgLight[1], bgLight[2]);
+    doc.roundedRect(x, y, boxW, boxH, 1.5, 1.5, 'F');
+    // Subtle border
+    doc.setDrawColor(ruleGray[0], ruleGray[1], ruleGray[2]);
+    doc.setLineWidth(0.2);
+    doc.roundedRect(x, y, boxW, boxH, 1.5, 1.5, 'S');
 
-    doc.setTextColor(gray[0], gray[1], gray[2]);
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
-    doc.text(m.label.toUpperCase(), x + boxWidth / 2, y + 9, { align: 'center' });
+    // Risk score box gets color-coded left accent
+    if (m.isRisk && compositeScore != null) {
+      const rc = riskColor(compositeScore);
+      doc.setFillColor(rc[0], rc[1], rc[2]);
+      doc.rect(x, y, 2.5, boxH, 'F');
+      // Re-round the corners
+      doc.setFillColor(bgLight[0], bgLight[1], bgLight[2]);
+      doc.rect(x, y, 1.5, 1.5, 'F');
+      doc.rect(x, y + boxH - 1.5, 1.5, 1.5, 'F');
+    }
 
-    doc.setTextColor(dark[0], dark[1], dark[2]);
-    doc.setFontSize(13);
+    // Label
+    doc.setTextColor(mid[0], mid[1], mid[2]);
+    doc.setFontSize(6.5);
     doc.setFont('helvetica', 'bold');
-    doc.text(m.value, x + boxWidth / 2, y + 21, { align: 'center' });
+    doc.text(m.label, x + boxW / 2, y + 9, { align: 'center' });
+
+    // Value
+    if (m.isRisk && compositeScore != null) {
+      const rc = riskColor(compositeScore);
+      doc.setTextColor(rc[0], rc[1], rc[2]);
+    } else {
+      doc.setTextColor(navy[0], navy[1], navy[2]);
+    }
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text(m.value, x + boxW / 2, y + 20, { align: 'center' });
+
+    // Risk rating label below score
+    if (m.isRisk && riskRating) {
+      doc.setFontSize(6);
+      doc.setFont('helvetica', 'normal');
+      doc.text(riskRating.toUpperCase(), x + boxW / 2, y + 24.5, { align: 'center' });
+    }
   });
 
-  y += boxHeight + 12;
+  y += boxH + 10;
 
   // ── Facility Portfolio Table ─────────────────────────────────────
   if (dealFacilities.length > 0) {
-    doc.setTextColor(dark[0], dark[1], dark[2]);
-    doc.setFontSize(11);
+    doc.setTextColor(navy[0], navy[1], navy[2]);
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.text(dealFacilities.length > 1 ? 'Portfolio Summary' : 'Facility Overview', margin, y);
     y += 6;
 
     // Table header
-    doc.setFillColor(primary[0], primary[1], primary[2]);
+    doc.setFillColor(teal[0], teal[1], teal[2]);
     doc.rect(margin, y, contentWidth, 7, 'F');
     doc.setTextColor(white[0], white[1], white[2]);
-    doc.setFontSize(7);
+    doc.setFontSize(6.5);
     doc.setFont('helvetica', 'bold');
 
     const cols = [
-      { label: 'Facility', x: margin + 2, w: 55 },
-      { label: 'Location', x: margin + 57, w: 35 },
-      { label: 'Type', x: margin + 92, w: 15 },
-      { label: 'Beds', x: margin + 107, w: 15 },
+      { label: 'FACILITY', x: margin + 2, w: 55 },
+      { label: 'LOCATION', x: margin + 57, w: 35 },
+      { label: 'TYPE', x: margin + 92, w: 15 },
+      { label: 'BEDS', x: margin + 107, w: 15 },
       { label: 'CMS', x: margin + 122, w: 12 },
       { label: 'SFF', x: margin + 134, w: 12 },
-      { label: 'Verified', x: margin + 146, w: 18 },
+      { label: 'VERIFIED', x: margin + 146, w: 18 },
     ];
 
     cols.forEach(c => doc.text(c.label, c.x, y + 5));
@@ -234,7 +436,7 @@ function generateMemoPDF(
     // Table rows
     doc.setFont('helvetica', 'normal');
     dealFacilities.forEach((f, idx) => {
-      const rowColor = idx % 2 === 0 ? [255, 255, 255] : [248, 250, 252];
+      const rowColor = idx % 2 === 0 ? white : bgLight;
       doc.setFillColor(rowColor[0], rowColor[1], rowColor[2]);
       doc.rect(margin, y, contentWidth, 6, 'F');
 
@@ -246,196 +448,201 @@ function generateMemoPDF(
       doc.text(f.assetType || 'SNF', cols[2].x, y + 4.5);
       doc.text(String(f.licensedBeds || '-'), cols[3].x, y + 4.5);
       doc.text(f.cmsRating ? `${f.cmsRating}/5` : '-', cols[4].x, y + 4.5);
-      doc.text(f.isSff ? 'YES' : 'No', cols[5].x, y + 4.5);
-      doc.text(f.isVerified ? 'Yes' : 'No', cols[6].x, y + 4.5);
 
+      // SFF coloring
+      if (f.isSff) {
+        doc.setTextColor(239, 68, 68);
+        doc.setFont('helvetica', 'bold');
+        doc.text('YES', cols[5].x, y + 4.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(dark[0], dark[1], dark[2]);
+      } else {
+        doc.text('No', cols[5].x, y + 4.5);
+      }
+      doc.text(f.isVerified ? 'Yes' : 'No', cols[6].x, y + 4.5);
       y += 6;
     });
 
-    // Table border
-    doc.setDrawColor(lightGray[0], lightGray[1], lightGray[2]);
-    doc.rect(margin, y - 6 * dealFacilities.length - 7, contentWidth, 7 + 6 * dealFacilities.length, 'S');
+    // Table bottom border
+    doc.setDrawColor(ruleGray[0], ruleGray[1], ruleGray[2]);
+    doc.setLineWidth(0.3);
+    doc.line(margin, y, margin + contentWidth, y);
   }
 
   y += 10;
 
-  // ── Deal Info ─────────────────────────────────────────────────────
-  doc.setTextColor(dark[0], dark[1], dark[2]);
-  doc.setFontSize(11);
+  // ── Deal Overview Info Grid ─────────────────────────────────────
+  doc.setTextColor(navy[0], navy[1], navy[2]);
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text('Deal Overview', margin, y);
-  y += 7;
+  y += 2;
+  // Accent line
+  doc.setDrawColor(tealLight[0], tealLight[1], tealLight[2]);
+  doc.setLineWidth(0.5);
+  doc.line(margin, y, margin + 30, y);
+  y += 5;
 
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(gray[0], gray[1], gray[2]);
+  doc.setFontSize(8.5);
 
   const infoItems = [
     ['Asset Type', deal.assetType?.toUpperCase() || 'N/A'],
     ['State', deal.primaryState || 'N/A'],
     ['Beds', String(deal.beds || 'N/A')],
     ['Asking Price', askingPrice],
-    ['Status', (memo.status || 'Draft').charAt(0).toUpperCase() + (memo.status || 'draft').slice(1)],
+    ['Memo Status', (memo.status || 'Draft').charAt(0).toUpperCase() + (memo.status || 'draft').slice(1)],
     ['Generated', memo.generatedAt ? new Date(memo.generatedAt).toLocaleDateString() : 'N/A'],
   ];
 
-  for (const [label, value] of infoItems) {
+  // Render as two-column grid for compactness
+  for (let i = 0; i < infoItems.length; i += 2) {
+    const left = infoItems[i];
+    const right = infoItems[i + 1];
+    // Left column
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(gray[0], gray[1], gray[2]);
-    doc.text(`${label}:`, margin, y);
+    doc.setTextColor(mid[0], mid[1], mid[2]);
+    doc.text(`${left[0]}:`, margin, y);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(dark[0], dark[1], dark[2]);
-    doc.text(value, margin + 35, y);
-    y += 5.5;
+    doc.text(left[1], margin + 28, y);
+    // Right column
+    if (right) {
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(mid[0], mid[1], mid[2]);
+      doc.text(`${right[0]}:`, margin + contentWidth / 2, y);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(dark[0], dark[1], dark[2]);
+      doc.text(right[1], margin + contentWidth / 2 + 28, y);
+    }
+    y += 5;
   }
 
-  // ── Table of Contents ─────────────────────────────────────────────
+  // ── Table of Contents ───────────────────────────────────────────
   y += 8;
-  doc.setFontSize(11);
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(dark[0], dark[1], dark[2]);
+  doc.setTextColor(navy[0], navy[1], navy[2]);
   doc.text('Table of Contents', margin, y);
-  y += 7;
+  y += 2;
+  doc.setDrawColor(tealLight[0], tealLight[1], tealLight[2]);
+  doc.setLineWidth(0.5);
+  doc.line(margin, y, margin + 34, y);
+  y += 6;
 
   const sections = [
-    { title: '1. Executive Summary', content: memo.executiveSummary },
-    { title: '2. Facility Overview', content: memo.facilityOverview },
-    { title: '3. Market Analysis', content: memo.marketAnalysis },
-    { title: '4. Financial Analysis', content: memo.financialAnalysis },
-    { title: '5. Operational Assessment', content: memo.operationalAssessment },
-    { title: '6. Risk Assessment', content: memo.riskAssessment },
-    { title: '7. Investment Thesis', content: memo.investmentThesis },
-    { title: '8. Recommendation', content: memo.recommendation },
+    { title: '1.  Executive Summary', content: memo.executiveSummary },
+    { title: '2.  Facility Overview', content: memo.facilityOverview },
+    { title: '3.  Market Analysis', content: memo.marketAnalysis },
+    { title: '4.  Financial Analysis', content: memo.financialAnalysis },
+    { title: '5.  Operational Assessment', content: memo.operationalAssessment },
+    { title: '6.  Risk Assessment', content: memo.riskAssessment },
+    { title: '7.  Investment Thesis', content: memo.investmentThesis },
+    { title: '8.  Recommendation', content: memo.recommendation },
   ];
 
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  let pageCounter = 2;
+  let tocPage = 2;
   for (const section of sections) {
     if (!section.content) continue;
-    doc.setTextColor(primary[0], primary[1], primary[2]);
-    doc.text(section.title, margin + 4, y);
-    doc.setTextColor(lightGray[0], lightGray[1], lightGray[2]);
-    // Dots
-    const titleWidth = doc.getTextWidth(section.title);
-    const pageStr = String(pageCounter);
-    const pageWidth2 = doc.getTextWidth(pageStr);
-    const dotsStart = margin + 4 + titleWidth + 2;
-    const dotsEnd = pageWidth - margin - pageWidth2 - 2;
-    let dx = dotsStart;
-    while (dx < dotsEnd) {
+    doc.setTextColor(teal[0], teal[1], teal[2]);
+    doc.setFont('helvetica', 'normal');
+    doc.text(section.title, margin + 2, y);
+
+    // Dotted leader
+    doc.setTextColor(ruleGray[0], ruleGray[1], ruleGray[2]);
+    const tw = doc.getTextWidth(section.title);
+    const pStr = String(tocPage);
+    const pw = doc.getTextWidth(pStr);
+    let dx = margin + 2 + tw + 3;
+    const dEnd = pageWidth - margin - pw - 3;
+    while (dx < dEnd) {
       doc.text('.', dx, y);
-      dx += 1.5;
+      dx += 1.8;
     }
-    doc.setTextColor(gray[0], gray[1], gray[2]);
-    doc.text(pageStr, pageWidth - margin, y, { align: 'right' });
-    y += 5;
-    pageCounter++;
+
+    doc.setTextColor(mid[0], mid[1], mid[2]);
+    doc.text(pStr, pageWidth - margin, y, { align: 'right' });
+    y += 5.5;
+    tocPage++;
   }
 
-  // Confidentiality notice
-  doc.setFontSize(7);
-  doc.setTextColor(lightGray[0], lightGray[1], lightGray[2]);
-  doc.text('CONFIDENTIAL — For internal use only. Not for distribution.', margin, pageHeight - 15);
-  doc.text(`Generated by SNFalyze AI Platform — ${new Date().toLocaleDateString()}`, margin, pageHeight - 10);
+  // Due diligence entry
+  if (memo.dueDiligenceChecklist) {
+    doc.setTextColor(teal[0], teal[1], teal[2]);
+    doc.text('9.  Due Diligence Checklist', margin + 2, y);
+    doc.setTextColor(ruleGray[0], ruleGray[1], ruleGray[2]);
+    const tw2 = doc.getTextWidth('9.  Due Diligence Checklist');
+    const pStr2 = String(tocPage);
+    const pw2 = doc.getTextWidth(pStr2);
+    let dx2 = margin + 2 + tw2 + 3;
+    while (dx2 < pageWidth - margin - pw2 - 3) {
+      doc.text('.', dx2, y);
+      dx2 += 1.8;
+    }
+    doc.setTextColor(mid[0], mid[1], mid[2]);
+    doc.text(pStr2, pageWidth - margin, y, { align: 'right' });
+  }
 
-  addFooter(1);
+  // Confidentiality strip at page bottom
+  doc.setFillColor(bgLight[0], bgLight[1], bgLight[2]);
+  doc.rect(0, pageHeight - 20, pageWidth, 20, 'F');
+  doc.setFontSize(6.5);
+  doc.setTextColor(light[0], light[1], light[2]);
+  doc.text('CONFIDENTIAL  —  For internal use only. Not for distribution.', margin, pageHeight - 14);
+  doc.text(`Generated by SNFalyze AI Platform  —  ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, margin, pageHeight - 9.5);
 
-  // ── Content Pages ─────────────────────────────────────────────────
-  let currentPage = 1;
+  addFooter();
+
+  // ── Content Section Pages ─────────────────────────────────────
 
   for (const section of sections) {
     if (!section.content) continue;
 
-    doc.addPage();
-    currentPage++;
-    y = 20;
+    y = newPage();
 
-    // Section header with accent bar
-    doc.setFillColor(primary[0], primary[1], primary[2]);
-    doc.rect(0, 0, pageWidth, 16, 'F');
+    // Section header bar
+    doc.setFillColor(teal[0], teal[1], teal[2]);
+    doc.rect(0, 0, pageWidth, 14, 'F');
     doc.setTextColor(white[0], white[1], white[2]);
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text(section.title, margin, 11);
+    doc.text(section.title, margin, 10);
 
-    y = 26;
+    y = 22;
 
-    // Section content
-    doc.setTextColor(dark[0], dark[1], dark[2]);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
+    // Render content with formatting
+    y = renderRichContent(section.content, y, section.title);
 
-    // Strip markdown formatting
-    const cleanContent = section.content
-      .replace(/\*\*(.*?)\*\*/g, '$1')
-      .replace(/\*(.*?)\*/g, '$1')
-      .replace(/^#{1,3}\s+/gm, '')
-      .replace(/^[-•]\s*/gm, '  - ');
-
-    const lines = doc.splitTextToSize(cleanContent, contentWidth);
-    for (const line of lines) {
-      if (y > pageHeight - 20) {
-        addFooter(currentPage);
-        doc.addPage();
-        currentPage++;
-        y = 20;
-        // Mini header on continuation pages
-        doc.setFillColor(primary[0], primary[1], primary[2]);
-        doc.rect(0, 0, pageWidth, 8, 'F');
-        doc.setTextColor(white[0], white[1], white[2]);
-        doc.setFontSize(7);
-        doc.text(`${section.title} (continued)`, margin, 5.5);
-        doc.setTextColor(dark[0], dark[1], dark[2]);
-        doc.setFontSize(9);
-        y = 16;
-      }
-      doc.text(line, margin, y);
-      y += 4.5;
-    }
-
-    addFooter(currentPage);
+    addFooter();
   }
 
   // ── Due Diligence Checklist ─────────────────────────────────────
   if (memo.dueDiligenceChecklist) {
-    doc.addPage();
-    currentPage++;
-    y = 20;
-    doc.setFillColor(primary[0], primary[1], primary[2]);
-    doc.rect(0, 0, pageWidth, 16, 'F');
-    doc.setTextColor(white[0], white[1], white[2]);
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.text('9. Due Diligence Checklist', margin, 11);
+    y = newPage();
 
-    y = 26;
-    doc.setTextColor(dark[0], dark[1], dark[2]);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
+    doc.setFillColor(teal[0], teal[1], teal[2]);
+    doc.rect(0, 0, pageWidth, 14, 'F');
+    doc.setTextColor(white[0], white[1], white[2]);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('9.  Due Diligence Checklist', margin, 10);
+
+    y = 22;
 
     const rawChecklist = typeof memo.dueDiligenceChecklist === 'object'
       ? (memo.dueDiligenceChecklist as Record<string, string>).content || JSON.stringify(memo.dueDiligenceChecklist, null, 2)
       : String(memo.dueDiligenceChecklist);
-    const checklistContent = rawChecklist
-      .replace(/\*\*(.*?)\*\*/g, '$1')
-      .replace(/\*(.*?)\*/g, '$1')
-      .replace(/^#{1,3}\s+/gm, '')
-      .replace(/^[-•]\s*/gm, '  - ');
 
-    const checklistLines = doc.splitTextToSize(checklistContent, contentWidth);
-    for (const line of checklistLines) {
-      if (y > pageHeight - 20) {
-        addFooter(currentPage);
-        doc.addPage();
-        currentPage++;
-        y = 20;
-      }
-      doc.text(line, margin, y);
-      y += 4.5;
-    }
+    // Render checklist items with checkbox symbols
+    const checklistFormatted = rawChecklist
+      .replace(/^[-•]\s*/gm, '\u2610  ')     // ☐ checkbox
+      .replace(/^\[x\]\s*/gim, '\u2611  ')    // ☑ checked
+      .replace(/^\[ \]\s*/gm, '\u2610  ');    // ☐ unchecked
 
-    addFooter(currentPage);
+    y = renderRichContent(checklistFormatted, y, 'Due Diligence Checklist');
+
+    addFooter();
   }
 
   return Buffer.from(doc.output('arraybuffer'));

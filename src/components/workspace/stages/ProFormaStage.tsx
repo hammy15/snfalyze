@@ -70,7 +70,7 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
   return (
     <div className="max-w-5xl mx-auto space-y-4">
       {/* Key Metrics Summary */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <MetricChip
           label="Current Revenue"
           value={currentRevenue ? `$${formatCompact(currentRevenue)}` : '—'}
@@ -119,6 +119,7 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
           <div className="border border-surface-200 dark:border-surface-700 rounded-xl p-5">
             <h3 className="text-sm font-semibold text-surface-800 dark:text-surface-200 mb-3">Census Projections (5-Year)</h3>
             {censusProjections.length > 0 ? (
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-surface-200 dark:border-surface-700">
@@ -136,13 +137,14 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
                       <td className="px-3 py-2 font-medium">Year {yr.year}</td>
                       <td className="text-right px-3 py-2">{(yr.occupancy * 100).toFixed(1)}%</td>
                       <td className="text-right px-3 py-2">{yr.adc}</td>
-                      <td className="text-right px-3 py-2 text-blue-600">{yr.medicareAdc}</td>
-                      <td className="text-right px-3 py-2 text-amber-600">{yr.medicaidAdc}</td>
-                      <td className="text-right px-3 py-2 text-emerald-600">{yr.privatPayAdc}</td>
+                      <td className="text-right px-3 py-2 text-blue-600 dark:text-blue-400">{yr.medicareAdc}</td>
+                      <td className="text-right px-3 py-2 text-amber-600 dark:text-amber-400">{yr.medicaidAdc}</td>
+                      <td className="text-right px-3 py-2 text-emerald-600 dark:text-emerald-400">{yr.privatPayAdc}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              </div>
             ) : (
               <p className="text-sm text-surface-500">Census projections will populate after generation.</p>
             )}
@@ -152,16 +154,20 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
           {payerMix && (
             <div className="border border-surface-200 dark:border-surface-700 rounded-xl p-5">
               <h3 className="text-sm font-semibold text-surface-800 dark:text-surface-200 mb-3">Payer Mix Revenue (Current Year)</h3>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {(['medicare', 'medicaid', 'privatePay'] as const).map(payer => {
                   const p = payerMix[payer];
                   if (!p) return null;
-                  const colors = { medicare: 'blue', medicaid: 'amber', privatePay: 'emerald' };
+                  const colorClasses = {
+                    medicare: { card: 'bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-800/30', text: 'text-blue-600 dark:text-blue-400' },
+                    medicaid: { card: 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-800/30', text: 'text-amber-600 dark:text-amber-400' },
+                    privatePay: { card: 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-800/30', text: 'text-emerald-600 dark:text-emerald-400' },
+                  };
                   const labels = { medicare: 'Medicare', medicaid: 'Medicaid', privatePay: 'Private Pay' };
-                  const color = colors[payer];
+                  const cls = colorClasses[payer];
                   return (
-                    <div key={payer} className={`bg-${color}-50 dark:bg-${color}-900/10 rounded-lg p-4 border border-${color}-100 dark:border-${color}-800/30`}>
-                      <p className={`text-xs font-medium text-${color}-600 dark:text-${color}-400 mb-2`}>{labels[payer]}</p>
+                    <div key={payer} className={`rounded-lg p-4 border ${cls.card}`}>
+                      <p className={`text-xs font-medium ${cls.text} mb-2`}>{labels[payer]}</p>
                       <p className="text-lg font-semibold text-surface-800 dark:text-surface-200">${formatCompact(p.annualRevenue)}</p>
                       <div className="mt-2 space-y-1 text-xs text-surface-500">
                         <div className="flex justify-between"><span>ADC</span><span>{p.adc.toFixed(1)}</span></div>
@@ -196,7 +202,7 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
         <div className="space-y-4">
           {/* Labor Summary */}
           {expenseModelRaw && (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="border border-surface-200 dark:border-surface-700 rounded-xl p-4">
                 <p className="text-xs text-surface-500 mb-1">Total Labor</p>
                 <p className="text-lg font-semibold text-surface-800 dark:text-surface-200">
@@ -208,7 +214,7 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
               </div>
               <div className="border border-surface-200 dark:border-surface-700 rounded-xl p-4">
                 <p className="text-xs text-surface-500 mb-1">Agency Spend</p>
-                <p className="text-lg font-semibold text-red-600">
+                <p className="text-lg font-semibold text-red-600 dark:text-red-400">
                   ${formatCompact(expenseModelRaw.agencySpend as number)}
                 </p>
                 <p className="text-xs text-surface-400 mt-1">Agency labor premium</p>
@@ -274,7 +280,7 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {(['bear', 'base', 'bull'] as const).map(scenario => {
               const s = scenarios[scenario];
               if (!s) return null;
@@ -303,21 +309,21 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
                 <SensitivityRow label="Labor Cost Δ" bear={scenarios.bear?.assumptions.laborCostChange} base={scenarios.base?.assumptions.laborCostChange} bull={scenarios.bull?.assumptions.laborCostChange} isPercent />
                 <tr className="font-semibold bg-surface-50 dark:bg-surface-800">
                   <td className="px-4 py-2">Year 3 EBITDA</td>
-                  <td className="text-right px-4 py-2 text-red-600">${formatCompact(scenarios.bear?.year3Ebitda)}</td>
+                  <td className="text-right px-4 py-2 text-red-600 dark:text-red-400">${formatCompact(scenarios.bear?.year3Ebitda)}</td>
                   <td className="text-right px-4 py-2">${formatCompact(scenarios.base?.year3Ebitda)}</td>
-                  <td className="text-right px-4 py-2 text-emerald-600">${formatCompact(scenarios.bull?.year3Ebitda)}</td>
+                  <td className="text-right px-4 py-2 text-emerald-600 dark:text-emerald-400">${formatCompact(scenarios.bull?.year3Ebitda)}</td>
                 </tr>
                 <tr className="font-semibold">
                   <td className="px-4 py-2">Implied Value</td>
-                  <td className="text-right px-4 py-2 text-red-600">${formatCompact(scenarios.bear?.impliedValue)}</td>
+                  <td className="text-right px-4 py-2 text-red-600 dark:text-red-400">${formatCompact(scenarios.bear?.impliedValue)}</td>
                   <td className="text-right px-4 py-2">${formatCompact(scenarios.base?.impliedValue)}</td>
-                  <td className="text-right px-4 py-2 text-emerald-600">${formatCompact(scenarios.bull?.impliedValue)}</td>
+                  <td className="text-right px-4 py-2 text-emerald-600 dark:text-emerald-400">${formatCompact(scenarios.bull?.impliedValue)}</td>
                 </tr>
                 <tr className="font-semibold">
                   <td className="px-4 py-2">IRR (5-yr)</td>
-                  <td className="text-right px-4 py-2 text-red-600">{scenarios.bear?.irr?.toFixed(1) ?? '—'}%</td>
+                  <td className="text-right px-4 py-2 text-red-600 dark:text-red-400">{scenarios.bear?.irr?.toFixed(1) ?? '—'}%</td>
                   <td className="text-right px-4 py-2">{scenarios.base?.irr?.toFixed(1) ?? '—'}%</td>
-                  <td className="text-right px-4 py-2 text-emerald-600">{scenarios.bull?.irr?.toFixed(1) ?? '—'}%</td>
+                  <td className="text-right px-4 py-2 text-emerald-600 dark:text-emerald-400">{scenarios.bull?.irr?.toFixed(1) ?? '—'}%</td>
                 </tr>
               </tbody>
             </table>
@@ -332,7 +338,7 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
             <>
               <div className="bg-surface-50 dark:bg-surface-800/50 rounded-xl p-6">
                 <h3 className="text-sm font-semibold text-surface-800 dark:text-surface-200 mb-4">Valuation Summary</h3>
-                <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                   <ValuationMetric label="Cap Rate Indicated" value={valuation.capRateValuation} />
                   <ValuationMetric label="EBITDA Multiple" value={valuation.ebitdaMultipleValuation} />
                   <ValuationMetric label="DCF Value" value={valuation.dcfValuation} />
@@ -347,9 +353,9 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
                     <span className="text-xs text-surface-500">CIL Assessment</span>
                     <p className={cn(
                       'text-sm font-semibold',
-                      valuation.cilAssessment === 'PRICED_BELOW' ? 'text-emerald-600' :
-                      valuation.cilAssessment === 'AT' ? 'text-surface-600' :
-                      'text-red-600'
+                      valuation.cilAssessment === 'PRICED_BELOW' ? 'text-emerald-600 dark:text-emerald-400' :
+                      valuation.cilAssessment === 'AT' ? 'text-surface-600 dark:text-surface-400' :
+                      'text-red-600 dark:text-red-400'
                     )}>
                       {valuation.cilAssessment?.replace('_', ' ') || 'AT'} Market
                     </p>
@@ -426,9 +432,9 @@ function MetricChip({ label, value, icon, highlight }: { label: string; value: s
 
 function ScenarioCard({ scenario, type }: { scenario: ScenarioResult; type: 'bear' | 'base' | 'bull' }) {
   const colors = {
-    bear: 'border-red-200 dark:border-red-800 bg-red-50/30 dark:bg-red-900/5',
+    bear: 'border-red-200 dark:border-red-800 bg-red-50/30 dark:bg-red-900/20',
     base: 'border-surface-200 dark:border-surface-700',
-    bull: 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-900/5',
+    bull: 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-900/20',
   };
 
   return (
@@ -456,7 +462,7 @@ function ScenarioCard({ scenario, type }: { scenario: ScenarioResult; type: 'bea
           <span className="text-surface-500">5-Year IRR</span>
           <span className={cn(
             'font-semibold',
-            scenario.irr && scenario.irr > 20 ? 'text-emerald-600' : scenario.irr && scenario.irr < 10 ? 'text-red-600' : ''
+            scenario.irr && scenario.irr > 20 ? 'text-emerald-600 dark:text-emerald-400' : scenario.irr && scenario.irr < 10 ? 'text-red-600 dark:text-red-400' : ''
           )}>
             {scenario.irr?.toFixed(1) ?? '—'}%
           </span>
@@ -477,9 +483,9 @@ function SensitivityRow({ label, bear, base, bull, isPercent }: {
   return (
     <tr>
       <td className="px-4 py-2 text-surface-700 dark:text-surface-300">{label}</td>
-      <td className="text-right px-4 py-2 text-red-600">{fmt(bear)}</td>
-      <td className="text-right px-4 py-2 text-surface-600">{fmt(base)}</td>
-      <td className="text-right px-4 py-2 text-emerald-600">{fmt(bull)}</td>
+      <td className="text-right px-4 py-2 text-red-600 dark:text-red-400">{fmt(bear)}</td>
+      <td className="text-right px-4 py-2 text-surface-600 dark:text-surface-400">{fmt(base)}</td>
+      <td className="text-right px-4 py-2 text-emerald-600 dark:text-emerald-400">{fmt(bull)}</td>
     </tr>
   );
 }

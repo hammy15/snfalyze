@@ -12,11 +12,11 @@ interface RiskScoreStageProps {
 }
 
 const RATING_COLORS: Record<string, string> = {
-  LOW: 'text-emerald-600',
-  MODERATE: 'text-amber-500',
-  ELEVATED: 'text-orange-500',
-  HIGH: 'text-red-500',
-  CRITICAL: 'text-red-700',
+  LOW: 'text-emerald-600 dark:text-emerald-400',
+  MODERATE: 'text-amber-500 dark:text-amber-400',
+  ELEVATED: 'text-orange-500 dark:text-orange-400',
+  HIGH: 'text-red-500 dark:text-red-400',
+  CRITICAL: 'text-red-700 dark:text-red-400',
 };
 
 const RATING_BG: Record<string, string> = {
@@ -177,20 +177,20 @@ export function RiskScoreStage({ dealId, stageData, onUpdate }: RiskScoreStagePr
       {data.riskAdjustedValuation && (
         <div className="border border-surface-200 dark:border-surface-700 rounded-xl p-5">
           <h3 className="text-sm font-semibold text-surface-800 dark:text-surface-200 mb-3">Risk-Adjusted Valuation</h3>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <p className="text-xs text-surface-500">Original Value</p>
-              <p className="text-lg font-semibold">${(data.riskAdjustedValuation.originalValue / 1e6).toFixed(1)}M</p>
+              <p className="text-lg font-semibold text-surface-800 dark:text-surface-200">${(data.riskAdjustedValuation.originalValue / 1e6).toFixed(1)}M</p>
             </div>
             <div>
               <p className="text-xs text-surface-500">Adjusted Value</p>
-              <p className="text-lg font-semibold text-primary-600">${(data.riskAdjustedValuation.adjustedValue / 1e6).toFixed(1)}M</p>
+              <p className="text-lg font-semibold text-primary-600 dark:text-primary-400">${(data.riskAdjustedValuation.adjustedValue / 1e6).toFixed(1)}M</p>
             </div>
             <div>
               <p className="text-xs text-surface-500">Adjustment</p>
               <p className={cn(
                 'text-lg font-semibold',
-                data.riskAdjustedValuation.adjustmentPercent < 0 ? 'text-red-500' : 'text-surface-600'
+                data.riskAdjustedValuation.adjustmentPercent < 0 ? 'text-red-500 dark:text-red-400' : 'text-surface-600 dark:text-surface-400'
               )}>
                 {data.riskAdjustedValuation.adjustmentPercent > 0 ? '+' : ''}{data.riskAdjustedValuation.adjustmentPercent.toFixed(1)}%
               </p>

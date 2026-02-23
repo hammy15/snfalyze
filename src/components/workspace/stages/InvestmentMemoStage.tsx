@@ -124,9 +124,9 @@ export function InvestmentMemoStage({ dealId, stageData, onUpdate }: InvestmentM
   }
 
   return (
-    <div className="max-w-5xl mx-auto flex gap-4 h-full">
+    <div className="max-w-5xl mx-auto flex flex-col md:flex-row gap-4 h-full">
       {/* Section navigation */}
-      <div className="w-56 shrink-0 space-y-1">
+      <div className="md:w-56 shrink-0 space-y-1 flex md:flex-col gap-1 md:gap-0 overflow-x-auto md:overflow-x-visible pb-2 md:pb-0">
         {MEMO_SECTIONS.map(sec => {
           const section = sections.find(s => s.id === sec.id);
           const hasContent = !!section?.content;

@@ -228,9 +228,9 @@ export function CompPullStage({ dealId, stageData, onUpdate }: CompPullStageProp
                   <span className="text-xs text-surface-500">Data Confidence:</span>
                   <span className={cn(
                     'text-xs font-medium px-2 py-0.5 rounded',
-                    summary.dataConfidence === 'HIGH' ? 'bg-emerald-100 text-emerald-700' :
-                    summary.dataConfidence === 'MEDIUM' ? 'bg-amber-100 text-amber-700' :
-                    'bg-red-100 text-red-700'
+                    summary.dataConfidence === 'HIGH' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                    summary.dataConfidence === 'MEDIUM' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                    'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                   )}>
                     {summary.dataConfidence} ({summary.compCount} comps)
                   </span>

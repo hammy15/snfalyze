@@ -27,14 +27,27 @@ const AUTH_STORAGE_KEY = 'snfalyze_auth';
 // Keep shared password for backward compatibility
 const SHARED_PASSWORD = (process.env.NEXT_PUBLIC_APP_PASSWORD || '').trim();
 
+// TODO: Remove auth bypass before production launch
+const AUTH_BYPASS = true;
+
+const BYPASS_USER: AuthUser = {
+  id: 'bypass-admin',
+  name: 'Test Admin',
+  email: 'admin@cascadia.com',
+  role: 'admin',
+  avatarUrl: null,
+  loginTime: new Date(),
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<AuthUser | null>(AUTH_BYPASS ? BYPASS_USER : null);
+  const [isLoading, setIsLoading] = useState(AUTH_BYPASS ? false : true);
   const router = useRouter();
   const pathname = usePathname();
 
   // Load auth state from localStorage on mount
   useEffect(() => {
+    if (AUTH_BYPASS) return; // Skip auth check when bypassed
     const stored = localStorage.getItem(AUTH_STORAGE_KEY);
     if (stored) {
       try {
@@ -58,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const publicRoutes = ['/login', '/design-demo'];
 
   useEffect(() => {
+    if (AUTH_BYPASS) return; // Skip redirect when bypassed
     if (!isLoading && !user && !publicRoutes.includes(pathname)) {
       router.push('/login');
     }

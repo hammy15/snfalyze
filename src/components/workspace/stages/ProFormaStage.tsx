@@ -18,6 +18,9 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
   const data = stageData as Partial<ProFormaStageData>;
   const scenarios = data.scenarios;
   const valuation = data.valuationOutput;
+  const censusProjections = data.revenueModel?.censusProjections ?? [];
+  const enhancementOpps = data.revenueModel?.enhancementOpportunities ?? [];
+  const expenseCategories = data.expenseModel?.otherOpex ?? [];
 
   const generateProForma = async () => {
     setIsGenerating(true);
@@ -58,8 +61,11 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
   // Key metrics summary bar
   const baseScenario = scenarios.base;
   const raw = stageData as Record<string, unknown>;
-  const revenueModel = raw.revenueModel as Record<string, unknown> | undefined;
-  const currentRevenue = (revenueModel?.currentRevenue as number) || 0;
+  const revenueModelRaw = raw.revenueModel as Record<string, unknown> | undefined;
+  const currentRevenue = (revenueModelRaw?.currentRevenue as number) || 0;
+  const payerMix = revenueModelRaw?.payerMixRevenue as Record<string, { adc: number; ratePerDay: number; annualRevenue: number }> | undefined;
+  const expenseModelRaw = raw.expenseModel as Record<string, unknown> | undefined;
+  const yearlyProjections = raw.yearlyProjections as Array<{ year: number; revenue: number; expenses: number; ebitda: number; noi: number; occupancy: number }> | undefined;
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
@@ -84,7 +90,7 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
           label="Base IRR"
           value={baseScenario?.irr ? `${baseScenario.irr.toFixed(1)}%` : '—'}
           icon={<TrendingUp className="w-3.5 h-3.5" />}
-          highlight={baseScenario?.irr && baseScenario.irr > 15}
+          highlight={baseScenario?.irr != null && baseScenario.irr > 15}
         />
       </div>
 
@@ -112,7 +118,7 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
           {/* Census Projections */}
           <div className="border border-surface-200 dark:border-surface-700 rounded-xl p-5">
             <h3 className="text-sm font-semibold text-surface-800 dark:text-surface-200 mb-3">Census Projections (5-Year)</h3>
-            {data.revenueModel?.censusProjections && data.revenueModel.censusProjections.length > 0 ? (
+            {censusProjections.length > 0 ? (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-surface-200 dark:border-surface-700">
@@ -125,7 +131,7 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-surface-100 dark:divide-surface-800">
-                  {data.revenueModel.censusProjections.map(yr => (
+                  {censusProjections.map(yr => (
                     <tr key={yr.year}>
                       <td className="px-3 py-2 font-medium">Year {yr.year}</td>
                       <td className="text-right px-3 py-2">{(yr.occupancy * 100).toFixed(1)}%</td>
@@ -143,13 +149,12 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
           </div>
 
           {/* Payer Mix Revenue Breakdown */}
-          {revenueModel?.payerMixRevenue && (
+          {payerMix && (
             <div className="border border-surface-200 dark:border-surface-700 rounded-xl p-5">
               <h3 className="text-sm font-semibold text-surface-800 dark:text-surface-200 mb-3">Payer Mix Revenue (Current Year)</h3>
               <div className="grid grid-cols-3 gap-4">
                 {(['medicare', 'medicaid', 'privatePay'] as const).map(payer => {
-                  const pmr = revenueModel.payerMixRevenue as Record<string, { adc: number; ratePerDay: number; annualRevenue: number }>;
-                  const p = pmr[payer];
+                  const p = payerMix[payer];
                   if (!p) return null;
                   const colors = { medicare: 'blue', medicaid: 'amber', privatePay: 'emerald' };
                   const labels = { medicare: 'Medicare', medicaid: 'Medicaid', privatePay: 'Private Pay' };
@@ -170,11 +175,11 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
           )}
 
           {/* Revenue Enhancements */}
-          {data.revenueModel?.enhancementOpportunities && data.revenueModel.enhancementOpportunities.length > 0 && (
+          {enhancementOpps.length > 0 && (
             <div className="border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-5">
               <h3 className="text-sm font-semibold text-emerald-700 dark:text-emerald-300 mb-2">Revenue Enhancement Opportunities</h3>
               <ul className="space-y-1.5">
-                {data.revenueModel.enhancementOpportunities.map((opp, i) => (
+                {enhancementOpps.map((opp, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-emerald-600 dark:text-emerald-400">
                     <TrendingUp className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                     {opp}
@@ -190,28 +195,28 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
       {activeTab === 'expense' && (
         <div className="space-y-4">
           {/* Labor Summary */}
-          {(raw.expenseModel as Record<string, unknown>) && (
+          {expenseModelRaw && (
             <div className="grid grid-cols-3 gap-3">
               <div className="border border-surface-200 dark:border-surface-700 rounded-xl p-4">
                 <p className="text-xs text-surface-500 mb-1">Total Labor</p>
                 <p className="text-lg font-semibold text-surface-800 dark:text-surface-200">
-                  ${formatCompact((raw.expenseModel as Record<string, unknown>).laborCost as number)}
+                  ${formatCompact(expenseModelRaw.laborCost as number)}
                 </p>
                 <p className="text-xs text-surface-400 mt-1">
-                  {((raw.expenseModel as Record<string, unknown>).laborPercent as number)?.toFixed(0)}% of expenses
+                  {(expenseModelRaw.laborPercent as number | undefined)?.toFixed(0)}% of expenses
                 </p>
               </div>
               <div className="border border-surface-200 dark:border-surface-700 rounded-xl p-4">
                 <p className="text-xs text-surface-500 mb-1">Agency Spend</p>
                 <p className="text-lg font-semibold text-red-600">
-                  ${formatCompact((raw.expenseModel as Record<string, unknown>).agencySpend as number)}
+                  ${formatCompact(expenseModelRaw.agencySpend as number)}
                 </p>
                 <p className="text-xs text-surface-400 mt-1">Agency labor premium</p>
               </div>
               <div className="border border-surface-200 dark:border-surface-700 rounded-xl p-4">
                 <p className="text-xs text-surface-500 mb-1">Total OpEx</p>
                 <p className="text-lg font-semibold text-surface-800 dark:text-surface-200">
-                  ${formatCompact((raw.expenseModel as Record<string, unknown>).totalExpenses as number)}
+                  ${formatCompact(expenseModelRaw.totalExpenses as number)}
                 </p>
                 <p className="text-xs text-surface-400 mt-1">All operating expenses</p>
               </div>
@@ -221,10 +226,10 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
           {/* Expense Categories */}
           <div className="border border-surface-200 dark:border-surface-700 rounded-xl p-5">
             <h3 className="text-sm font-semibold text-surface-800 dark:text-surface-200 mb-3">Expense Breakdown</h3>
-            {data.expenseModel?.otherOpex && data.expenseModel.otherOpex.length > 0 ? (
+            {expenseCategories.length > 0 ? (
               <div className="space-y-2.5">
-                {data.expenseModel.otherOpex.map(cat => {
-                  const pctOfMax = cat.projectedAmount / Math.max(...data.expenseModel!.otherOpex.map(c => c.projectedAmount)) * 100;
+                {expenseCategories.map(cat => {
+                  const pctOfMax = cat.projectedAmount / Math.max(...expenseCategories.map(c => c.projectedAmount)) * 100;
                   return (
                     <div key={cat.category}>
                       <div className="flex items-center justify-between mb-1">
@@ -361,7 +366,7 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
               </div>
 
               {/* Yearly Projections Table */}
-              {(raw.yearlyProjections as Array<{ year: number; revenue: number; expenses: number; ebitda: number; noi: number; occupancy: number }>) && (
+              {yearlyProjections && yearlyProjections.length > 0 && (
                 <div className="border border-surface-200 dark:border-surface-700 rounded-xl overflow-hidden">
                   <div className="bg-surface-50 dark:bg-surface-800 px-4 py-2.5">
                     <h4 className="text-xs font-semibold text-surface-600 dark:text-surface-300">Base Case Yearly Projections</h4>
@@ -378,7 +383,7 @@ export function ProFormaStage({ dealId, stageData, onUpdate }: ProFormaStageProp
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-surface-100 dark:divide-surface-800">
-                      {(raw.yearlyProjections as Array<{ year: number; revenue: number; expenses: number; ebitda: number; noi: number; occupancy: number }>).map(yr => (
+                      {yearlyProjections.map(yr => (
                         <tr key={yr.year}>
                           <td className="px-4 py-2 font-medium">Y{yr.year}</td>
                           <td className="text-right px-4 py-2">${formatCompact(yr.revenue)}</td>

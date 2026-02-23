@@ -11,3 +11,117 @@ dist/
 
 # User uploads
 uploads/
+
+# Screenshots / test artifacts
+*.png
+
+# Knowledge files — non-healthcare (personal, business, agent config)
+# SENSITIVE — credentials and keys
+knowledge/TOOLS.md
+knowledge/EMAIL_CREDENTIALS.md
+knowledge/GODADDY_ACCESS_CONFIRMED.md
+knowledge/FINANCIAL_ASSETS.md
+knowledge/ACTIVATION_LOG.md
+
+# Claude/AI agent config
+knowledge/IDENTITY.md
+knowledge/AGENTS.md
+knowledge/SOUL.md
+knowledge/USER.md
+knowledge/MEMORY.md
+knowledge/HEARTBEAT.md
+
+# Meshuga business / branding
+knowledge/meshuga*.md
+knowledge/MESHUGA*.md
+knowledge/BRAND_STRATEGY_PIVOT.md
+knowledge/brand_voice_and_messaging.md
+knowledge/logo_implementation_guide.md
+knowledge/ai_prompts_for_logo_generation.md
+knowledge/SHANKSHACK_TRANSFORMATION.md
+knowledge/CUSTOM_WEBSITE_STRATEGY.md
+knowledge/LUXURY_LEGAL_EXECUTION.md
+knowledge/COST_OPTIMIZATION_PLAN.md
+knowledge/MINIMUM_INFRASTRUCTURE.md
+knowledge/INFRASTRUCTURE_PLAN.md
+knowledge/INFRASTRUCTURE_DEPLOYMENT_LIVE.md
+knowledge/SERVICE_CATALOG.md
+knowledge/MARKET_OPPORTUNITIES.md
+
+# Austin business / website outreach
+knowledge/air-comfort-austin-proposal.md
+knowledge/fox-service-proposal.md
+knowledge/optimization_proposal_*.md
+knowledge/OPTIMIZATION_PROPOSALS.md
+knowledge/AUSTIN_*.md
+knowledge/MANUAL_AUSTIN_BUSINESS_LIST.md
+knowledge/ALTERNATIVE_RESEARCH_METHOD.md
+knowledge/FOX_SERVICE_OUTREACH_PREP.md
+knowledge/FIRST_OUTREACH_READY.md
+knowledge/WEBSITE_*.md
+knowledge/TERRIBLE_WEBSITES_*.md
+
+# Trading / crypto
+knowledge/trading-log.md
+knowledge/technical-analysis-feb10.md
+knowledge/performance-tracker.md
+
+# Outreach / emails / client pipeline
+knowledge/outreach_email*.md
+knowledge/outreach_emails*.md
+knowledge/OUTREACH_*.md
+knowledge/CLIENT_PIPELINE.md
+knowledge/KIRKLAND_OUTREACH_READY.md
+knowledge/FIRST_MONETIZATION.md
+knowledge/responses_for_owen.md
+knowledge/SCOUT_INTELLIGENCE_FEED.md
+
+# Law firm research
+knowledge/LAW_FIRM_*.md
+
+# Deployment / infrastructure notes
+knowledge/CLOUD_DEPLOYMENT_INSTRUCTIONS.md
+knowledge/COMMAND_CENTER_*.md
+knowledge/COMPLETE_CODE_FOR_COPY_PASTE.md
+knowledge/deploy-dashboard.md
+knowledge/DOWNLOAD_LINKS.md
+knowledge/FILE_TRANSFER_OPTIONS.md
+knowledge/VERCEL_DEPLOYMENT_STEP_BY_STEP.md
+
+# Personal execution logs / trackers
+knowledge/30_DAY_EXECUTION.md
+knowledge/BD_CYCLE_REPORT_*.md
+knowledge/cycle_completion_summary.md
+knowledge/daily_execution_log.md
+knowledge/DAILY_*.md
+knowledge/EXECUTION_*.md
+knowledge/HONEST_STATUS_UPDATE.md
+knowledge/LIVE_*.md
+knowledge/NEWO_DAILY_BLOCKS.md
+knowledge/OPERATIONAL_AUTHORITY_LOG.md
+knowledge/REAL_EXECUTION_PLAN.md
+knowledge/SUNDAY_*.md
+knowledge/WEEK_1_EXECUTION.md
+knowledge/UPDATE_STATUS_REPORT.md
+knowledge/PIXEL_ACTIVATION_LOG.md
+knowledge/AUTONOMOUS_MONITORING_SETUP.md
+knowledge/ACCESS_STATUS.md
+knowledge/CURRENT_ROADBLOCKS.md
+knowledge/ROADBLOCK_ANALYSIS.md
+knowledge/TECHNICAL_LIMITATIONS.md
+knowledge/GODADDY_SETUP_WALKTHROUGH.md
+knowledge/CLAUDE_FAMILY_*.md
+
+# Strategy / misc non-healthcare
+knowledge/DUAL_STRATEGY_EXECUTION.md
+knowledge/STRATEGIC_PIVOT_DECISION.md
+knowledge/STRATEGIC_ANALYSIS_PROFESSIONAL.md
+knowledge/TARGET_RESEARCH.md
+knowledge/FUTURE_OPPORTUNITIES.md
+knowledge/FOUNDER_OPERATING_SYSTEM.md
+knowledge/learning-acceleration-system.md
+knowledge/ui-ux-speed-mastery-top100.md
+
+# Sync artifacts
+knowledge/sync.log
+sync-knowledge.sh

@@ -21,6 +21,9 @@ import {
   ChevronRight,
   Target,
   Shield,
+  Search,
+  FileText,
+  Wrench,
 } from 'lucide-react';
 
 interface DashboardData {
@@ -140,6 +143,52 @@ export default function DashboardPage() {
           >
             <Zap className="w-3.5 h-3.5" />
             New Deal
+          </Link>
+        </div>
+      </div>
+
+      {/* Workflow guide — clear 1-2-3 */}
+      <div className="border border-surface-200 dark:border-surface-700 rounded-xl bg-white dark:bg-surface-900 p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <h2 className="text-sm font-semibold text-surface-800 dark:text-surface-200">How It Works</h2>
+          <span className="text-[10px] text-surface-400">— your deal underwriting workflow</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Link
+            href="/app/tools/quick-screen"
+            className="group flex items-start gap-3 p-3.5 rounded-xl border-2 border-amber-200 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-900/5 hover:border-amber-400 dark:hover:border-amber-600 transition-all"
+          >
+            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex-shrink-0">
+              <span className="text-xs font-bold text-amber-600">1</span>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-surface-800 dark:text-surface-200 group-hover:text-amber-600 transition-colors">Screen a Deal</p>
+              <p className="text-[11px] text-surface-500 mt-0.5">Quick Screen gives you a GO / PASS signal in 30 seconds</p>
+            </div>
+          </Link>
+          <Link
+            href="/app/deals/new/wizard"
+            className="group flex items-start gap-3 p-3.5 rounded-xl border-2 border-primary-200 dark:border-primary-800/50 bg-primary-50/50 dark:bg-primary-900/5 hover:border-primary-400 dark:hover:border-primary-600 transition-all"
+          >
+            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary-100 dark:bg-primary-900/30 flex-shrink-0">
+              <span className="text-xs font-bold text-primary-600">2</span>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-surface-800 dark:text-surface-200 group-hover:text-primary-600 transition-colors">Create a Deal</p>
+              <p className="text-[11px] text-surface-500 mt-0.5">Upload docs or enter details — AI extracts the data</p>
+            </div>
+          </Link>
+          <Link
+            href="/app/deals"
+            className="group flex items-start gap-3 p-3.5 rounded-xl border-2 border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/50 dark:bg-emerald-900/5 hover:border-emerald-400 dark:hover:border-emerald-600 transition-all"
+          >
+            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex-shrink-0">
+              <span className="text-xs font-bold text-emerald-600">3</span>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-surface-800 dark:text-surface-200 group-hover:text-emerald-600 transition-colors">Work the Pipeline</p>
+              <p className="text-[11px] text-surface-500 mt-0.5">5-stage workspace: Intake → Comps → Pro Forma → Risk → Memo</p>
+            </div>
           </Link>
         </div>
       </div>

@@ -31,14 +31,23 @@ interface NavItem {
   roles?: string[];
 }
 
-const NAV_ITEMS: NavItem[] = [
+// ── Primary: the core 1-2-3 workflow ──
+const PRIMARY_NAV: NavItem[] = [
   { href: '/app', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/app/macro', icon: Radar, label: 'Portfolio Radar' },
-  { href: '/app/deals', icon: Crosshair, label: 'Deal Pipeline' },
-  { href: '/app/facilities', icon: Building2, label: 'Facilities' },
-  { href: '/app/tools/watchlist', icon: Eye, label: 'Watchlist' },
-  { href: '/app/learning', icon: Brain, label: 'Deal Learning' },
+  { href: '/app/deals', icon: Crosshair, label: 'Deals' },
   { href: '/app/tools', icon: Wrench, label: 'Tools' },
+];
+
+// ── Secondary: monitoring & intelligence ──
+const SECONDARY_NAV: NavItem[] = [
+  { href: '/app/tools/watchlist', icon: Eye, label: 'Watchlist' },
+  { href: '/app/facilities', icon: Building2, label: 'Facilities' },
+  { href: '/app/macro', icon: Radar, label: 'Market Intel' },
+];
+
+// ── Tertiary: learning & admin ──
+const TERTIARY_NAV: NavItem[] = [
+  { href: '/app/learning', icon: Brain, label: 'Learning' },
   { href: '/app/partners', icon: Handshake, label: 'Partners', roles: ['admin', 'vp', 'analyst'] },
 ];
 
@@ -73,10 +82,8 @@ export function FocusRail() {
       .catch(() => {});
   }, []);
 
-  const visibleItems = NAV_ITEMS.filter(item => {
-    if (!item.roles) return true;
-    return item.roles.includes(user?.role || 'viewer');
-  });
+  const filterByRole = (items: NavItem[]) =>
+    items.filter(item => !item.roles || item.roles.includes(user?.role || 'viewer'));
 
   const isActive = (href: string) => {
     if (href === '/app' && pathname === '/app') return true;
@@ -111,56 +118,148 @@ export function FocusRail() {
           )}
         </Link>
 
-        {/* Main Nav */}
-        <div className="flex-1 py-3 space-y-1 px-2">
-          {visibleItems.map(item => {
-            const Icon = item.icon;
-            const active = isActive(item.href);
+        {/* Main Nav — Grouped */}
+        <div className="flex-1 py-3 px-2 flex flex-col">
+          {/* Primary: Core workflow */}
+          <div className="space-y-0.5">
+            {expanded && (
+              <span className="text-[9px] uppercase tracking-widest text-surface-400 px-2 pb-1 block font-semibold">
+                Workflow
+              </span>
+            )}
+            {filterByRole(PRIMARY_NAV).map(item => {
+              const Icon = item.icon;
+              const active = isActive(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    'flex items-center gap-3 px-2 py-2.5 rounded-lg transition-all duration-200 group relative',
+                    active
+                      ? 'bg-primary-500/15 text-primary-600 dark:bg-primary-500/20 dark:text-primary-400'
+                      : 'text-surface-500 dark:text-surface-400 hover:text-surface-700 dark:hover:text-surface-200 hover:bg-[#EFEDE8] dark:hover:bg-surface-800/70'
+                  )}
+                >
+                  {active && (
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-primary-500 dark:bg-primary-400 rounded-r-full" />
+                  )}
+                  <Icon className={cn('w-5 h-5 flex-shrink-0', active && 'text-primary-600 dark:text-primary-400')} />
+                  {expanded && (
+                    <span className="text-sm font-medium animate-fade-in truncate">{item.label}</span>
+                  )}
+                  {!expanded && (
+                    <div className="absolute left-full ml-2 px-2 py-1 bg-white dark:bg-surface-800 text-surface-700 dark:text-surface-200 text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg border border-surface-200 dark:border-surface-700">
+                      {item.label}
+                    </div>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
 
-            return (
+          {/* Divider */}
+          <div className="my-3 mx-2 border-t border-[#E2DFD8] dark:border-surface-800" />
+
+          {/* Secondary: Monitoring */}
+          <div className="space-y-0.5">
+            {expanded && (
+              <span className="text-[9px] uppercase tracking-widest text-surface-400 px-2 pb-1 block font-semibold">
+                Monitor
+              </span>
+            )}
+            {filterByRole(SECONDARY_NAV).map(item => {
+              const Icon = item.icon;
+              const active = isActive(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    'flex items-center gap-3 px-2 py-2 rounded-lg transition-all duration-200 group relative',
+                    active
+                      ? 'bg-primary-500/15 text-primary-600 dark:bg-primary-500/20 dark:text-primary-400'
+                      : 'text-surface-400 dark:text-surface-500 hover:text-surface-700 dark:hover:text-surface-200 hover:bg-[#EFEDE8] dark:hover:bg-surface-800/70'
+                  )}
+                >
+                  {active && (
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-4 bg-primary-500 dark:bg-primary-400 rounded-r-full" />
+                  )}
+                  <Icon className={cn('w-4.5 h-4.5 flex-shrink-0', active && 'text-primary-600 dark:text-primary-400')} />
+                  {expanded && (
+                    <span className="text-[13px] animate-fade-in truncate">{item.label}</span>
+                  )}
+                  {!expanded && (
+                    <div className="absolute left-full ml-2 px-2 py-1 bg-white dark:bg-surface-800 text-surface-700 dark:text-surface-200 text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg border border-surface-200 dark:border-surface-700">
+                      {item.label}
+                    </div>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+
+          {/* Divider */}
+          <div className="my-3 mx-2 border-t border-[#E2DFD8] dark:border-surface-800" />
+
+          {/* Tertiary: Learn & admin */}
+          <div className="space-y-0.5">
+            {expanded && (
+              <span className="text-[9px] uppercase tracking-widest text-surface-400 px-2 pb-1 block font-semibold">
+                More
+              </span>
+            )}
+            {filterByRole(TERTIARY_NAV).map(item => {
+              const Icon = item.icon;
+              const active = isActive(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    'flex items-center gap-3 px-2 py-2 rounded-lg transition-all duration-200 group relative',
+                    active
+                      ? 'bg-primary-500/15 text-primary-600 dark:bg-primary-500/20 dark:text-primary-400'
+                      : 'text-surface-400 dark:text-surface-500 hover:text-surface-700 dark:hover:text-surface-200 hover:bg-[#EFEDE8] dark:hover:bg-surface-800/70'
+                  )}
+                >
+                  {active && (
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-4 bg-primary-500 dark:bg-primary-400 rounded-r-full" />
+                  )}
+                  <Icon className={cn('w-4.5 h-4.5 flex-shrink-0', active && 'text-primary-600 dark:text-primary-400')} />
+                  {expanded && (
+                    <span className="text-[13px] animate-fade-in truncate">{item.label}</span>
+                  )}
+                  {!expanded && (
+                    <div className="absolute left-full ml-2 px-2 py-1 bg-white dark:bg-surface-800 text-surface-700 dark:text-surface-200 text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg border border-surface-200 dark:border-surface-700">
+                      {item.label}
+                    </div>
+                  )}
+                </Link>
+              );
+            })}
+
+            {/* Team link for admin/vp */}
+            {(user?.role === 'admin' || user?.role === 'vp') && (
               <Link
-                key={item.href}
-                href={item.href}
+                href="/app/admin"
                 className={cn(
-                  'flex items-center gap-3 px-2 py-2.5 rounded-lg transition-all duration-200 group relative',
-                  active
-                    ? 'bg-primary-500/15 text-primary-600 dark:bg-primary-500/20 dark:text-primary-400'
-                    : 'text-surface-500 dark:text-surface-400 hover:text-surface-700 dark:hover:text-surface-200 hover:bg-[#EFEDE8] dark:hover:bg-surface-800/70'
+                  'flex items-center gap-3 px-2 py-2 rounded-lg transition-all duration-200 group relative',
+                  pathname.startsWith('/app/admin')
+                    ? 'bg-amber-500/15 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400'
+                    : 'text-surface-400 dark:text-surface-500 hover:text-surface-700 dark:hover:text-surface-200 hover:bg-[#EFEDE8] dark:hover:bg-surface-800/70'
                 )}
               >
-                {active && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-primary-500 dark:bg-primary-400 rounded-r-full" />
-                )}
-                <Icon className={cn('w-5 h-5 flex-shrink-0', active && 'text-primary-600 dark:text-primary-400')} />
+                <Users className="w-4.5 h-4.5 flex-shrink-0" />
                 {expanded && (
-                  <span className="text-sm font-medium animate-fade-in truncate">{item.label}</span>
-                )}
-                {!expanded && (
-                  <div className="absolute left-full ml-2 px-2 py-1 bg-white dark:bg-surface-800 text-surface-700 dark:text-surface-200 text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg border border-surface-200 dark:border-surface-700">
-                    {item.label}
-                  </div>
+                  <span className="text-[13px] animate-fade-in">Team</span>
                 )}
               </Link>
-            );
-          })}
+            )}
+          </div>
 
-          {/* Team link for admin/vp */}
-          {(user?.role === 'admin' || user?.role === 'vp') && (
-            <Link
-              href="/app/admin"
-              className={cn(
-                'flex items-center gap-3 px-2 py-2.5 rounded-lg transition-all duration-200 group relative',
-                pathname.startsWith('/app/admin')
-                  ? 'bg-amber-500/15 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400'
-                  : 'text-surface-500 dark:text-surface-400 hover:text-surface-700 dark:hover:text-surface-200 hover:bg-[#EFEDE8] dark:hover:bg-surface-800/70'
-              )}
-            >
-              <Users className="w-5 h-5 flex-shrink-0" />
-              {expanded && (
-                <span className="text-sm font-medium animate-fade-in">Team</span>
-              )}
-            </Link>
-          )}
+          {/* Spacer to push rest to bottom */}
+          <div className="flex-1" />
         </div>
 
         {/* Pinned Deals */}

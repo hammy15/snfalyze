@@ -250,14 +250,47 @@ export async function calculateWorkspaceRisk(dealId: string): Promise<WorkspaceR
     }
   }
 
-  // Risk-adjusted valuation
-  const askingPrice = deal.askingPrice ? parseFloat(deal.askingPrice) : null;
+  // Risk-adjusted valuation — fallback chain: asking price → intake asking → pro forma value
+  let baseValue: number | null = deal.askingPrice ? parseFloat(deal.askingPrice) : null;
+  let valueSource = 'asking price';
+
+  // Try intake asking price
+  if (!baseValue) {
+    const intakeAsking = intakeData.ownershipDealStructure?.askingPrice as number | null;
+    if (intakeAsking && intakeAsking > 0) {
+      baseValue = intakeAsking;
+      valueSource = 'intake asking price';
+    }
+  }
+
+  // Try pro forma reconciled value
+  if (!baseValue) {
+    const [proFormaStage] = await db
+      .select()
+      .from(dealWorkspaceStages)
+      .where(and(eq(dealWorkspaceStages.dealId, dealId), eq(dealWorkspaceStages.stage, 'pro_forma')));
+    const pfData = (proFormaStage?.stageData || {}) as Record<string, unknown>;
+    const valOutput = pfData.valuationOutput as Record<string, unknown> | undefined;
+    const scenarios = pfData.scenarios as Record<string, Record<string, unknown>> | undefined;
+
+    if (valOutput?.capRateValuation && (valOutput.capRateValuation as number) > 0) {
+      baseValue = valOutput.capRateValuation as number;
+      valueSource = 'cap rate valuation';
+    } else if (valOutput?.ebitdaMultipleValuation && (valOutput.ebitdaMultipleValuation as number) > 0) {
+      baseValue = valOutput.ebitdaMultipleValuation as number;
+      valueSource = 'EBITDA multiple valuation';
+    } else if (scenarios?.base?.impliedValue && (scenarios.base.impliedValue as number) > 0) {
+      baseValue = scenarios.base.impliedValue as number;
+      valueSource = 'pro forma base case';
+    }
+  }
+
   const adjustment = RISK_ADJUSTMENT_TABLE[rating];
-  const riskAdjustedValuation = askingPrice ? {
-    originalValue: askingPrice,
-    adjustedValue: Math.round(askingPrice * (1 + adjustment.discount)),
-    adjustmentPercent: adjustment.discount * 100,
-    adjustmentReason: adjustment.description,
+  const riskAdjustedValuation = baseValue ? {
+    originalValue: Math.round(baseValue),
+    adjustedValue: Math.round(baseValue * (1 + adjustment.discount)),
+    adjustmentPercent: +(adjustment.discount * 100).toFixed(1),
+    adjustmentReason: `${adjustment.description} (based on ${valueSource})`,
   } : null;
 
   // ── Persist risk factors to DB ────────────────────────────────────

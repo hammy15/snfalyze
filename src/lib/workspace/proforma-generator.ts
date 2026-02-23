@@ -153,7 +153,7 @@ export async function generateProForma(input: ProFormaGeneratorInput): Promise<P
   // Get geographic cap rate
   const geoCapRate = getGeographicCapRate(state, assetType as 'snf' | 'alf' | 'SNF' | 'ALF');
   const baseCapRate = geoCapRate
-    ? (geoCapRate.low + geoCapRate.high) / 2 / 100
+    ? (geoCapRate.low + geoCapRate.high) / 2
     : assetType === 'ALF' ? 0.07 : 0.125;
 
   // ── Build Revenue Model ───────────────────────────────────────────
@@ -259,9 +259,12 @@ export async function generateProForma(input: ProFormaGeneratorInput): Promise<P
     agencyReductionPercent: 0,
   };
 
-  const base = buildScenario('Base Case', 'baseline', baseAssumptions, ttmRevenue, totalExpenses, beds, adc, projectionYears, askingPrice);
-  const bull = buildScenario('Bull Case', 'upside', bullAssumptions, ttmRevenue, totalExpenses, beds, adc, projectionYears, askingPrice);
-  const bear = buildScenario('Bear Case', 'downside', bearAssumptions, ttmRevenue, totalExpenses, beds, adc, projectionYears, askingPrice);
+  // Estimate acquisition cost: use asking price if available, else use cap-rate-based estimate
+  const estimatedAcquisitionCost = askingPrice || String(Math.round(ttmEbitda / baseCapRate));
+
+  const base = buildScenario('Base Case', 'baseline', baseAssumptions, ttmRevenue, totalExpenses, beds, adc, projectionYears, estimatedAcquisitionCost);
+  const bull = buildScenario('Bull Case', 'upside', bullAssumptions, ttmRevenue, totalExpenses, beds, adc, projectionYears, estimatedAcquisitionCost);
+  const bear = buildScenario('Bear Case', 'downside', bearAssumptions, ttmRevenue, totalExpenses, beds, adc, projectionYears, estimatedAcquisitionCost);
 
   // Sensitivity matrix (occupancy × cap rate)
   const sensitivityMatrix: SensitivityCell[] = [];

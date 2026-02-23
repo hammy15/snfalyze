@@ -16,6 +16,26 @@ export interface CILResponse {
   response?: string;
 }
 
+// ── CIL Response Cache ──────────────────────────────────────────────
+// Caches stage-level insights for 3 minutes to avoid redundant Claude calls
+
+interface CachedCILResponse {
+  response: CILResponse;
+  timestamp: number;
+}
+
+const _cilCache = new Map<string, CachedCILResponse>();
+const CIL_CACHE_TTL = 3 * 60 * 1000; // 3 minutes
+
+// ── Request deduplication ───────────────────────────────────────────
+// Prevents concurrent identical CIL requests from firing multiple Claude calls
+
+const _inflightRequests = new Map<string, Promise<CILResponse>>();
+
+function getCacheKey(dealId: string, stage: string, query?: string): string {
+  return query ? `${dealId}:${stage}:q:${query}` : `${dealId}:${stage}`;
+}
+
 // ── Stage-specific system prompts ───────────────────────────────────
 
 const STAGE_PROMPTS: Record<string, string> = {
@@ -61,6 +81,32 @@ Format each insight as a JSON object with: type, title, content, source.`,
 // ── Generate stage-specific CIL insights ────────────────────────────
 
 export async function generateCILInsights(request: CILRequest): Promise<CILResponse> {
+  const { dealId, stage, query } = request;
+  const cacheKey = getCacheKey(dealId, stage, query);
+
+  // Check cache first (skip for user queries — always fresh)
+  if (!query) {
+    const cached = _cilCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < CIL_CACHE_TTL) {
+      return cached.response;
+    }
+  }
+
+  // Deduplicate: if identical request is in-flight, wait for it
+  const inflight = _inflightRequests.get(cacheKey);
+  if (inflight) return inflight;
+
+  const promise = _generateCILInsightsImpl(request, cacheKey);
+  _inflightRequests.set(cacheKey, promise);
+
+  try {
+    return await promise;
+  } finally {
+    _inflightRequests.delete(cacheKey);
+  }
+}
+
+async function _generateCILInsightsImpl(request: CILRequest, cacheKey: string): Promise<CILResponse> {
   const { dealId, stage, query } = request;
 
   // Load deal context
@@ -124,6 +170,9 @@ export async function generateCILInsights(request: CILRequest): Promise<CILRespo
         })
         .where(and(eq(dealWorkspaceStages.dealId, dealId), eq(dealWorkspaceStages.stage, stage)));
     }
+
+    // Cache the response
+    _cilCache.set(cacheKey, { response: parsed, timestamp: Date.now() });
 
     return parsed;
   } catch (error) {

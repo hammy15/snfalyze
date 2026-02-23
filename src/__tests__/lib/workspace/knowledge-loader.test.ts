@@ -13,7 +13,7 @@ vi.mock('fs/promises', () => ({
   readFile: mockReadFile,
 }));
 
-import { loadKnowledgeForStage, searchKnowledge } from '@/lib/workspace/knowledge-loader';
+import { loadKnowledgeForStage, searchKnowledge, _resetCaches } from '@/lib/workspace/knowledge-loader';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -50,6 +50,7 @@ function longContent(): string {
 beforeEach(() => {
   mockReaddir.mockReset();
   mockReadFile.mockReset();
+  _resetCaches();
 
   mockReaddir.mockResolvedValue(SAMPLE_FILES);
   mockReadFile.mockImplementation(async (filepath: string) => {
@@ -340,6 +341,7 @@ describe('searchKnowledge', () => {
   beforeEach(() => {
     mockReaddir.mockReset();
     mockReadFile.mockReset();
+    _resetCaches();
     mockReaddir.mockResolvedValue(SAMPLE_FILES);
     mockReadFile.mockImplementation(async (filepath: string) => {
       const name = String(filepath).split('/').pop() || '';

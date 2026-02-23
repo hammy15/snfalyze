@@ -150,11 +150,11 @@ function parseInsightsResponse(text: string, stage: string): CILResponse {
       return {
         insights: parsed.map((item, idx) => ({
           id: `cil_${stage}_${idx}`,
-          type: item.type || 'info',
+          type: normalizeType(item.type),
           title: item.title || 'Insight',
           content: item.content || '',
           source: item.source || 'CIL Analysis',
-          confidence: (item.confidence as CILInsight['confidence']) || 'medium',
+          confidence: normalizeConfidence(item.confidence),
           stage: stage as WorkspaceStageType,
         })),
       };
@@ -165,11 +165,11 @@ function parseInsightsResponse(text: string, stage: string): CILResponse {
         response: parsed.response,
         insights: (parsed.insights as Array<Record<string, string>>).map((item, idx) => ({
           id: `cil_${stage}_${idx}`,
-          type: (item.type as CILInsight['type']) || 'info',
+          type: normalizeType(item.type),
           title: item.title || 'Insight',
           content: item.content || '',
           source: item.source || 'CIL Analysis',
-          confidence: (item.confidence as CILInsight['confidence']) || 'medium',
+          confidence: normalizeConfidence(item.confidence),
           stage: stage as WorkspaceStageType,
         })),
       };
@@ -219,6 +219,26 @@ function buildDealContext(
   }
 
   return lines.join('\n');
+}
+
+// ── Type normalization ───────────────────────────────────────────────
+
+function normalizeType(type: string | undefined): CILInsight['type'] {
+  if (!type) return 'info';
+  const t = type.toLowerCase();
+  if (t === 'warning' || t === 'risk' || t === 'red_flag' || t === 'caution') return 'warning';
+  if (t === 'opportunity' || t === 'upside' || t === 'green_flag' || t === 'positive') return 'opportunity';
+  if (t.includes('benchmark') || t.includes('data') || t.includes('price') || t.includes('metric')) return 'benchmark';
+  if (t === 'info' || t === 'warning' || t === 'opportunity' || t === 'benchmark') return t as CILInsight['type'];
+  return 'info';
+}
+
+function normalizeConfidence(confidence: string | undefined): CILInsight['confidence'] {
+  if (!confidence) return 'medium';
+  const c = confidence.toLowerCase();
+  if (c === 'high') return 'high';
+  if (c === 'low') return 'low';
+  return 'medium';
 }
 
 // ── Fallback insights ───────────────────────────────────────────────

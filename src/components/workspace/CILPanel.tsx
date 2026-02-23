@@ -6,19 +6,27 @@ import { Brain, ChevronRight, Lightbulb, AlertTriangle, TrendingUp, BarChart3, M
 import type { WorkspaceStageType, CILInsight } from '@/types/workspace';
 import { WORKSPACE_STAGES } from '@/types/workspace';
 
-const INSIGHT_ICONS: Record<CILInsight['type'], React.ElementType> = {
+const INSIGHT_ICONS: Record<string, React.ElementType> = {
   info: Lightbulb,
   warning: AlertTriangle,
   opportunity: TrendingUp,
   benchmark: BarChart3,
 };
 
-const INSIGHT_COLORS: Record<CILInsight['type'], string> = {
+const INSIGHT_COLORS: Record<string, string> = {
   info: 'text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-900/20',
   warning: 'text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/20',
   opportunity: 'text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-900/20',
   benchmark: 'text-purple-600 bg-purple-50 dark:text-purple-400 dark:bg-purple-900/20',
 };
+
+// Normalize AI-generated types to our 4 valid types
+function normalizeInsightType(type: string): CILInsight['type'] {
+  if (type === 'warning' || type === 'risk' || type === 'red_flag') return 'warning';
+  if (type === 'opportunity' || type === 'upside' || type === 'green_flag') return 'opportunity';
+  if (type.includes('benchmark') || type.includes('data') || type.includes('price')) return 'benchmark';
+  return 'info';
+}
 
 interface CILPanelProps {
   dealId: string;
@@ -114,8 +122,9 @@ export function CILPanel({
           </div>
         ) : (
           stageInsights.map(insight => {
-            const Icon = INSIGHT_ICONS[insight.type];
-            const colorClass = INSIGHT_COLORS[insight.type];
+            const normalizedType = normalizeInsightType(insight.type);
+            const Icon = INSIGHT_ICONS[normalizedType] || Lightbulb;
+            const colorClass = INSIGHT_COLORS[normalizedType] || INSIGHT_COLORS.info;
             const isExpanded = expandedInsight === insight.id;
 
             return (

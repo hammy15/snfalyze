@@ -2184,3 +2184,77 @@ export const dealCompsRelations = relations(dealComps, ({ one }) => ({
     references: [comparableSales.id],
   }),
 }));
+
+// ============================================================================
+// Deal Activity & Collaboration Tables
+// ============================================================================
+
+export const dealActivityTypeEnum = pgEnum('deal_activity_type', [
+  'comment',
+  'stage_change',
+  'data_update',
+  'document_upload',
+  'risk_flag',
+  'cms_sync',
+  'memo_generated',
+  'status_change',
+]);
+
+export const dealActivities = pgTable(
+  'deal_activities',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    dealId: uuid('deal_id')
+      .references(() => deals.id, { onDelete: 'cascade' })
+      .notNull(),
+    type: dealActivityTypeEnum('type').notNull(),
+    title: varchar('title', { length: 255 }).notNull(),
+    description: text('description'),
+    metadata: jsonb('metadata').default('{}'),
+    userId: varchar('user_id', { length: 100 }).default('system'),
+    userName: varchar('user_name', { length: 100 }).default('System'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    dealIdIdx: index('idx_deal_activities_deal_id').on(table.dealId),
+    typeIdx: index('idx_deal_activities_type').on(table.type),
+    createdAtIdx: index('idx_deal_activities_created_at').on(table.createdAt),
+  })
+);
+
+export const dealComments = pgTable(
+  'deal_comments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    dealId: uuid('deal_id')
+      .references(() => deals.id, { onDelete: 'cascade' })
+      .notNull(),
+    stage: workspaceStageTypeEnum('stage'),
+    content: text('content').notNull(),
+    userId: varchar('user_id', { length: 100 }).default('user'),
+    userName: varchar('user_name', { length: 100 }).default('Analyst'),
+    parentId: uuid('parent_id'),
+    isResolved: boolean('is_resolved').default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    dealIdIdx: index('idx_deal_comments_deal_id').on(table.dealId),
+    stageIdx: index('idx_deal_comments_stage').on(table.stage),
+    parentIdx: index('idx_deal_comments_parent_id').on(table.parentId),
+  })
+);
+
+export const dealActivitiesRelations = relations(dealActivities, ({ one }) => ({
+  deal: one(deals, {
+    fields: [dealActivities.dealId],
+    references: [deals.id],
+  }),
+}));
+
+export const dealCommentsRelations = relations(dealComments, ({ one }) => ({
+  deal: one(deals, {
+    fields: [dealComments.dealId],
+    references: [deals.id],
+  }),
+}));

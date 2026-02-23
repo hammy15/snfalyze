@@ -14,6 +14,10 @@ import {
   Loader2,
   CheckCircle2,
   LayoutGrid,
+  Upload,
+  FileSpreadsheet,
+  X,
+  Sparkles,
 } from 'lucide-react';
 import type { IntakeStageData } from '@/types/workspace';
 
@@ -42,11 +46,21 @@ const SECTIONS = [
   { id: 'marketContext', label: 'Market Context', icon: MapPin, description: 'Market area, competitors, CON' },
 ];
 
+interface ExtractedFile {
+  name: string;
+  status: 'uploading' | 'extracting' | 'complete' | 'error';
+  fieldsExtracted?: string[];
+  error?: string;
+}
+
 export function DealIntakeStage({ dealId, stageData, onUpdate }: DealIntakeStageProps) {
   const [expandedSection, setExpandedSection] = useState<string>('facilityIdentification');
   const [cmsLoading, setCmsLoading] = useState(false);
   const [cmsLoaded, setCmsLoaded] = useState(false);
   const [activeFacilityIdx, setActiveFacilityIdx] = useState(0);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [extractedFiles, setExtractedFiles] = useState<ExtractedFile[]>([]);
+  const [isExtracting, setIsExtracting] = useState(false);
 
   const data = stageData as Partial<IntakeStageData>;
   const facilitySlots = (stageData._facilitySlots || []) as FacilitySlot[];
@@ -137,8 +151,132 @@ export function DealIntakeStage({ dealId, stageData, onUpdate }: DealIntakeStage
     }
   };
 
+  // Document drag-and-drop extraction
+  const handleFileDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+
+    const files = Array.from(e.dataTransfer.files).filter(f =>
+      f.type.includes('pdf') || f.type.includes('sheet') || f.type.includes('excel') ||
+      f.type.includes('csv') || f.type.includes('image')
+    );
+    if (files.length === 0) return;
+
+    setIsExtracting(true);
+    const newFiles: ExtractedFile[] = files.map(f => ({ name: f.name, status: 'uploading' as const }));
+    setExtractedFiles(prev => [...prev, ...newFiles]);
+
+    try {
+      // Update status to extracting
+      setExtractedFiles(prev => prev.map(f =>
+        newFiles.find(nf => nf.name === f.name) ? { ...f, status: 'extracting' as const } : f
+      ));
+
+      const formData = new FormData();
+      files.forEach(f => formData.append('files', f));
+
+      const res = await fetch(`/api/deals/${dealId}/workspace/intake/extract`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        const autoFill = result.data?.autoFill || {};
+        const fieldNames = Object.keys(autoFill);
+
+        // Apply extracted data to the form
+        if (fieldNames.length > 0) {
+          onUpdate(autoFill);
+        }
+
+        setExtractedFiles(prev => prev.map(f =>
+          newFiles.find(nf => nf.name === f.name)
+            ? { ...f, status: 'complete' as const, fieldsExtracted: fieldNames }
+            : f
+        ));
+      } else {
+        setExtractedFiles(prev => prev.map(f =>
+          newFiles.find(nf => nf.name === f.name)
+            ? { ...f, status: 'error' as const, error: 'Extraction failed' }
+            : f
+        ));
+      }
+    } catch {
+      setExtractedFiles(prev => prev.map(f =>
+        newFiles.find(nf => nf.name === f.name)
+          ? { ...f, status: 'error' as const, error: 'Network error' }
+          : f
+      ));
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
+  const removeExtractedFile = (name: string) => {
+    setExtractedFiles(prev => prev.filter(f => f.name !== name));
+  };
+
   return (
     <div className="max-w-3xl mx-auto space-y-3">
+      {/* Document drop zone */}
+      <div
+        onDragOver={e => { e.preventDefault(); setIsDragOver(true); }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={handleFileDrop}
+        className={cn(
+          'border-2 border-dashed rounded-xl p-4 text-center transition-all',
+          isDragOver
+            ? 'border-primary-400 bg-primary-50/50 dark:bg-primary-900/10'
+            : 'border-surface-200 dark:border-surface-700 hover:border-surface-300 dark:hover:border-surface-600'
+        )}
+      >
+        <div className="flex items-center justify-center gap-3">
+          {isExtracting ? (
+            <Loader2 className="w-5 h-5 text-primary-500 animate-spin" />
+          ) : (
+            <Upload className={cn('w-5 h-5', isDragOver ? 'text-primary-500' : 'text-surface-400')} />
+          )}
+          <div className="text-left">
+            <p className={cn('text-sm font-medium', isDragOver ? 'text-primary-700 dark:text-primary-300' : 'text-surface-600 dark:text-surface-400')}>
+              {isDragOver ? 'Drop to auto-extract' : isExtracting ? 'Extracting data...' : 'Drop P&L, census, or financial documents here'}
+            </p>
+            <p className="text-[10px] text-surface-400">
+              PDF, Excel, CSV — AI will auto-fill intake fields
+            </p>
+          </div>
+          <Sparkles className={cn('w-4 h-4', isDragOver ? 'text-primary-400' : 'text-surface-300')} />
+        </div>
+      </div>
+
+      {/* Extracted files */}
+      {extractedFiles.length > 0 && (
+        <div className="space-y-1.5">
+          {extractedFiles.map((file) => (
+            <div
+              key={file.name}
+              className="flex items-center gap-2 px-3 py-2 bg-surface-50 dark:bg-surface-800/50 rounded-lg text-xs"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-surface-400 shrink-0" />
+              <span className="text-surface-700 dark:text-surface-300 truncate flex-1">{file.name}</span>
+              {file.status === 'extracting' && <Loader2 className="w-3 h-3 animate-spin text-primary-500" />}
+              {file.status === 'complete' && (
+                <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" />
+                  {file.fieldsExtracted?.length || 0} sections filled
+                </span>
+              )}
+              {file.status === 'error' && (
+                <span className="text-red-500">{file.error}</span>
+              )}
+              <button onClick={() => removeExtractedFile(file.name)} className="p-0.5 hover:bg-surface-200 dark:hover:bg-surface-700 rounded">
+                <X className="w-3 h-3 text-surface-400" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Portfolio facility selector */}
       {isPortfolio && (
         <div className="border border-primary-200 dark:border-primary-800 bg-primary-50/50 dark:bg-primary-900/10 rounded-xl p-4">

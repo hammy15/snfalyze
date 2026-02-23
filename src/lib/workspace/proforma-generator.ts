@@ -497,7 +497,7 @@ function estimateIRR(cashFlows: number[], guess = 0.10, maxIter = 100, tolerance
   }
 
   // Bisection fallback — more robust for bear/edge cases
-  let lo = -0.50;
+  let lo = -0.95;
   let hi = 5.0;
   const npvLo = npvAtRate(cashFlows, lo);
   const npvHi = npvAtRate(cashFlows, hi);

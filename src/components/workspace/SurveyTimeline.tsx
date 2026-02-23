@@ -142,7 +142,7 @@ export function SurveyTimeline({ ccn, facilityName }: SurveyTimelineProps) {
     setError(null);
 
     try {
-      const res = await fetch(`/api/facilities/${encodeURIComponent(ccn)}/survey-history`);
+      const res = await fetch(`/api/cms/survey-history/${encodeURIComponent(ccn)}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `Failed to fetch survey history (${res.status})`);

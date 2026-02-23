@@ -7,6 +7,7 @@ import {
   documentFolders,
   analysisStages,
   saleLeaseback,
+  dealWorkspaceStages,
 } from '@/db';
 import { eq } from 'drizzle-orm';
 
@@ -369,6 +370,56 @@ export async function POST(
       .where(eq(wizardSessions.id, id))
       .returning();
 
+    // ── Auto-initialize 5-stage workspace ───────────────────────────
+    try {
+      const existingWorkspace = await db
+        .select()
+        .from(dealWorkspaceStages)
+        .where(eq(dealWorkspaceStages.dealId, dealRecord.id))
+        .limit(1);
+
+      if (existingWorkspace.length === 0) {
+        // Build Stage 1 intake data from wizard facility + deal data
+        const primaryFacility = createdFacilities[0];
+        const intakeData = buildIntakeFromWizard(
+          dealRecord,
+          primaryFacility,
+          facilityData,
+          stageData,
+        );
+
+        const workspaceStages = [
+          { stage: 'deal_intake' as const, order: 1 },
+          { stage: 'comp_pull' as const, order: 2 },
+          { stage: 'pro_forma' as const, order: 3 },
+          { stage: 'risk_score' as const, order: 4 },
+          { stage: 'investment_memo' as const, order: 5 },
+        ];
+
+        for (const config of workspaceStages) {
+          await db.insert(dealWorkspaceStages).values({
+            dealId: dealRecord.id,
+            stage: config.stage,
+            order: config.order,
+            status: config.order === 1 ? 'in_progress' : 'pending',
+            stageData: config.order === 1 ? intakeData : {},
+            completionScore: config.order === 1 ? calculateIntakeCompleteness(intakeData) : 0,
+            validationErrors: [],
+            startedAt: config.order === 1 ? new Date() : null,
+          });
+        }
+
+        // Set workspace current stage on the deal
+        await db
+          .update(deals)
+          .set({ workspaceCurrentStage: 'deal_intake', updatedAt: new Date() })
+          .where(eq(deals.id, dealRecord.id));
+      }
+    } catch (wsError) {
+      // Workspace initialization is best-effort — don't fail the wizard
+      console.error('Workspace auto-init error (non-fatal):', wsError);
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -386,4 +437,155 @@ export async function POST(
       { status: 500 }
     );
   }
+}
+
+// ── Bridge: build workspace Stage 1 data from wizard output ─────────
+
+function buildIntakeFromWizard(
+  deal: typeof deals.$inferSelect,
+  primaryFacility: typeof facilities.$inferSelect,
+  facilitySlots: Array<{
+    ccn?: string;
+    name?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    licensedBeds?: number;
+    certifiedBeds?: number;
+    cmsRating?: number;
+    healthRating?: number;
+    staffingRating?: number;
+    qualityRating?: number;
+    isSff?: boolean;
+    assetType?: string;
+  }>,
+  stageData: WizardStageData,
+): Record<string, unknown> {
+  const f = primaryFacility;
+  const typeMap: Record<string, string> = { SNF: 'SNF', ALF: 'ALF', ILF: 'CCRC' };
+
+  // Map wizard extraction data if available
+  const extraction = stageData.documentExtraction as Record<string, unknown> | undefined;
+  const visionData = (stageData as Record<string, unknown>).visionExtraction as Record<string, unknown> | undefined;
+
+  // Try to pull financial data from extraction or vision
+  let ttmRevenue: number | null = null;
+  let ttmEbitda: number | null = null;
+
+  if (extraction) {
+    const financialSummary = extraction.financialSummary as Record<string, unknown> | undefined;
+    if (financialSummary) {
+      ttmRevenue = (financialSummary.totalRevenue as number) || null;
+      ttmEbitda = (financialSummary.ebitda as number) || (financialSummary.ebitdar as number) || null;
+    }
+  }
+  if (!ttmRevenue && visionData) {
+    const visionFacilities = visionData.facilities as Array<Record<string, unknown>> | undefined;
+    if (visionFacilities?.length) {
+      // Sum up revenue from all vision-extracted facilities
+      for (const vf of visionFacilities) {
+        const periods = vf.periods as Array<Record<string, unknown>> | undefined;
+        if (periods?.length) {
+          const latest = periods[periods.length - 1];
+          ttmRevenue = (ttmRevenue || 0) + ((latest.totalRevenue as number) || 0);
+          ttmEbitda = (ttmEbitda || 0) + ((latest.ebitda as number) || (latest.ebitdar as number) || 0);
+        }
+      }
+    }
+  }
+
+  return {
+    facilityIdentification: {
+      facilityName: f?.name || deal.name || '',
+      ccn: f?.ccn || '',
+      npiNumber: '',
+      address: f?.address || '',
+      city: f?.city || '',
+      state: f?.state || deal.primaryState || '',
+      zipCode: f?.zipCode || '',
+      facilityType: typeMap[f?.assetType || deal.assetType || 'SNF'] || 'SNF',
+      licensedBeds: f?.licensedBeds || deal.beds || null,
+      medicareCertifiedBeds: f?.certifiedBeds || null,
+      medicaidCertifiedBeds: null,
+    },
+    ownershipDealStructure: {
+      currentOwnerName: '',
+      ownerType: '',
+      yearsUnderCurrentOwnership: null,
+      askingPrice: deal.askingPrice ? parseFloat(deal.askingPrice) : null,
+      dealStructure: deal.dealStructure === 'sale_leaseback' ? 'lease' : 'asset_sale',
+      realEstateIncluded: true,
+      sellerFinancingAvailable: false,
+      estimatedClosingTimeline: '',
+      sourceOfDeal: '',
+      brokerName: '',
+    },
+    financialSnapshot: {
+      ttmRevenue,
+      ttmEbitda,
+      normalizedEbitda: null,
+      managementFeeStructure: '',
+      ttmTotalCensusAdc: null,
+      medicareCensusPercent: null,
+      medicaidCensusPercent: null,
+      privatePayCensusPercent: null,
+      revenueYear1: null,
+      revenueYear2: null,
+      revenueYear3: null,
+      ebitdaYear1: null,
+      ebitdaYear2: null,
+      ebitdaYear3: null,
+    },
+    operationalSnapshot: {
+      cmsOverallRating: f?.cmsRating || null,
+      cmsStaffingStar: f?.staffingRating || null,
+      cmsQualityStar: f?.qualityRating || null,
+      cmsInspectionStar: f?.healthRating || null,
+      administratorName: '',
+      donName: '',
+      totalStaffingFte: null,
+      agencyStaffPercent: null,
+      lastSurveyDate: '',
+      ijCitationsLast3Years: null,
+      cmi: null,
+    },
+    marketContext: {
+      primaryMarketArea: f?.city && f?.state ? `${f.city}, ${f.state}` : '',
+      marketType: '',
+      population65Plus: null,
+      knownCompetitors: '',
+      marketOccupancyRate: null,
+      isCONState: false,
+    },
+    // Store all facility slots for multi-facility support
+    _facilitySlots: facilitySlots.map((slot, idx) => ({
+      index: idx,
+      name: slot.name || '',
+      ccn: slot.ccn || '',
+      state: slot.state || '',
+      city: slot.city || '',
+      beds: slot.licensedBeds || 0,
+      cmsRating: slot.cmsRating || null,
+      isSff: slot.isSff || false,
+    })),
+  };
+}
+
+function calculateIntakeCompleteness(data: Record<string, unknown>): number {
+  let filled = 0;
+  let total = 0;
+
+  for (const sectionKey of ['facilityIdentification', 'ownershipDealStructure', 'financialSnapshot', 'operationalSnapshot', 'marketContext']) {
+    const section = data[sectionKey] as Record<string, unknown> | undefined;
+    if (!section) continue;
+    for (const value of Object.values(section)) {
+      total++;
+      if (value !== null && value !== undefined && value !== '' && value !== 0) {
+        filled++;
+      }
+    }
+  }
+
+  return total > 0 ? Math.round((filled / total) * 100) : 0;
 }

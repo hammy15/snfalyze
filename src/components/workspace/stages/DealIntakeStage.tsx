@@ -13,8 +13,20 @@ import {
   Search,
   Loader2,
   CheckCircle2,
+  LayoutGrid,
 } from 'lucide-react';
 import type { IntakeStageData } from '@/types/workspace';
+
+interface FacilitySlot {
+  index: number;
+  name: string;
+  ccn: string;
+  state: string;
+  city: string;
+  beds: number;
+  cmsRating: number | null;
+  isSff: boolean;
+}
 
 interface DealIntakeStageProps {
   dealId: string;
@@ -34,8 +46,11 @@ export function DealIntakeStage({ dealId, stageData, onUpdate }: DealIntakeStage
   const [expandedSection, setExpandedSection] = useState<string>('facilityIdentification');
   const [cmsLoading, setCmsLoading] = useState(false);
   const [cmsLoaded, setCmsLoaded] = useState(false);
+  const [activeFacilityIdx, setActiveFacilityIdx] = useState(0);
 
   const data = stageData as Partial<IntakeStageData>;
+  const facilitySlots = (stageData._facilitySlots || []) as FacilitySlot[];
+  const isPortfolio = facilitySlots.length > 1;
 
   const updateSection = <K extends keyof IntakeStageData>(
     section: K,
@@ -100,8 +115,75 @@ export function DealIntakeStage({ dealId, stageData, onUpdate }: DealIntakeStage
     }
   };
 
+  // When user switches facility in portfolio, swap the intake fields
+  const handleFacilitySwitch = (idx: number) => {
+    setActiveFacilityIdx(idx);
+    const slot = facilitySlots[idx];
+    if (slot) {
+      onUpdate({
+        facilityIdentification: {
+          ...(data.facilityIdentification || {}),
+          facilityName: slot.name,
+          ccn: slot.ccn,
+          state: slot.state,
+          city: slot.city,
+          licensedBeds: slot.beds || null,
+        },
+        operationalSnapshot: {
+          ...(data.operationalSnapshot || {}),
+          cmsOverallRating: slot.cmsRating,
+        },
+      });
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto space-y-3">
+      {/* Portfolio facility selector */}
+      {isPortfolio && (
+        <div className="border border-primary-200 dark:border-primary-800 bg-primary-50/50 dark:bg-primary-900/10 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <LayoutGrid className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+            <span className="text-sm font-semibold text-primary-800 dark:text-primary-300">
+              Portfolio — {facilitySlots.length} Facilities
+            </span>
+            <span className="text-xs text-primary-600 dark:text-primary-400 ml-auto">
+              {facilitySlots.reduce((s, f) => s + (f.beds || 0), 0)} total beds
+            </span>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {facilitySlots.map((slot, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleFacilitySwitch(idx)}
+                className={cn(
+                  'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap border',
+                  idx === activeFacilityIdx
+                    ? 'bg-primary-500 text-white border-primary-500 shadow-sm'
+                    : 'bg-white dark:bg-surface-900 text-surface-700 dark:text-surface-300 border-surface-200 dark:border-surface-700 hover:border-primary-300'
+                )}
+              >
+                <Building2 className="w-3 h-3" />
+                <span>{slot.name || `Facility ${idx + 1}`}</span>
+                {slot.beds > 0 && (
+                  <span className={cn(
+                    'px-1.5 py-0.5 rounded text-[10px]',
+                    idx === activeFacilityIdx
+                      ? 'bg-white/20'
+                      : 'bg-surface-100 dark:bg-surface-800'
+                  )}>
+                    {slot.beds} beds
+                  </span>
+                )}
+                {slot.isSff && (
+                  <span className="px-1 py-0.5 rounded bg-red-100 text-red-600 text-[10px] font-bold">SFF</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Section cards */}
       {SECTIONS.map((section, idx) => {
         const isExpanded = expandedSection === section.id;

@@ -2,6 +2,7 @@
 
 import { AppShellNew } from '@/components/layout/app-shell-new';
 import { SplashScreen, useSplashScreen } from '@/components/splash/splash-screen';
+import { Walkthrough } from '@/components/onboarding/walkthrough';
 
 export default function AppLayout({
   children,
@@ -19,6 +20,7 @@ export default function AppLayout({
     <>
       {showSplash && <SplashScreen onComplete={completeSplash} />}
       <AppShellNew>{children}</AppShellNew>
+      <Walkthrough />
     </>
   );
 }

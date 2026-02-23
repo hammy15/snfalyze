@@ -33,11 +33,16 @@ interface SearchResult {
 }
 
 const TOOLS: SearchResult[] = [
+  { id: 'tool-quickscreen', type: 'tool', title: 'Quick Screen', subtitle: 'Cascadia GO/PASS signal calculator', icon: Zap, href: '/app/tools/quick-screen' },
+  { id: 'tool-bulkccn', type: 'tool', title: 'Bulk CCN Profiler', subtitle: 'Portfolio profiling from CCN list', icon: Building2, href: '/app/tools/bulk-ccn' },
+  { id: 'tool-watchlist', type: 'tool', title: 'Facility Watchlist', subtitle: 'Monitor facilities for CMS changes', icon: Search, href: '/app/tools/watchlist' },
+  { id: 'tool-marketmap', type: 'tool', title: 'Market Map', subtitle: 'Pipeline + portfolio map view', icon: MapPin, href: '/app/tools/market-map' },
+  { id: 'tool-rates', type: 'tool', title: 'Rate Tracker', subtitle: 'State Medicaid reimbursement rates', icon: TrendingUp, href: '/app/tools/rates' },
   { id: 'tool-caprate', type: 'tool', title: 'Cap Rate Calculator', subtitle: 'Calculate capitalization rates', icon: Calculator, href: '/app/tools/cap-rate' },
-  { id: 'tool-irr', type: 'tool', title: 'IRR Calculator', subtitle: 'Internal rate of return', icon: TrendingUp, href: '/app/tools/irr' },
+  { id: 'tool-irr', type: 'tool', title: 'IRR Calculator', subtitle: 'Internal rate of return', icon: TrendingUp, href: '/app/tools/irr-npv' },
   { id: 'tool-waterfall', type: 'tool', title: 'Waterfall Calculator', subtitle: 'Distribution waterfall', icon: DollarSign, href: '/app/tools/waterfall' },
   { id: 'tool-sensitivity', type: 'tool', title: 'Sensitivity Analysis', subtitle: 'Multi-variable stress testing', icon: BarChart3, href: '/app/tools/sensitivity' },
-  { id: 'tool-comps', type: 'tool', title: 'Market Comparables', subtitle: 'Comparable transaction analysis', icon: Building2, href: '/app/tools/comps' },
+  { id: 'tool-proforma', type: 'tool', title: 'Pro Forma Generator', subtitle: 'Multi-year operating projections', icon: Calculator, href: '/app/tools/pro-forma' },
 ];
 
 const PAGES: SearchResult[] = [
@@ -306,10 +311,10 @@ export function CommandBar() {
               <p className="text-[10px] uppercase tracking-wider text-surface-400 dark:text-surface-600 mb-2">Quick Actions</p>
               <div className="grid grid-cols-2 gap-1.5">
                 {[
-                  { label: 'New Deal', icon: Crosshair, href: '/app/deals' },
-                  { label: 'Portfolio Radar', icon: MapPin, href: '/app/macro' },
-                  { label: 'Cap Rate Calc', icon: Calculator, href: '/app/tools/cap-rate' },
-                  { label: 'Documents', icon: FileText, href: '/app/repository' },
+                  { label: 'New Deal', icon: Crosshair, href: '/app/deals/new/wizard' },
+                  { label: 'Quick Screen', icon: Zap, href: '/app/tools/quick-screen' },
+                  { label: 'Deal Pipeline', icon: Crosshair, href: '/app/deals' },
+                  { label: 'Watchlist', icon: Search, href: '/app/tools/watchlist' },
                 ].map(action => (
                   <button
                     key={action.label}

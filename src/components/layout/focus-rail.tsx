@@ -18,6 +18,10 @@ import {
   Sparkles,
   Users,
   Brain,
+  Bell,
+  Eye,
+  Wrench,
+  LayoutDashboard,
 } from 'lucide-react';
 
 interface NavItem {
@@ -28,10 +32,13 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  { href: '/app', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/app/macro', icon: Radar, label: 'Portfolio Radar' },
   { href: '/app/deals', icon: Crosshair, label: 'Deal Pipeline' },
   { href: '/app/facilities', icon: Building2, label: 'Facilities' },
+  { href: '/app/tools/watchlist', icon: Eye, label: 'Watchlist' },
   { href: '/app/learning', icon: Brain, label: 'Deal Learning' },
+  { href: '/app/tools', icon: Wrench, label: 'Tools' },
   { href: '/app/partners', icon: Handshake, label: 'Partners', roles: ['admin', 'vp', 'analyst'] },
 ];
 
@@ -47,6 +54,7 @@ export function FocusRail() {
   const [expanded, setExpanded] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [recentDeals, setRecentDeals] = useState<RecentDeal[]>([]);
+  const [unreadAlerts, setUnreadAlerts] = useState(0);
 
   useEffect(() => {
     fetch('/api/deals?limit=5')
@@ -54,6 +62,13 @@ export function FocusRail() {
       .then(data => {
         const deals = (data.data || []).slice(0, 4);
         setRecentDeals(deals);
+      })
+      .catch(() => {});
+    // Fetch unread alert count
+    fetch('/api/watchlist')
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) setUnreadAlerts(data.data.totalUnreadAlerts || 0);
       })
       .catch(() => {});
   }, []);
@@ -189,6 +204,39 @@ export function FocusRail() {
             </div>
           </div>
         )}
+
+        {/* Notification bell */}
+        <div className="px-2 py-2 border-t border-[#E2DFD8] dark:border-surface-800">
+          <Link
+            href="/app/tools/watchlist"
+            className={cn(
+              'flex items-center gap-3 px-2 py-2.5 rounded-lg transition-all duration-200 group relative',
+              'text-surface-500 dark:text-surface-400 hover:text-surface-700 dark:hover:text-surface-200 hover:bg-[#EFEDE8] dark:hover:bg-surface-800/70'
+            )}
+          >
+            <div className="relative flex-shrink-0">
+              <Bell className="w-5 h-5" />
+              {unreadAlerts > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                  {unreadAlerts > 9 ? '9+' : unreadAlerts}
+                </span>
+              )}
+            </div>
+            {expanded && (
+              <span className="text-sm font-medium animate-fade-in">
+                Alerts
+                {unreadAlerts > 0 && (
+                  <span className="ml-1.5 text-[10px] text-red-500 font-semibold">{unreadAlerts}</span>
+                )}
+              </span>
+            )}
+            {!expanded && (
+              <div className="absolute left-full ml-2 px-2 py-1 bg-white dark:bg-surface-800 text-surface-700 dark:text-surface-200 text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg border border-surface-200 dark:border-surface-700">
+                Alerts {unreadAlerts > 0 && `(${unreadAlerts})`}
+              </div>
+            )}
+          </Link>
+        </div>
 
         {/* User */}
         <div className="px-2 py-3 border-t border-[#E2DFD8] dark:border-surface-800 relative">

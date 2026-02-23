@@ -23,13 +23,14 @@ export function CompPullStage({ dealId, stageData, onUpdate }: CompPullStageProp
   const loadComps = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/deals/${dealId}/workspace/comps`);
+      // POST triggers the comp engine to pull + score comps
+      const res = await fetch(`/api/deals/${dealId}/workspace/comps`, { method: 'POST' });
       if (res.ok) {
         const result = await res.json();
         onUpdate({
-          transactionComps: result.comps || [],
-          operatingBenchmarks: result.benchmarks || null,
-          marketBenchmarkSummary: result.summary || null,
+          transactionComps: result.transactionComps || [],
+          operatingBenchmarks: result.operatingBenchmarks || null,
+          marketBenchmarkSummary: result.marketBenchmarkSummary || null,
         });
       }
     } catch (err) {

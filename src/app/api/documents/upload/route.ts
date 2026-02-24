@@ -83,31 +83,96 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create document record
+    // Parse file content INLINE — all parsing must complete before response.
+    // AI analysis and deep extraction happen via separate API calls (extract, analyze).
+    let rawText = '';
+    let extractedData: Record<string, any> = {};
+
+    const isImage = fileType.includes('image') || /\.(png|jpg|jpeg|gif|webp|bmp|tiff)$/i.test(lowerName);
+
+    if (isImage) {
+      rawText = `[Image: ${fileName}]`;
+      const ext = lowerName.split('.').pop() || 'png';
+      const mimeType = fileType.includes('image') ? fileType : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+      extractedData = {
+        imageBase64: fileBuffer.toString('base64'),
+        imageMimeType: mimeType,
+        requiresVision: true,
+      };
+    } else if (lowerName.endsWith('.pdf')) {
+      try {
+        const pdfData = await pdfParse(fileBuffer);
+        rawText = pdfData.text;
+        extractedData = { pageCount: pdfData.numpages, pdfInfo: pdfData.info };
+      } catch (e) {
+        rawText = `[Error extracting PDF: ${e instanceof Error ? e.message : 'Unknown'}]`;
+      }
+    } else if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.numbers')) {
+      try {
+        const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+        const sheets: Record<string, any[][]> = {};
+        const textParts: string[] = [];
+        for (const sheetName of workbook.SheetNames) {
+          const sheet = workbook.Sheets[sheetName];
+          const data = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+          sheets[sheetName] = data;
+          textParts.push(`=== Sheet: ${sheetName} ===`);
+          for (const row of data) {
+            if (row && row.some(cell => cell !== null && cell !== undefined && cell !== '')) {
+              textParts.push(row.map(cell => cell ?? '').join('\t'));
+            }
+          }
+        }
+        rawText = textParts.join('\n');
+        extractedData = { sheets, sheetNames: workbook.SheetNames };
+      } catch (e) {
+        rawText = `[Error extracting Excel: ${e instanceof Error ? e.message : 'Unknown'}]`;
+      }
+    } else if (lowerName.endsWith('.csv')) {
+      try {
+        const csvText = fileBuffer.toString('utf-8');
+        const parseResult = Papa.parse(csvText, { header: false, skipEmptyLines: true });
+        const csvData = parseResult.data as (string | number | null)[][];
+        const sheetName = fileName.replace(/\.csv$/i, '');
+        rawText = csvData.map(row => row.map(c => c ?? '').join('\t')).join('\n');
+        extractedData = { sheets: { [sheetName]: csvData }, sheetNames: [sheetName], csvData, rowCount: csvData.length };
+      } catch (e) {
+        rawText = `[Error extracting CSV: ${e instanceof Error ? e.message : 'Unknown'}]`;
+      }
+    } else {
+      rawText = fileBuffer.toString('utf-8');
+    }
+
+    // Classify document from parsed text
+    const documentType = rawText.length > 10 && !rawText.startsWith('[Error') && !rawText.startsWith('[Image:')
+      ? classifyDocument(rawText, fileName)
+      : 'other';
+
+    // Create document record with parsed content — ready for extraction/analysis
     const [document] = await db
       .insert(documents)
       .values({
         dealId,
         filename: fileName,
+        type: documentType as any,
         status: 'uploaded',
+        uploadedAt: new Date(),
+        rawText,
+        extractedData,
       })
       .returning();
 
-    // Process INLINE — NOT fire-and-forget. On Vercel serverless, the function
-    // dies after the response is sent. Processing must complete before we return.
-    // maxDuration = 300 gives us 5 minutes for the full pipeline.
-    await processDocument(document.id, fileBuffer, fileName, fileType);
-
-    // Return the fully processed document
-    const [processed] = await db
-      .select()
-      .from(documents)
-      .where(eq(documents.id, document.id))
-      .limit(1);
+    console.log(`[Upload] ${fileName} (${(fileBuffer.length / 1024).toFixed(0)}KB) → ${documentType} — parsed inline, ready for extraction`);
 
     return NextResponse.json({
       success: true,
-      data: processed,
+      data: {
+        id: document.id,
+        filename: fileName,
+        type: documentType,
+        size: fileBuffer.length,
+        status: 'uploaded',
+      },
     });
   } catch (error) {
     console.error('Error uploading document:', error);

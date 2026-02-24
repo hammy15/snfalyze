@@ -13,8 +13,8 @@ export const maxDuration = 300;
 // CONSTANTS
 // ============================================================================
 
-/** Max text per AI call. Sheets larger than this get chunked. */
-const MAX_CHUNK_SIZE = 300_000;
+/** Max text per AI call. Smaller chunks = faster AI response times. */
+const MAX_CHUNK_SIZE = 100_000;
 
 /** Max tokens for a full sheet extraction (single chunk) */
 const TEXT_MAX_TOKENS = 16384;
@@ -24,6 +24,15 @@ const CHUNK_MAX_TOKENS = 8192;
 
 /** Max tokens for image extraction response */
 const IMAGE_MAX_TOKENS = 8000;
+
+/**
+ * Hard deadline in ms — abort processing before Vercel kills the function.
+ * Set to 260s (40s safety margin before Vercel's 300s limit).
+ */
+const HARD_DEADLINE_MS = 260_000;
+
+/** Minimum time remaining (ms) to start a new AI call */
+const MIN_TIME_FOR_AI_CALL_MS = 95_000;
 
 // ============================================================================
 // JSON PARSING UTILITIES (from vision-extractor.ts)
@@ -344,24 +353,83 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Track time budget — abort before Vercel kills us
+    const routeStartTime = Date.now();
+    const getElapsed = () => Date.now() - routeStartTime;
+    const getRemainingMs = () => HARD_DEADLINE_MS - getElapsed();
+    const hasTimeForAiCall = () => getRemainingMs() > MIN_TIME_FOR_AI_CALL_MS;
+
     // ========================================================================
-    // SMART EXCEL EXTRACTION — Try structured parsing first for Excel files
+    // SMART EXTRACTION — Try structured parsing first for Excel AND CSV files
     // ========================================================================
-    const excelDocs = docs.filter(d => {
+    const structuredDocs = docs.filter(d => {
       const ext = d.filename?.split('.').pop()?.toLowerCase();
-      return (ext === 'xlsx' || ext === 'xls') && d.extractedData;
+      return (ext === 'xlsx' || ext === 'xls' || ext === 'csv') && (d.extractedData || d.rawText);
     });
 
-    if (excelDocs.length > 0) {
+    if (structuredDocs.length > 0) {
       try {
         console.log('='.repeat(60));
-        console.log('SMART EXCEL EXTRACTION — Direct cell parsing');
-        console.log(`Attempting structured extraction on ${excelDocs.length} Excel file(s)`);
+        console.log('SMART EXTRACTION — Direct structured parsing');
+        console.log(`Attempting structured extraction on ${structuredDocs.length} file(s)`);
         console.log('='.repeat(60));
 
         // Convert stored sheet data to SheetExtraction format
-        const smartFiles = excelDocs.map(doc => {
+        const smartFiles = structuredDocs.map(doc => {
+          const ext = doc.filename?.split('.').pop()?.toLowerCase();
           const extracted = doc.extractedData as Record<string, any>;
+
+          if (ext === 'csv') {
+            // CSV: parse rawText into rows
+            const rawText = doc.rawText || '';
+            const lines = rawText.split('\n').filter(l => l.trim().length > 0);
+            const data: (string | number | null)[][] = lines.map(line => {
+              // Handle CSV parsing (respect quoted fields)
+              const cells: (string | number | null)[] = [];
+              let current = '';
+              let inQuotes = false;
+              for (let i = 0; i < line.length; i++) {
+                const ch = line[i];
+                if (ch === '"') {
+                  inQuotes = !inQuotes;
+                } else if (ch === ',' && !inQuotes) {
+                  const val = current.trim();
+                  const num = val.replace(/[$,()%]/g, '').trim();
+                  const parsed = num ? Number(num) : NaN;
+                  cells.push(!isNaN(parsed) && num.length > 0 && !/^[A-Za-z]/.test(val) ? parsed : val || null);
+                  current = '';
+                } else {
+                  current += ch;
+                }
+              }
+              // Push last cell
+              const val = current.trim();
+              const num = val.replace(/[$,()%]/g, '').trim();
+              const parsed = num ? Number(num) : NaN;
+              cells.push(!isNaN(parsed) && num.length > 0 && !/^[A-Za-z]/.test(val) ? parsed : val || null);
+              return cells;
+            });
+
+            const headers = data.length > 0
+              ? data[0].map(c => c != null ? String(c) : '')
+              : [];
+
+            const sheet: SheetExtraction = {
+              sheetName: doc.filename?.replace(/\.csv$/i, '') || 'Sheet 1',
+              sheetType: 'unknown' as const,
+              rowCount: data.length,
+              columnCount: headers.length,
+              headers,
+              data,
+              facilitiesDetected: [],
+              periodsDetected: [],
+              metadata: { hasFormulas: false, hasMergedCells: false, firstDataRow: 1 },
+            };
+
+            return { documentId: doc.id, filename: doc.filename || 'unknown.csv', sheets: [sheet] };
+          }
+
+          // Excel: use stored sheet data
           const sheetsData = extracted?.sheets || {};
           const sheetNames = extracted?.sheetNames || Object.keys(sheetsData);
 
@@ -398,14 +466,14 @@ export async function POST(request: NextRequest) {
             `method=${smartResult.extractionMethod}`);
           console.log(`Warnings: ${smartResult.warnings.join('; ')}`);
 
-          if (smartResult.confidence >= 0.5 && smartResult.facilityClassifications.length > 0) {
+          if (smartResult.confidence >= 0.3 && smartResult.facilityClassifications.length > 0) {
             console.log('Smart extraction succeeded — returning structured data');
 
             // Convert to stage data format
             const stageData = smartResultToStageData(smartResult);
 
             // Update doc status
-            for (const doc of excelDocs) {
+            for (const doc of structuredDocs) {
               await db
                 .update(documents)
                 .set({
@@ -486,18 +554,26 @@ export async function POST(request: NextRequest) {
     // ========================================================================
 
     console.log('='.repeat(60));
-    console.log('AI VISION EXTRACTION — SHEET-BY-SHEET');
+    console.log('AI VISION EXTRACTION — SHEET-BY-SHEET (with time budget)');
     console.log(`Processing ${docs.length} file(s) sequentially`);
+    console.log(`Time budget: ${(getRemainingMs() / 1000).toFixed(0)}s remaining`);
     console.log('='.repeat(60));
 
     const results: VisionExtractionResult[] = [];
     const processingErrors: string[] = [];
 
-    // Process files ONE AT A TIME (sequential)
+    // Process files ONE AT A TIME (sequential) with time budget
     for (const doc of docs) {
-      console.log(`\n--- Processing: ${doc.filename} ---`);
+      // Check time budget before starting a new file
+      if (!hasTimeForAiCall()) {
+        console.warn(`[Time Budget] Only ${(getRemainingMs() / 1000).toFixed(0)}s remaining — skipping ${doc.filename}`);
+        processingErrors.push(`${doc.filename}: Skipped — insufficient time budget (${(getRemainingMs() / 1000).toFixed(0)}s remaining)`);
+        continue;
+      }
+
+      console.log(`\n--- Processing: ${doc.filename} (${(getRemainingMs() / 1000).toFixed(0)}s remaining) ---`);
       try {
-        const result = await extractDocument(doc);
+        const result = await extractDocument(doc, routeStartTime);
         results.push(result);
 
         await db
@@ -606,12 +682,12 @@ export async function POST(request: NextRequest) {
 // DOCUMENT-LEVEL EXTRACTION
 // ============================================================================
 
-async function extractDocument(doc: typeof documents.$inferSelect): Promise<VisionExtractionResult> {
+async function extractDocument(doc: typeof documents.$inferSelect, routeStartTime: number): Promise<VisionExtractionResult> {
   const ext = doc.filename?.split('.').pop()?.toLowerCase() || 'pdf';
   const start = Date.now();
 
   if (ext === 'xlsx' || ext === 'xls' || ext === 'csv' || ext === 'pdf') {
-    return extractFromText(doc, ext, start);
+    return extractFromText(doc, ext, start, routeStartTime);
   } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
     return extractFromImage(doc, ext, start);
   } else {
@@ -627,15 +703,21 @@ async function extractFromText(
   doc: typeof documents.$inferSelect,
   ext: string,
   start: number,
+  routeStartTime: number,
 ): Promise<VisionExtractionResult> {
   const rawText = doc.rawText || '';
   const docExtractedData = doc.extractedData as Record<string, any> | null;
+
+  // Time budget helpers
+  const getRouteElapsed = () => Date.now() - routeStartTime;
+  const getRouteRemaining = () => HARD_DEADLINE_MS - getRouteElapsed();
+  const canStartAiCall = () => getRouteRemaining() > MIN_TIME_FOR_AI_CALL_MS;
 
   if (!rawText || rawText.length < 20 || rawText.startsWith('[Error')) {
     throw new Error(`No parsed text available for ${doc.filename}. Raw text: ${rawText?.slice(0, 100)}`);
   }
 
-  console.log(`  [${doc.filename}] Total text: ${(rawText.length / 1024).toFixed(0)}KB`);
+  console.log(`  [${doc.filename}] Total text: ${(rawText.length / 1024).toFixed(0)}KB, time remaining: ${(getRouteRemaining() / 1000).toFixed(0)}s`);
 
   // Step 1: Split into individual sheets
   const sheets = splitIntoSheets(rawText);
@@ -648,6 +730,13 @@ async function extractFromText(
   const rawAnalysisParts: string[] = [];
 
   for (let sheetIdx = 0; sheetIdx < sheets.length; sheetIdx++) {
+    // Time budget check before each sheet
+    if (!canStartAiCall()) {
+      console.warn(`  [${doc.filename}] Time budget exhausted (${(getRouteRemaining() / 1000).toFixed(0)}s left) — skipping sheet ${sheetIdx + 1}/${sheets.length}`);
+      allWarnings.push(`Sheet "${sheets[sheetIdx].name}" skipped — time budget exhausted`);
+      break;
+    }
+
     const sheet = sheets[sheetIdx];
 
     // Compress text to remove empty rows and excessive whitespace
@@ -656,7 +745,7 @@ async function extractFromText(
     const compressedSize = sheet.content.length;
     const saved = ((1 - compressedSize / originalSize) * 100).toFixed(0);
 
-    console.log(`  [${doc.filename}] Sheet ${sheetIdx + 1}/${sheets.length}: "${sheet.name}" (${(originalSize / 1024).toFixed(0)}KB -> ${(compressedSize / 1024).toFixed(0)}KB, ${saved}% compressed)`);
+    console.log(`  [${doc.filename}] Sheet ${sheetIdx + 1}/${sheets.length}: "${sheet.name}" (${(originalSize / 1024).toFixed(0)}KB -> ${(compressedSize / 1024).toFixed(0)}KB, ${saved}% compressed) [${(getRouteRemaining() / 1000).toFixed(0)}s remaining]`);
 
     // Chunk large sheets
     const chunks = chunkSheet(sheet);
@@ -665,38 +754,48 @@ async function extractFromText(
       console.log(`    Chunked into ${chunks.length} segments`);
     }
 
-    // Process ALL chunks in parallel (router handles concurrency internally)
+    // Process chunks SEQUENTIALLY with time budget checks between each
+    // (parallel was causing multiple slow AI calls to stack and exceed deadline)
     const chunkFacilities: any[] = [];
 
-    console.log(`    Processing ${chunks.length} chunk(s) in parallel...`);
+    console.log(`    Processing ${chunks.length} chunk(s) sequentially with time budget...`);
 
-    const chunkResults = await Promise.allSettled(
-      chunks.map(async (chunk) => {
-        const chunkLabel = chunks.length > 1
-          ? `chunk ${chunk.chunkIndex + 1}/${chunk.totalChunks}`
-          : 'full sheet';
+    for (const chunk of chunks) {
+      // Time budget check before each chunk
+      if (!canStartAiCall()) {
+        console.warn(`    Time budget exhausted (${(getRouteRemaining() / 1000).toFixed(0)}s left) — skipping remaining chunks`);
+        allWarnings.push(`Sheet "${chunk.sheetName}" chunk ${chunk.chunkIndex + 1}/${chunk.totalChunks} skipped — time budget`);
+        break;
+      }
 
+      const chunkLabel = chunks.length > 1
+        ? `chunk ${chunk.chunkIndex + 1}/${chunk.totalChunks}`
+        : 'full sheet';
+
+      try {
         const userPrompt = chunks.length > 1
           ? `Extract all financial data from this section (${chunkLabel}) of sheet "${chunk.sheetName}" in document "${doc.filename}".\nThis is part of a larger sheet — extract everything you see in this segment.\n\n${chunk.content}`
           : `Extract all financial data from sheet "${chunk.sheetName}" in document "${doc.filename}".\n\n${chunk.content}`;
 
         const isChunked = chunks.length > 1;
         const router = getRouter();
-        const response = await router.route({
-          taskType: 'vision_extraction',
-          systemPrompt: FINANCIAL_EXTRACTION_SYSTEM,
-          userPrompt,
-          maxTokens: isChunked ? CHUNK_MAX_TOKENS : TEXT_MAX_TOKENS,
-          responseFormat: 'json',
-        });
 
-        return { chunk, chunkLabel, content: response.content || '' };
-      })
-    );
+        // Race the AI call against our own time budget (slightly shorter than provider timeout)
+        const budgetTimeoutMs = Math.min(getRouteRemaining() - 5_000, 90_000);
+        const response = await Promise.race([
+          router.route({
+            taskType: 'vision_extraction',
+            systemPrompt: FINANCIAL_EXTRACTION_SYSTEM,
+            userPrompt,
+            maxTokens: isChunked ? CHUNK_MAX_TOKENS : TEXT_MAX_TOKENS,
+            responseFormat: 'json',
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`Time budget exceeded (${(getRouteRemaining() / 1000).toFixed(0)}s remaining)`)), budgetTimeoutMs)
+          ),
+        ]);
 
-    for (const outcome of chunkResults) {
-      if (outcome.status === 'fulfilled') {
-        const { chunk, chunkLabel, content } = outcome.value;
+        const content = response.content || '';
         rawAnalysisParts.push(`--- Sheet: ${chunk.sheetName} (${chunkLabel}) ---\n${content}`);
 
         const { data: parsed, warnings } = robustJsonParse(content);
@@ -709,11 +808,13 @@ async function extractFromText(
           allWarnings.push(...parsed.warnings);
         }
 
-        console.log(`    -> ${chunkLabel}: ${facilities.length} facilities, ${facilities.reduce((s: number, f: any) => s + (f.lineItems?.length || 0), 0)} line items`);
-      } else {
-        const msg = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
-        console.error(`    ERROR: ${msg}`);
-        allWarnings.push(`Failed to extract chunk: ${msg}`);
+        console.log(`    -> ${chunkLabel}: ${facilities.length} facilities, ${facilities.reduce((s: number, f: any) => s + (f.lineItems?.length || 0), 0)} line items [${(getRouteRemaining() / 1000).toFixed(0)}s remaining]`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`    ERROR [${chunkLabel}]: ${msg}`);
+        allWarnings.push(`Failed to extract ${chunkLabel}: ${msg}`);
+        // If time budget error, break out of chunk loop
+        if (msg.includes('Time budget')) break;
       }
     }
 

@@ -5,6 +5,9 @@ import { type VisionExtractionResult } from '@/lib/extraction/vision-extractor';
 import { getRouter } from '@/lib/ai';
 import type { SheetExtraction } from '@/lib/extraction/excel-extractor';
 import { extractSmartExcel, isStructuredExcelData, smartResultToStageData } from '@/lib/extraction/smart-excel';
+import { extractPLData } from '@/lib/extraction/pl-extractor';
+import { extractCensusData } from '@/lib/extraction/census-extractor';
+import { extractRatesFromTable } from '@/lib/extraction/rate-extractor';
 
 // Allow up to 300s for AI extraction (Vercel Pro)
 export const maxDuration = 300;
@@ -316,6 +319,213 @@ Rules:
 - Return ONLY valid JSON. Start with { and end with }.`;
 
 // ============================================================================
+// DIRECT EXTRACTION — Rule-based, no AI needed (instant)
+// ============================================================================
+
+/**
+ * Try to extract financial data directly from stored sheet data using
+ * PL/Census/Rate extractors. No AI call needed — runs in <1 second.
+ * Returns null if no meaningful data could be extracted.
+ */
+function tryDirectExtraction(doc: typeof documents.$inferSelect): VisionExtractionResult | null {
+  const start = Date.now();
+  const extracted = doc.extractedData as Record<string, any> | null;
+  const sheets = extracted?.sheets as Record<string, any[][]> | undefined;
+
+  if (!sheets || Object.keys(sheets).length === 0) return null;
+
+  const allFacilities: any[] = [];
+  const allSheetResults: any[] = [];
+  const allWarnings: string[] = [];
+  let sheetIdx = 0;
+
+  for (const [sheetName, sheetData] of Object.entries(sheets)) {
+    if (!Array.isArray(sheetData) || sheetData.length < 3) continue;
+
+    try {
+      // Try P&L extraction
+      const plData = extractPLData(sheetData, sheetName, []);
+      // Try census extraction
+      const censusData = extractCensusData(sheetData, sheetName, []);
+      // Try rate extraction
+      const rateData = extractRatesFromTable(sheetData, doc.id, []);
+
+      if (plData.length === 0 && censusData.length === 0 && rateData.length === 0) {
+        allSheetResults.push({
+          name: sheetName,
+          index: sheetIdx,
+          type: 'unknown' as const,
+          facilitiesFound: [],
+          periodsFound: [],
+          confidence: 0.2,
+        });
+        sheetIdx++;
+        continue;
+      }
+
+      // Build facilities from P&L data
+      const facilityMap = new Map<string, any>();
+
+      for (const period of plData) {
+        const facName = period.facilityName || doc.filename?.replace(/\.(csv|xlsx|xls)$/i, '') || 'Unknown';
+        if (!facilityMap.has(facName)) {
+          facilityMap.set(facName, {
+            name: facName,
+            state: undefined,
+            city: undefined,
+            beds: undefined,
+            periods: [],
+            lineItems: [],
+            census: undefined,
+            payerRates: undefined,
+            confidence: 0.75,
+          });
+        }
+        const fac = facilityMap.get(facName)!;
+        fac.periods.push({
+          label: period.periodLabel,
+          startDate: period.periodStart.toISOString().split('T')[0],
+          endDate: period.periodEnd.toISOString().split('T')[0],
+          type: period.isAnnualized ? 'annual' : 'monthly',
+        });
+
+        // Map P&L fields to lineItems
+        const addItem = (cat: string, subcat: string, label: string, value: number | undefined) => {
+          if (value !== undefined && value !== 0) {
+            fac.lineItems.push({
+              category: cat,
+              subcategory: subcat,
+              label,
+              values: [{ period: period.periodLabel, value }],
+              annual: period.isAnnualized ? value : undefined,
+              confidence: 0.8,
+            });
+          }
+        };
+
+        addItem('revenue', 'total_revenue', 'Total Revenue', period.totalRevenue);
+        addItem('revenue', 'medicare_revenue', 'Medicare Revenue', period.medicareRevenue);
+        addItem('revenue', 'medicaid_revenue', 'Medicaid Revenue', period.medicaidRevenue);
+        addItem('revenue', 'managed_care_revenue', 'Managed Care Revenue', period.managedCareRevenue);
+        addItem('revenue', 'private_revenue', 'Private Pay Revenue', period.privatePayRevenue);
+        addItem('revenue', 'other_revenue', 'Other Revenue', period.otherRevenue);
+        addItem('expense', 'labor_total', 'Total Labor', period.totalLaborCost);
+        addItem('expense', 'labor_nursing', 'Nursing Labor', period.nursingLabor);
+        addItem('expense', 'labor_agency', 'Agency Labor', period.agencyLabor);
+        addItem('expense', 'labor_benefits', 'Employee Benefits', period.employeeBenefits);
+        addItem('expense', 'dietary', 'Food/Dietary', period.foodCost);
+        addItem('expense', 'supplies', 'Supplies', period.suppliesCost);
+        addItem('expense', 'utilities', 'Utilities', period.utilitiesCost);
+        addItem('expense', 'insurance', 'Insurance', period.insuranceCost);
+        addItem('expense', 'property_tax', 'Property Tax', period.propertyTax);
+        addItem('expense', 'management_fee', 'Management Fee', period.managementFee);
+        addItem('expense', 'other_expense', 'Other Expenses', period.otherExpenses);
+        addItem('expense', 'total_expenses', 'Total Expenses', period.totalExpenses);
+        addItem('metric', 'ebitdar', 'EBITDAR', period.ebitdar);
+        addItem('metric', 'ebitda', 'EBITDA', period.ebitda);
+        addItem('metric', 'noi', 'Net Operating Income', period.noi);
+        addItem('metric', 'net_income', 'Net Income', period.netIncome);
+      }
+
+      // Add census data to matching facilities
+      for (const census of censusData) {
+        const facName = census.facilityName || doc.filename?.replace(/\.(csv|xlsx|xls)$/i, '') || 'Unknown';
+        if (!facilityMap.has(facName)) {
+          facilityMap.set(facName, {
+            name: facName,
+            periods: [],
+            lineItems: [],
+            confidence: 0.7,
+          });
+        }
+        const fac = facilityMap.get(facName)!;
+        fac.census = {
+          periods: [census.periodLabel],
+          medicarePartADays: [census.medicarePartADays],
+          medicareAdvantageDays: [census.medicareAdvantageDays],
+          managedCareDays: [census.managedCareDays],
+          medicaidDays: [census.medicaidDays],
+          managedMedicaidDays: [census.managedMedicaidDays],
+          privateDays: [census.privateDays],
+          hospiceDays: [census.hospiceDays],
+          vaContractDays: [census.vaContractDays],
+          otherDays: [census.otherDays],
+          totalDays: [census.totalPatientDays],
+          avgDailyCensus: [census.avgDailyCensus],
+          occupancy: [census.occupancyRate],
+          beds: census.totalBeds,
+        };
+      }
+
+      // Add rate data to matching facilities
+      for (const rate of rateData) {
+        const facName = [...facilityMap.keys()][0] || 'Unknown';
+        const fac = facilityMap.get(facName);
+        if (fac) {
+          fac.payerRates = {
+            effectiveDate: rate.effectiveDate?.toISOString()?.split('T')[0],
+            medicarePartAPpd: rate.medicarePartAPpd,
+            medicareAdvantagePpd: rate.medicareAdvantagePpd,
+            managedCarePpd: rate.managedCarePpd,
+            medicaidPpd: rate.medicaidPpd,
+            managedMedicaidPpd: rate.managedMedicaidPpd,
+            privatePpd: rate.privatePpd,
+            hospicePpd: rate.hospicePpd,
+            vaContractPpd: rate.vaContractPpd,
+          };
+        }
+      }
+
+      const facList = [...facilityMap.values()];
+      allFacilities.push(...facList);
+
+      // Determine sheet type
+      let sheetType: 'pl' | 'census' | 'rates' | 'unknown' = 'unknown';
+      if (plData.length > 0) sheetType = 'pl';
+      else if (censusData.length > 0) sheetType = 'census';
+      else if (rateData.length > 0) sheetType = 'rates';
+
+      allSheetResults.push({
+        name: sheetName,
+        index: sheetIdx,
+        type: sheetType,
+        facilitiesFound: facList.map(f => f.name),
+        periodsFound: facList.flatMap(f => f.periods?.map((p: any) => p.label || p) || []),
+        confidence: 0.75,
+      });
+    } catch (err) {
+      allWarnings.push(`Direct extraction error on sheet "${sheetName}": ${err instanceof Error ? err.message : 'Unknown'}`);
+    }
+
+    sheetIdx++;
+  }
+
+  // Only return if we found meaningful data
+  const totalLineItems = allFacilities.reduce((sum, f) => sum + (f.lineItems?.length || 0), 0);
+  if (allFacilities.length === 0 || totalLineItems < 3) return null;
+
+  const processingTimeMs = Date.now() - start;
+  const confidence = Math.min(
+    0.7 + (totalLineItems > 10 ? 0.1 : 0) + (allFacilities.some(f => f.census) ? 0.1 : 0),
+    0.95,
+  );
+
+  console.log(`[Direct Extraction] ${doc.filename}: ${allFacilities.length} facilities, ${totalLineItems} line items in ${processingTimeMs}ms`);
+
+  return {
+    documentId: doc.id,
+    filename: doc.filename || 'unknown',
+    facilities: allFacilities,
+    sheets: allSheetResults,
+    rawAnalysis: '',
+    confidence,
+    processingTimeMs,
+    warnings: allWarnings,
+    errors: [],
+  };
+}
+
+// ============================================================================
 // POST HANDLER
 // ============================================================================
 
@@ -360,9 +570,73 @@ export async function POST(request: NextRequest) {
     const hasTimeForAiCall = () => getRemainingMs() > MIN_TIME_FOR_AI_CALL_MS;
 
     // ========================================================================
+    // FAST PATH: Direct extraction using PL/Census/Rate extractors (no AI)
+    // Works for CSV and Excel files with stored sheet data — runs in <1 second
+    // ========================================================================
+    const directResults: VisionExtractionResult[] = [];
+    const docsNeedingAi: typeof docs = [];
+
+    for (const doc of docs) {
+      const ext = doc.filename?.split('.').pop()?.toLowerCase();
+      if ((ext === 'csv' || ext === 'xlsx' || ext === 'xls') && (doc.extractedData as any)?.sheets) {
+        const directResult = tryDirectExtraction(doc);
+        if (directResult && directResult.facilities.some(f => f.lineItems?.length >= 3)) {
+          directResults.push(directResult);
+          console.log(`[Fast Path] ${doc.filename}: Direct extraction succeeded — ${directResult.facilities.length} facilities, ${directResult.facilities.reduce((s, f) => s + (f.lineItems?.length || 0), 0)} line items`);
+
+          // Update doc status
+          await db.update(documents).set({
+            status: 'complete',
+            processedAt: new Date(),
+            extractedData: {
+              ...(doc.extractedData as Record<string, any>),
+              method: 'direct_extraction',
+              facilitiesCount: directResult.facilities.length,
+              confidence: directResult.confidence,
+              processingTimeMs: directResult.processingTimeMs,
+            },
+          }).where(eq(documents.id, doc.id));
+
+          continue;
+        }
+      }
+      docsNeedingAi.push(doc);
+    }
+
+    // If ALL docs were handled by direct extraction, return immediately
+    if (docsNeedingAi.length === 0 && directResults.length > 0) {
+      const allFacilities = directResults.flatMap(r => r.facilities);
+      const allSheets = directResults.flatMap(r => r.sheets);
+      const overallConfidence = directResults.reduce((sum, r) => sum + r.confidence, 0) / directResults.length;
+
+      return NextResponse.json({
+        success: true,
+        extractionMethod: 'direct',
+        data: {
+          facilities: allFacilities,
+          sheets: allSheets,
+          summary: {
+            totalFacilities: allFacilities.length,
+            totalLineItems: allFacilities.reduce((sum, f) => sum + f.lineItems.length, 0),
+            totalSheets: allSheets.length,
+            overallConfidence,
+            processingTimeMs: directResults.reduce((sum, r) => sum + r.processingTimeMs, 0),
+            hasCensusData: allFacilities.some(f => f.census && f.census.totalDays?.length > 0),
+            hasPayerRates: allFacilities.some(f => f.payerRates && f.payerRates.medicarePartAPpd),
+          },
+          warnings: directResults.flatMap(r => r.warnings),
+          errors: [],
+        },
+      });
+    }
+
+    // For remaining docs, continue with smart extraction and AI fallback
+    const docs_for_extraction = docsNeedingAi.length > 0 ? docsNeedingAi : docs;
+
+    // ========================================================================
     // SMART EXTRACTION — Try structured parsing first for Excel AND CSV files
     // ========================================================================
-    const structuredDocs = docs.filter(d => {
+    const structuredDocs = docs_for_extraction.filter(d => {
       const ext = d.filename?.split('.').pop()?.toLowerCase();
       return (ext === 'xlsx' || ext === 'xls' || ext === 'csv') && (d.extractedData || d.rawText);
     });
@@ -555,7 +829,7 @@ export async function POST(request: NextRequest) {
 
     console.log('='.repeat(60));
     console.log('AI VISION EXTRACTION — SHEET-BY-SHEET (with time budget)');
-    console.log(`Processing ${docs.length} file(s) sequentially`);
+    console.log(`Processing ${docs_for_extraction.length} file(s) sequentially`);
     console.log(`Time budget: ${(getRemainingMs() / 1000).toFixed(0)}s remaining`);
     console.log('='.repeat(60));
 
@@ -563,7 +837,7 @@ export async function POST(request: NextRequest) {
     const processingErrors: string[] = [];
 
     // Process files ONE AT A TIME (sequential) with time budget
-    for (const doc of docs) {
+    for (const doc of docs_for_extraction) {
       // Check time budget before starting a new file
       if (!hasTimeForAiCall()) {
         console.warn(`[Time Budget] Only ${(getRemainingMs() / 1000).toFixed(0)}s remaining — skipping ${doc.filename}`);
@@ -610,20 +884,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Cross-document merge: combine direct extraction results with AI results
+    const allResults = [...directResults, ...results];
+
     console.log('\n' + '='.repeat(60));
     console.log('EXTRACTION COMPLETE');
-    console.log(`  Files: ${results.length}/${docs.length}`);
-    console.log(`  Facilities: ${results.reduce((s, r) => s + r.facilities.length, 0)}`);
-    console.log(`  Line items: ${results.reduce((s, r) => s + r.facilities.reduce((s2, f) => s2 + f.lineItems.length, 0), 0)}`);
+    console.log(`  AI Files: ${results.length}/${docs_for_extraction.length}, Direct: ${directResults.length}`);
+    const totalFacs = allResults.reduce((s, r) => s + r.facilities.length, 0);
+    const totalItems = allResults.reduce((s, r) => s + r.facilities.reduce((s2, f) => s2 + f.lineItems.length, 0), 0);
+    console.log(`  Facilities: ${totalFacs}`);
+    console.log(`  Line items: ${totalItems}`);
     if (processingErrors.length > 0) console.log(`  Errors: ${processingErrors.length}`);
     console.log('='.repeat(60));
-
-    // Cross-document merge: same facility from different docs should combine data
-    const allFacilitiesRaw = results.flatMap(r => r.facilities);
+    const allFacilitiesRaw = allResults.flatMap(r => r.facilities);
     const allFacilities = mergeChunkFacilities(allFacilitiesRaw, 'cross-sheet');
-    const allSheets = results.flatMap(r => r.sheets);
-    const overallConfidence = results.length > 0
-      ? results.reduce((sum, r) => sum + r.confidence, 0) / results.length
+    const allSheets = allResults.flatMap(r => r.sheets);
+    const overallConfidence = allResults.length > 0
+      ? allResults.reduce((sum, r) => sum + r.confidence, 0) / allResults.length
       : 0;
 
     const response: {

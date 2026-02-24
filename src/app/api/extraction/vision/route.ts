@@ -160,9 +160,42 @@ function splitIntoSheets(rawText: string): { name: string; content: string }[] {
   return sheets;
 }
 
+/**
+ * Strip CPM/financial planning metadata from CSV text.
+ * Removes #hiderow, #hidecolumn, #freezerow/column, Section:, Block: lines,
+ * and rows that are entirely empty commas.
+ */
+function stripMetadataRows(text: string): string {
+  const lines = text.split('\n');
+  const cleaned: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Skip empty lines
+    if (!trimmed) continue;
+    // Skip metadata markers
+    if (/^#(hide|freeze)(row|column)/i.test(trimmed)) continue;
+    // Skip lines starting with metadata markers (comma-separated with #hide in first cells)
+    if (/^[,\s]*#(hide|freeze)/i.test(trimmed)) continue;
+    // Skip lines that are only commas and whitespace
+    if (/^[,\s]+$/.test(trimmed)) continue;
+    // Skip Section/Block descriptor lines
+    if (/^[,\s]*(Section:|Block:)\s/i.test(trimmed)) continue;
+
+    cleaned.push(line);
+  }
+
+  return cleaned.join('\n');
+}
+
 /** Compress text by removing empty/whitespace-only rows and collapsing excessive spacing */
 function compressText(text: string): string {
-  return text
+  // First strip CPM metadata if present
+  const stripped = text.includes('#hide') || text.includes('#freeze')
+    ? stripMetadataRows(text)
+    : text;
+
+  return stripped
     .split('\n')
     .filter(line => line.trim().length > 0) // Remove empty lines
     .map(line => line.replace(/\t+/g, '\t').replace(/ {3,}/g, '  ')) // Collapse tabs and spaces
@@ -323,11 +356,280 @@ Rules:
 // ============================================================================
 
 /**
+ * Parse a CPM-format value string like " 1,136,045 " or " (697,555) " or " - " into a number.
+ */
+function parseCpmValue(raw: any): number | null {
+  if (raw === null || raw === undefined) return null;
+  const str = String(raw).trim();
+  if (!str || str === '-' || str === '' || str === '#DIV/0!') return null;
+
+  // Handle percentage values
+  if (str.endsWith('%')) {
+    const pct = parseFloat(str.replace(/[,%]/g, ''));
+    return isNaN(pct) ? null : pct / 100;
+  }
+
+  // Remove quotes, spaces, dollar signs
+  let cleaned = str.replace(/["$\s]/g, '');
+  // Handle parentheses = negative
+  const isNeg = cleaned.startsWith('(') && cleaned.endsWith(')');
+  if (isNeg) cleaned = cleaned.slice(1, -1);
+  // Remove commas
+  cleaned = cleaned.replace(/,/g, '');
+  const num = parseFloat(cleaned);
+  if (isNaN(num)) return null;
+  return isNeg ? -num : num;
+}
+
+/**
+ * Detect and extract from CPM/Adaptive Planning export format.
+ * These CSVs have #hiderow metadata, labels in col 5, data starting at col 8.
+ */
+function tryCpmExtraction(doc: typeof documents.$inferSelect): VisionExtractionResult | null {
+  const start = Date.now();
+  const extracted = doc.extractedData as Record<string, any> | null;
+  const sheets = extracted?.sheets as Record<string, any[][]> | undefined;
+  const rawText = doc.rawText || '';
+
+  if (!sheets || Object.keys(sheets).length === 0) return null;
+
+  // Detect CPM format: look for #hiderow or #hidecolumn in first 10 rows
+  const firstSheet = Object.values(sheets)[0] as any[][];
+  if (!firstSheet || firstSheet.length < 30) return null;
+
+  const isCpm = firstSheet.slice(0, 15).some(row =>
+    row && row.some(cell => String(cell || '').trim().startsWith('#hide') || String(cell || '').trim().startsWith('#freeze'))
+  );
+  if (!isCpm) return null;
+
+  console.log(`[CPM Extractor] Detected CPM/Adaptive Planning format in ${doc.filename}`);
+
+  // Find period header row (contains Jan-XX, Feb-XX patterns)
+  let periodRow = -1;
+  let periods: string[] = [];
+  const periodColStart = 8; // Data starts at col 8 in CPM format
+
+  for (let i = 0; i < Math.min(40, firstSheet.length); i++) {
+    const row = firstSheet[i];
+    if (!row) continue;
+    const matches = row.filter((cell, j) => j >= 8 && /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{2}/i.test(String(cell || '').trim()));
+    if (matches.length >= 6) {
+      periodRow = i;
+      // Extract all period labels from this row
+      for (let j = periodColStart; j < row.length; j++) {
+        const label = String(row[j] || '').trim();
+        if (label && !/^(Whole|PPD|$)/.test(label)) {
+          periods.push(label);
+        } else if (!label && periods.length > 0) {
+          break; // Stop at first empty column after period data
+        }
+      }
+      break;
+    }
+  }
+
+  if (periodRow === -1) {
+    console.log('[CPM Extractor] Could not find period header row');
+    return null;
+  }
+
+  console.log(`[CPM Extractor] Found ${periods.length} periods starting at row ${periodRow}: ${periods.slice(0, 5).join(', ')}...`);
+
+  // Find label column (usually col 5 in CPM format) and T12M column
+  const labelCol = 5;
+  let t12Col = -1;
+  let year1Col = -1;
+
+  const headerRow = firstSheet[periodRow];
+  if (headerRow) {
+    for (let j = 0; j < headerRow.length; j++) {
+      const val = String(headerRow[j] || '').trim();
+      if (val === 'T12M' && t12Col === -1) t12Col = j;
+      if (val === 'Year 1' && year1Col === -1) year1Col = j;
+    }
+  }
+
+  // Extract financial data rows
+  const lineItems: any[] = [];
+  let facilityName = 'Unknown';
+  let state: string | undefined;
+  let beds: number | undefined;
+
+  // Track section for category assignment
+  let currentSection = 'metric';
+
+  for (let i = periodRow + 2; i < firstSheet.length; i++) {
+    const row = firstSheet[i];
+    if (!row) continue;
+
+    const firstCell = String(row[0] || '').trim();
+    if (firstCell.startsWith('#hide') || firstCell.startsWith('#freeze')) continue;
+
+    const label = String(row[labelCol] || '').trim();
+    if (!label) continue;
+
+    // Detect facility name
+    if (label.includes('Proforma') || label.includes('- WA') || label.includes('- OR') || label.includes('- ID')) {
+      facilityName = label.replace(/\s*Proforma\s*$/i, '').trim();
+      const stateMatch = label.match(/- ([A-Z]{2})\b/);
+      if (stateMatch) state = stateMatch[1];
+    }
+
+    // Track section categories
+    if (/Revenue$/i.test(label) && !/Total/.test(label)) currentSection = 'revenue';
+    if (/Operating Expenses|Ancillary Expenses|Therapy Expenses/i.test(label)) currentSection = 'expense';
+    if (/EBITDA|Net Income|Net Operating|Margin/i.test(label)) currentSection = 'metric';
+
+    // Determine category and subcategory
+    let category = currentSection;
+    let subcategory = 'other';
+
+    if (/total revenue/i.test(label)) { category = 'revenue'; subcategory = 'total_revenue'; }
+    else if (/medicaid revenue/i.test(label) && !/managed/i.test(label)) { category = 'revenue'; subcategory = 'medicaid_revenue'; }
+    else if (/medicare revenue/i.test(label)) { category = 'revenue'; subcategory = 'medicare_revenue'; }
+    else if (/private revenue/i.test(label)) { category = 'revenue'; subcategory = 'private_revenue'; }
+    else if (/hmo revenue/i.test(label)) { category = 'revenue'; subcategory = 'managed_care_revenue'; }
+    else if (/managed medicaid/i.test(label) && /revenue/i.test(label)) { category = 'revenue'; subcategory = 'managed_care_revenue'; }
+    else if (/hospice revenue/i.test(label)) { category = 'revenue'; subcategory = 'hospice_revenue'; }
+    else if (/veterans revenue/i.test(label)) { category = 'revenue'; subcategory = 'other_revenue'; }
+    else if (/vent revenue/i.test(label)) { category = 'revenue'; subcategory = 'other_revenue'; }
+    else if (/other revenue/i.test(label)) { category = 'revenue'; subcategory = 'other_revenue'; }
+    else if (/total.*expenses|total.*opex/i.test(label)) { category = 'expense'; subcategory = 'total_expenses'; }
+    else if (/nursing/i.test(label)) { category = 'expense'; subcategory = 'labor_nursing'; }
+    else if (/dietary/i.test(label)) { category = 'expense'; subcategory = 'dietary'; }
+    else if (/housekeeping/i.test(label)) { category = 'expense'; subcategory = 'labor_housekeeping'; }
+    else if (/therapy/i.test(label) && /expense|wage|benefit/i.test(label)) { category = 'expense'; subcategory = 'labor_therapy'; }
+    else if (/administration/i.test(label)) { category = 'expense'; subcategory = 'labor_admin'; }
+    else if (/plant|maintenance/i.test(label)) { category = 'expense'; subcategory = 'utilities'; }
+    else if (/laundry/i.test(label)) { category = 'expense'; subcategory = 'supplies'; }
+    else if (/social services/i.test(label)) { category = 'expense'; subcategory = 'labor_social_services'; }
+    else if (/activities/i.test(label)) { category = 'expense'; subcategory = 'labor_activities'; }
+    else if (/insurance/i.test(label)) { category = 'expense'; subcategory = 'insurance'; }
+    else if (/management fee/i.test(label)) { category = 'expense'; subcategory = 'management_fee'; }
+    else if (/rent|lease/i.test(label)) { category = 'expense'; subcategory = 'rent'; }
+    else if (/property tax/i.test(label)) { category = 'expense'; subcategory = 'property_tax'; }
+    else if (/ebitdar margin/i.test(label)) continue; // Skip margin rows
+    else if (/ebitda margin/i.test(label)) continue;
+    else if (/ebitdar/i.test(label)) { category = 'metric'; subcategory = 'ebitdar'; }
+    else if (/ebitda/i.test(label)) { category = 'metric'; subcategory = 'ebitda'; }
+    else if (/net income margin/i.test(label)) continue;
+    else if (/net income/i.test(label)) { category = 'metric'; subcategory = 'net_income'; }
+    else if (/total patient days/i.test(label)) { category = 'metric'; subcategory = 'total_patient_days'; }
+    else if (/occupancy/i.test(label)) { category = 'metric'; subcategory = 'occupancy'; }
+    else if (/beds/i.test(label)) { category = 'metric'; subcategory = 'beds'; }
+
+    // Extract values
+    const values: any[] = [];
+
+    // T12M column
+    if (t12Col >= 0 && row[t12Col]) {
+      const val = parseCpmValue(row[t12Col]);
+      if (val !== null) {
+        values.push({ period: 'T12M', value: val });
+      }
+    }
+
+    // Year 1-4 columns
+    if (year1Col >= 0) {
+      for (let yr = 0; yr < 4; yr++) {
+        const col = year1Col + yr;
+        if (col < row.length) {
+          const val = parseCpmValue(row[col]);
+          if (val !== null) {
+            values.push({ period: `Year ${yr + 1}`, value: val });
+          }
+        }
+      }
+    }
+
+    // Monthly values (cols 8+)
+    for (let j = periodColStart; j < Math.min(row.length, periodColStart + periods.length); j++) {
+      const val = parseCpmValue(row[j]);
+      if (val !== null) {
+        const periodLabel = periods[j - periodColStart];
+        if (periodLabel) {
+          values.push({ period: periodLabel, value: val });
+        }
+      }
+    }
+
+    if (values.length > 0) {
+      const t12Val = values.find(v => v.period === 'T12M')?.value;
+      const y1Val = values.find(v => v.period === 'Year 1')?.value;
+
+      lineItems.push({
+        category,
+        subcategory,
+        label,
+        values,
+        annual: t12Val || y1Val,
+        confidence: 0.85,
+      });
+
+      // Detect beds
+      if (/beds/i.test(label) && t12Val) {
+        beds = Math.round(t12Val);
+      }
+    }
+  }
+
+  if (lineItems.length < 3) {
+    console.log(`[CPM Extractor] Only ${lineItems.length} line items found — skipping`);
+    return null;
+  }
+
+  const processingTimeMs = Date.now() - start;
+  const confidence = Math.min(0.75 + (lineItems.length > 20 ? 0.1 : 0) + (lineItems.length > 50 ? 0.1 : 0), 0.95);
+
+  const facility = {
+    name: facilityName || doc.filename?.replace(/\.(csv|xlsx|xls)$/i, '') || 'Unknown',
+    state,
+    city: undefined,
+    beds,
+    periods: periods.map(p => ({
+      label: p,
+      startDate: '',
+      endDate: '',
+      type: p.includes('Year') ? 'annual' as const : 'monthly' as const,
+    })),
+    lineItems,
+    census: undefined as any,
+    payerRates: undefined as any,
+    confidence,
+  };
+
+  console.log(`[CPM Extractor] ${facility.name}: ${lineItems.length} line items, ${periods.length} periods in ${processingTimeMs}ms`);
+
+  return {
+    documentId: doc.id,
+    filename: doc.filename || 'unknown',
+    facilities: [facility],
+    sheets: [{
+      name: Object.keys(sheets)[0] || 'Sheet 1',
+      index: 0,
+      type: 'pl' as const,
+      facilitiesFound: [facility.name],
+      periodsFound: periods.slice(0, 10),
+      confidence,
+    }],
+    rawAnalysis: '',
+    confidence,
+    processingTimeMs,
+    warnings: [],
+    errors: [],
+  };
+}
+
+/**
  * Try to extract financial data directly from stored sheet data using
  * PL/Census/Rate extractors. No AI call needed — runs in <1 second.
  * Returns null if no meaningful data could be extracted.
  */
 function tryDirectExtraction(doc: typeof documents.$inferSelect): VisionExtractionResult | null {
+  // First try CPM format (Adaptive Planning export)
+  const cpmResult = tryCpmExtraction(doc);
+  if (cpmResult) return cpmResult;
+
   const start = Date.now();
   const extracted = doc.extractedData as Record<string, any> | null;
   const sheets = extracted?.sheets as Record<string, any[][]> | undefined;
@@ -339,8 +641,20 @@ function tryDirectExtraction(doc: typeof documents.$inferSelect): VisionExtracti
   const allWarnings: string[] = [];
   let sheetIdx = 0;
 
-  for (const [sheetName, sheetData] of Object.entries(sheets)) {
-    if (!Array.isArray(sheetData) || sheetData.length < 3) continue;
+  for (const [sheetName, rawSheetData] of Object.entries(sheets)) {
+    if (!Array.isArray(rawSheetData) || rawSheetData.length < 3) continue;
+
+    // Pre-filter CPM metadata rows (rows starting with #hiderow, #hidecolumn, etc.)
+    const sheetData = rawSheetData.filter((row: any[]) => {
+      if (!Array.isArray(row) || row.length === 0) return false;
+      const firstCell = String(row[0] || '').trim();
+      if (/^#(hide|freeze)/i.test(firstCell)) return false;
+      // Skip rows that are entirely empty or null
+      if (row.every(cell => cell === null || cell === undefined || String(cell).trim() === '')) return false;
+      return true;
+    });
+
+    if (sheetData.length < 3) continue;
 
     try {
       // Try P&L extraction

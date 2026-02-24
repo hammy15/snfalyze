@@ -404,6 +404,25 @@ function tryCpmExtraction(doc: typeof documents.$inferSelect): VisionExtractionR
 
   console.log(`[CPM Extractor] Detected CPM/Adaptive Planning format in ${doc.filename}`);
 
+  // Scan metadata rows for facility name and state
+  let detectedFacilityName = '';
+  let detectedState = '';
+  for (let i = 0; i < Math.min(30, firstSheet.length); i++) {
+    const row = firstSheet[i];
+    if (!row) continue;
+    for (const cell of row) {
+      const val = String(cell || '').trim();
+      // Look for "FacilityName - XX" pattern (where XX is state code)
+      const facMatch = val.match(/^([A-Za-z\s.']+)\s*-\s*([A-Z]{2})(?:\s|$)/);
+      if (facMatch && facMatch[1].length > 2) {
+        detectedFacilityName = facMatch[1].trim();
+        detectedState = facMatch[2];
+        break;
+      }
+    }
+    if (detectedFacilityName) break;
+  }
+
   // Find period header row (contains Jan-XX, Feb-XX patterns)
   let periodRow = -1;
   let periods: string[] = [];
@@ -451,8 +470,8 @@ function tryCpmExtraction(doc: typeof documents.$inferSelect): VisionExtractionR
 
   // Extract financial data rows
   const lineItems: any[] = [];
-  let facilityName = 'Unknown';
-  let state: string | undefined;
+  let facilityName = detectedFacilityName || 'Unknown';
+  let state: string | undefined = detectedState || undefined;
   let beds: number | undefined;
 
   // Track section for category assignment

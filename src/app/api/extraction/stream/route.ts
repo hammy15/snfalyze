@@ -12,6 +12,9 @@ import { join } from 'path';
 import { extractSingleFile, type PerFileExtractionResult } from '@/lib/extraction/per-file-extractor';
 import { populateFromExtraction } from '@/lib/extraction/db-populator';
 
+// Vercel Pro: allow up to 5 minutes for AI analysis/extraction
+export const maxDuration = 300;
+
 // Use /tmp on Vercel (serverless), local uploads folder in development
 const getUploadsDir = () => {
   if (process.env.VERCEL) {

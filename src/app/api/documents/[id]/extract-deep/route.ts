@@ -23,6 +23,9 @@ import { extractPLData, type FinancialPeriod } from '@/lib/extraction/pl-extract
 import { extractCensusData, type CensusPeriod } from '@/lib/extraction/census-extractor';
 import { extractRatesFromText, extractRatesFromTable, type PayerRate } from '@/lib/extraction/rate-extractor';
 
+// Vercel Pro: allow up to 5 minutes for AI analysis/extraction
+export const maxDuration = 300;
+
 // Sheet type classification
 function classifySheetType(data: any[][], sheetName: string): 'pl' | 'census' | 'rates' | 'unknown' {
   const sampleText = data

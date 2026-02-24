@@ -12,6 +12,9 @@ import pdfParse from 'pdf-parse';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 
+// Vercel Pro: allow up to 5 minutes for large file processing + AI analysis
+export const maxDuration = 300;
+
 /**
  * Detect if an Excel file is encrypted with Microsoft RMS (MSMAMARPCRYPT)
  */

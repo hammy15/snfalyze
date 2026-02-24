@@ -12,6 +12,9 @@ import { eq } from 'drizzle-orm';
 import { ClarificationEngine, type ExtractedField } from '@/lib/analysis/document-extraction/clarification-engine';
 import { LearningService } from '@/lib/analysis/document-extraction/learning-service';
 
+// Vercel Pro: allow up to 5 minutes for AI analysis/extraction
+export const maxDuration = 300;
+
 // ============================================================================
 // Types
 // ============================================================================

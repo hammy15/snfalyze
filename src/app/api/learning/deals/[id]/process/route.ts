@@ -12,6 +12,9 @@ import type { SmartExtractionResult } from '@/lib/extraction/smart-excel/types';
 import type { ComparisonResult, FacilityComparison, DetectedPreferences } from '@/lib/learning/types';
 import { readFile } from 'fs/promises';
 
+// Vercel Pro: allow up to 5 minutes for AI analysis/extraction
+export const maxDuration = 300;
+
 /**
  * POST /api/learning/deals/[id]/process — Trigger the extraction → comparison → learning pipeline
  */

@@ -10,6 +10,9 @@ import pdfParse from 'pdf-parse';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 
+// Vercel Pro: allow up to 5 minutes for full document processing pipeline
+export const maxDuration = 300;
+
 /**
  * Detect if an Excel file is encrypted with Microsoft RMS (MSMAMARPCRYPT)
  */
@@ -60,33 +63,62 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Read file buffer UPFRONT — must happen before any async work on Vercel
+    // Vercel kills serverless functions after the response is sent, so
+    // fire-and-forget background processing WILL NOT complete.
+    const arrayBuffer = await file.arrayBuffer();
+    const fileBuffer = Buffer.from(arrayBuffer);
+    const fileName = file.name;
+    const fileType = file.type;
+
+    // Check for encrypted Excel files BEFORE creating DB record
+    const lowerName = fileName.toLowerCase();
+    if ((lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) && isEncryptedExcel(fileBuffer)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `The file "${fileName}" is encrypted with Microsoft's Rights Management Service (RMS). Please open in Excel and save without encryption.`,
+        },
+        { status: 400 }
+      );
+    }
+
     // Create document record
     const [document] = await db
       .insert(documents)
       .values({
         dealId,
-        filename: file.name,
+        filename: fileName,
         status: 'uploaded',
       })
       .returning();
 
-    // Process in background (in production, use a job queue)
-    processDocument(document.id, file).catch(console.error);
+    // Process INLINE — NOT fire-and-forget. On Vercel serverless, the function
+    // dies after the response is sent. Processing must complete before we return.
+    // maxDuration = 300 gives us 5 minutes for the full pipeline.
+    await processDocument(document.id, fileBuffer, fileName, fileType);
+
+    // Return the fully processed document
+    const [processed] = await db
+      .select()
+      .from(documents)
+      .where(eq(documents.id, document.id))
+      .limit(1);
 
     return NextResponse.json({
       success: true,
-      data: document,
+      data: processed,
     });
   } catch (error) {
     console.error('Error uploading document:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to upload document' },
+      { success: false, error: error instanceof Error ? error.message : 'Failed to upload document' },
       { status: 500 }
     );
   }
 }
 
-async function processDocument(documentId: string, file: File) {
+async function processDocument(documentId: string, buffer: Buffer, originalFileName: string, originalFileType: string) {
   try {
     // Update status to parsing
     await db
@@ -94,16 +126,14 @@ async function processDocument(documentId: string, file: File) {
       .set({ status: 'parsing' })
       .where(eq(documents.id, documentId));
 
-    // Read file content
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    // Buffer is already read upfront (critical for Vercel — file blobs die after response)
 
     let rawText = '';
     let extractedData: Record<string, any> = {};
 
     // Process based on file type
-    const fileType = file.type;
-    const fileName = file.name.toLowerCase();
+    const fileType = originalFileType;
+    const fileName = originalFileName.toLowerCase();
 
     if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
       // Extract text from PDF using pdf-parse
@@ -126,7 +156,7 @@ async function processDocument(documentId: string, file: File) {
     ) {
       // Check for encrypted files first (only for Excel formats, not Numbers)
       if (!fileName.endsWith('.numbers') && isEncryptedExcel(buffer)) {
-        const encryptedMsg = `The file "${file.name}" is encrypted with Microsoft's Rights Management Service (RMS). Please open in Excel and save without encryption.`;
+        const encryptedMsg = `The file "${originalFileName}" is encrypted with Microsoft's Rights Management Service (RMS). Please open in Excel and save without encryption.`;
         await db
           .update(documents)
           .set({ status: 'error', errors: [encryptedMsg] })
@@ -181,7 +211,7 @@ async function processDocument(documentId: string, file: File) {
         rawText = textParts.join('\n');
 
         // Convert CSV data to sheets format for deep extraction
-        const sheetName = file.name.replace(/\.csv$/i, '');
+        const sheetName = originalFileName.replace(/\.csv$/i, '');
         extractedData.sheets = { [sheetName]: csvData };
         extractedData.sheetNames = [sheetName];
         extractedData.csvData = csvData;
@@ -212,12 +242,12 @@ async function processDocument(documentId: string, file: File) {
           ],
         });
 
-        rawText = visionResult.content || `[Image: ${file.name}]`;
+        rawText = visionResult.content || `[Image: ${originalFileName}]`;
         extractedData.visionExtracted = true;
-        console.log(`Vision extracted ${rawText.length} chars from image ${file.name}`);
+        console.log(`Vision extracted ${rawText.length} chars from image ${originalFileName}`);
       } catch (visionErr) {
         console.warn('Vision extraction failed, storing image reference:', visionErr);
-        rawText = `[Image file: ${file.name} - Vision extraction unavailable]`;
+        rawText = `[Image file: ${originalFileName} - Vision extraction unavailable]`;
         extractedData.requiresOcr = true;
       }
     } else {
@@ -226,7 +256,7 @@ async function processDocument(documentId: string, file: File) {
     }
 
     // Classify document
-    const documentType = classifyDocument(rawText, file.name);
+    const documentType = classifyDocument(rawText, originalFileName);
 
     // Update status to normalizing
     await db
@@ -255,7 +285,7 @@ async function processDocument(documentId: string, file: File) {
         console.log(`Starting AI analysis for document ${documentId}...`);
         aiAnalysis = await analyzeDocument({
           documentId,
-          filename: file.name,
+          filename: originalFileName,
           documentType,
           rawText,
           spreadsheetData: extractedData.sheets,

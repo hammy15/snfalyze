@@ -14,6 +14,9 @@ import {
   getSession,
 } from '@/lib/extraction/pipeline';
 
+// Vercel Pro: allow up to 5 minutes for AI analysis/extraction
+export const maxDuration = 300;
+
 // ============================================================================
 // POST - Start Pipeline
 // ============================================================================

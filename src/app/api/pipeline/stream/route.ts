@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SmartIntakePipeline, createPipelineSSEResponse } from '@/lib/pipeline/smart-intake';
 
+// Vercel Pro: allow up to 5 minutes for AI analysis/extraction
+export const maxDuration = 300;
+
 // =============================================================================
 // POST — Start Smart Intake Pipeline with SSE streaming
 // =============================================================================

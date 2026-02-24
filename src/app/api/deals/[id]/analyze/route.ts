@@ -3,6 +3,9 @@ import { db, deals, valuations, financialPeriods, assumptions, partnerMatches, r
 import { eq } from 'drizzle-orm';
 import { analyzeDeal } from '@/lib/analysis/engine';
 
+// Vercel Pro: allow up to 5 minutes for AI analysis/extraction
+export const maxDuration = 300;
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }

@@ -10,6 +10,9 @@ import { crossReferenceValidate, type CrossReferenceResult } from '@/lib/extract
 import { generateAISummary, generateQuickSummary, type AISummaryOutput } from '@/lib/extraction/ai-summary-generator';
 import { matchExtractedFacilityToCMS, type NormalizedProviderData } from '@/lib/cms';
 
+// Vercel Pro: allow up to 5 minutes for AI analysis/extraction
+export const maxDuration = 300;
+
 // Use /tmp on Vercel (serverless), local uploads folder in development
 const getUploadsDir = () => {
   if (process.env.VERCEL) {

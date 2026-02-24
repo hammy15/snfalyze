@@ -256,6 +256,73 @@ export const STATE_REIMBURSEMENT_PROGRAMS: Record<string, StateReimbursementProg
     perBedBenefit: { low: 500, high: 1600 },
     requirements: 'CMS star rating, staffing levels',
   },
+  // Cascadia operating states
+  WA: {
+    name: 'Medicaid Quality Incentive Payment',
+    perBedBenefit: { low: 400, high: 1200 },
+    requirements: 'Quality measures, staffing ratios (3.4 HPPD minimum), resident outcomes, survey performance',
+  },
+  OR: {
+    name: 'Quality Incentive Payment (QIP)',
+    perBedBenefit: { low: 350, high: 1100 },
+    requirements: 'Quality metrics, staff-to-resident ratios, abuse prevention, infection control compliance',
+  },
+  ID: {
+    name: 'Medicaid Rate Enhancement',
+    perBedBenefit: { low: 200, high: 800 },
+    requirements: 'Basic quality measures, state survey compliance, bed occupancy thresholds',
+  },
+  MT: {
+    name: 'Medicaid Direct Care Wage Pass-through',
+    perBedBenefit: { low: 250, high: 700 },
+    requirements: 'Direct care wage spending verification, staffing level maintenance',
+  },
+  AZ: {
+    name: 'AHCCCS Quality Performance Program',
+    perBedBenefit: { low: 300, high: 1000 },
+    requirements: 'AHCCCS quality metrics, hospitalization reduction, resident satisfaction scores',
+  },
+  // Additional high-value states
+  FL: {
+    name: 'Quality of Care Performance Program',
+    perBedBenefit: { low: 400, high: 1300 },
+    requirements: 'CMS star rating, deficiency-free surveys, staffing levels',
+  },
+  GA: {
+    name: 'Nursing Facility Quality Enhancement',
+    perBedBenefit: { low: 300, high: 950 },
+    requirements: 'Quality measures, occupancy targets, staff retention metrics',
+  },
+  PA: {
+    name: 'Medical Assistance Quality Incentive',
+    perBedBenefit: { low: 500, high: 1400 },
+    requirements: 'Quality metrics, cost efficiency, patient outcomes',
+  },
+  NC: {
+    name: 'Medicaid Quality Enhancement',
+    perBedBenefit: { low: 350, high: 1000 },
+    requirements: 'Star rating improvement, staffing stability, resident outcomes',
+  },
+  VA: {
+    name: 'Provider Assessment Quality Program',
+    perBedBenefit: { low: 400, high: 1200 },
+    requirements: 'Quality metrics, CMS compliance, staffing adequacy',
+  },
+  NJ: {
+    name: 'Quality Incentive Program',
+    perBedBenefit: { low: 500, high: 1500 },
+    requirements: 'Quality measures, staff ratios, resident satisfaction',
+  },
+  MI: {
+    name: 'Nursing Facility Quality Measure',
+    perBedBenefit: { low: 350, high: 1100 },
+    requirements: 'CMS quality metrics, staffing hours, survey performance',
+  },
+  MN: {
+    name: 'Quality Add-on Payment',
+    perBedBenefit: { low: 400, high: 1300 },
+    requirements: 'Performance-based quality measures, staffing targets',
+  },
 };
 
 // =============================================================================

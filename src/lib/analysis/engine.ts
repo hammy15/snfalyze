@@ -1,5 +1,6 @@
 import { getRouter } from '@/lib/ai';
 import { CASCADIA_SYSTEM_PROMPT, ANALYSIS_PROMPT_TEMPLATE, getStateMarketData } from './prompts';
+import { buildEnrichedSystemPrompt } from './knowledge-bridge';
 import { calculateConfidenceDecay } from '@/lib/utils';
 import {
   getGeographicCapRate,
@@ -63,11 +64,21 @@ export interface AnalysisResult {
 export async function analyzeDeal(deal: AnalysisInput): Promise<AnalysisResult> {
   const prompt = buildAnalysisPrompt(deal);
 
+  // Dynamically enrich the system prompt with NEWO institutional intelligence
+  // loaded specifically for this deal's state, asset type, and characteristics.
+  // This ensures every analysis leverages Cascadia's full knowledge base.
+  const systemPrompt = await buildEnrichedSystemPrompt({
+    state: deal.primaryState,
+    assetType: deal.assetType,
+    dealName: deal.name,
+    beds: deal.beds,
+  });
+
   try {
     const router = getRouter();
     const response = await router.route({
       taskType: 'deal_analysis',
-      systemPrompt: CASCADIA_SYSTEM_PROMPT,
+      systemPrompt,
       userPrompt: prompt,
       maxTokens: 8000,
       metadata: { dealId: deal.id },

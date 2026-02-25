@@ -389,32 +389,73 @@ function tryCpmExtraction(doc: typeof documents.$inferSelect): VisionExtractionR
   const start = Date.now();
   const extracted = doc.extractedData as Record<string, any> | null;
   const sheets = extracted?.sheets as Record<string, any[][]> | undefined;
-  const rawText = doc.rawText || '';
 
   if (!sheets || Object.keys(sheets).length === 0) return null;
 
-  // Detect CPM format: look for #hiderow or #hidecolumn in first 10 rows
-  const firstSheet = Object.values(sheets)[0] as any[][];
-  if (!firstSheet || firstSheet.length < 30) return null;
+  // Try each sheet (skip internal/system sheets like _vena_process_variables)
+  let targetSheet: any[][] | null = null;
+  let targetSheetName = '';
 
-  const isCpm = firstSheet.slice(0, 15).some(row =>
-    row && row.some(cell => String(cell || '').trim().startsWith('#hide') || String(cell || '').trim().startsWith('#freeze'))
-  );
-  if (!isCpm) return null;
+  for (const [sheetName, sheetData] of Object.entries(sheets)) {
+    // Skip internal Vena/CPM system sheets
+    if (/^_vena|^_process|^_config|^_meta/i.test(sheetName)) continue;
+    if (!Array.isArray(sheetData) || sheetData.length < 20) continue;
 
-  console.log(`[CPM Extractor] Detected CPM/Adaptive Planning format in ${doc.filename}`);
+    // Detect CPM format by ANY of these signals:
+    // 1. #hiderow/#hidecolumn markers in cell values
+    // 2. Period headers (Jan-XX, Feb-XX) in columns 2+
+    // 3. Vena sheet names elsewhere in the workbook
+    // 4. Financial terms (Revenue, EBITDAR, etc.) in the data
 
-  // Scan metadata rows for facility name and state
+    const hasHideMarkers = sheetData.slice(0, 20).some(row =>
+      row && row.some(cell => /^#(hide|freeze)/i.test(String(cell || '').trim()))
+    );
+
+    // Look for period header row (Jan-XX pattern) in ANY column position
+    let foundPeriodRow = false;
+    for (let i = 0; i < Math.min(50, sheetData.length); i++) {
+      const row = sheetData[i];
+      if (!row) continue;
+      const monthMatches = row.filter(cell =>
+        /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{2}/i.test(String(cell || '').trim())
+      );
+      if (monthMatches.length >= 6) {
+        foundPeriodRow = true;
+        break;
+      }
+    }
+
+    const hasVenaSheets = Object.keys(sheets).some(n => /^_vena/i.test(n));
+
+    // Look for financial terms in the data
+    const hasFinancialTerms = sheetData.slice(0, 100).some(row =>
+      row && row.some(cell => /\b(EBITDA|Total Revenue|Total Expenses|Net Income)\b/i.test(String(cell || '')))
+    );
+
+    // Accept if: has period headers AND (has hide markers OR vena sheets OR financial terms)
+    if (foundPeriodRow && (hasHideMarkers || hasVenaSheets || hasFinancialTerms)) {
+      targetSheet = sheetData;
+      targetSheetName = sheetName;
+      console.log(`[CPM Extractor] Detected CPM format in sheet "${sheetName}" (hideMarkers=${hasHideMarkers}, vena=${hasVenaSheets}, financial=${hasFinancialTerms})`);
+      break;
+    }
+  }
+
+  if (!targetSheet) return null;
+
+  console.log(`[CPM Extractor] Processing ${doc.filename} sheet "${targetSheetName}" (${targetSheet.length} rows)`);
+
+  // Scan ALL rows for facility name and state (including metadata rows)
   let detectedFacilityName = '';
   let detectedState = '';
-  for (let i = 0; i < Math.min(30, firstSheet.length); i++) {
-    const row = firstSheet[i];
+  for (let i = 0; i < Math.min(50, targetSheet.length); i++) {
+    const row = targetSheet[i];
     if (!row) continue;
     for (const cell of row) {
       const val = String(cell || '').trim();
-      // Look for "FacilityName - XX" pattern (where XX is state code)
+      // Look for "FacilityName - XX" pattern (XX = state code) or "FacilityName - XX Proforma"
       const facMatch = val.match(/^([A-Za-z\s.']+)\s*-\s*([A-Z]{2})(?:\s|$)/);
-      if (facMatch && facMatch[1].length > 2) {
+      if (facMatch && facMatch[1].length > 2 && !facMatch[1].includes('Whole') && !facMatch[1].includes('Prior')) {
         detectedFacilityName = facMatch[1].trim();
         detectedState = facMatch[2];
         break;
@@ -423,43 +464,98 @@ function tryCpmExtraction(doc: typeof documents.$inferSelect): VisionExtractionR
     if (detectedFacilityName) break;
   }
 
-  // Find period header row (contains Jan-XX, Feb-XX patterns)
+  // Find period header row and auto-detect column start
   let periodRow = -1;
   let periods: string[] = [];
-  const periodColStart = 8; // Data starts at col 8 in CPM format
+  let periodColStart = -1;
 
-  for (let i = 0; i < Math.min(40, firstSheet.length); i++) {
-    const row = firstSheet[i];
+  for (let i = 0; i < Math.min(50, targetSheet.length); i++) {
+    const row = targetSheet[i];
     if (!row) continue;
-    const matches = row.filter((cell, j) => j >= 8 && /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{2}/i.test(String(cell || '').trim()));
-    if (matches.length >= 6) {
-      periodRow = i;
-      // Extract all period labels from this row
-      for (let j = periodColStart; j < row.length; j++) {
-        const label = String(row[j] || '').trim();
-        if (label && !/^(Whole|PPD|$)/.test(label)) {
-          periods.push(label);
-        } else if (!label && periods.length > 0) {
-          break; // Stop at first empty column after period data
+
+    // Find the first column with a month pattern
+    for (let j = 0; j < row.length; j++) {
+      if (/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{2}/i.test(String(row[j] || '').trim())) {
+        // Count how many consecutive month patterns follow
+        let count = 0;
+        for (let k = j; k < row.length; k++) {
+          if (/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{2}/i.test(String(row[k] || '').trim())) {
+            count++;
+          }
+        }
+        if (count >= 6) {
+          periodRow = i;
+          periodColStart = j;
+          // Extract all period labels
+          for (let k = j; k < row.length; k++) {
+            const label = String(row[k] || '').trim();
+            if (label && !/^(Whole|PPD|$)/.test(label)) {
+              periods.push(label);
+            } else if (!label && periods.length > 0) {
+              break;
+            }
+          }
+          break;
         }
       }
-      break;
     }
+    if (periodRow >= 0) break;
   }
 
-  if (periodRow === -1) {
+  if (periodRow === -1 || periodColStart === -1) {
     console.log('[CPM Extractor] Could not find period header row');
     return null;
   }
 
-  console.log(`[CPM Extractor] Found ${periods.length} periods starting at row ${periodRow}: ${periods.slice(0, 5).join(', ')}...`);
+  console.log(`[CPM Extractor] Period headers at row ${periodRow}, col ${periodColStart}: ${periods.slice(0, 5).join(', ')}...`);
 
-  // Find label column (usually col 5 in CPM format) and T12M column
-  const labelCol = 5;
+  // Auto-detect label column: find the column that contains financial terms
+  let labelCol = -1;
+  const financialTerms = /\b(Total Revenue|Total Expenses|EBITDAR|EBITDA|Net Income|Medicaid Revenue|Medicare Revenue|Operating Expenses)\b/i;
+
+  for (let col = 0; col < Math.min(periodColStart, 10); col++) {
+    let matches = 0;
+    for (let i = periodRow; i < Math.min(targetSheet.length, periodRow + 200); i++) {
+      const row = targetSheet[i];
+      if (!row) continue;
+      if (financialTerms.test(String(row[col] || ''))) matches++;
+    }
+    if (matches >= 3) {
+      labelCol = col;
+      break;
+    }
+  }
+
+  // Fallback: try common positions (5, 3, 4, 2, 0)
+  if (labelCol === -1) {
+    for (const tryCol of [5, 3, 4, 2, 0]) {
+      if (tryCol >= periodColStart) continue;
+      let found = false;
+      for (let i = periodRow; i < Math.min(targetSheet.length, periodRow + 200); i++) {
+        const row = targetSheet[i];
+        if (!row) continue;
+        if (financialTerms.test(String(row[tryCol] || ''))) {
+          labelCol = tryCol;
+          found = true;
+          break;
+        }
+      }
+      if (found) break;
+    }
+  }
+
+  if (labelCol === -1) {
+    console.log('[CPM Extractor] Could not find label column');
+    return null;
+  }
+
+  console.log(`[CPM Extractor] Label column: ${labelCol}`);
+
+  // Find T12M and Year columns
   let t12Col = -1;
   let year1Col = -1;
 
-  const headerRow = firstSheet[periodRow];
+  const headerRow = targetSheet[periodRow];
   if (headerRow) {
     for (let j = 0; j < headerRow.length; j++) {
       const val = String(headerRow[j] || '').trim();
@@ -477,14 +573,17 @@ function tryCpmExtraction(doc: typeof documents.$inferSelect): VisionExtractionR
   // Track section for category assignment
   let currentSection = 'metric';
 
-  for (let i = periodRow + 2; i < firstSheet.length; i++) {
-    const row = firstSheet[i];
+  for (let i = periodRow + 1; i < targetSheet.length; i++) {
+    const row = targetSheet[i];
     if (!row) continue;
 
+    // Skip metadata markers and "Whole $s" / "PPD" descriptor rows
     const firstCell = String(row[0] || '').trim();
     if (firstCell.startsWith('#hide') || firstCell.startsWith('#freeze')) continue;
+    const labelCellRaw = String(row[labelCol] || '').trim();
+    if (/^(Whole \$|PPD)$/i.test(labelCellRaw)) continue;
 
-    const label = String(row[labelCol] || '').trim();
+    const label = labelCellRaw;
     if (!label) continue;
 
     // Detect facility name
@@ -624,7 +723,7 @@ function tryCpmExtraction(doc: typeof documents.$inferSelect): VisionExtractionR
     filename: doc.filename || 'unknown',
     facilities: [facility],
     sheets: [{
-      name: Object.keys(sheets)[0] || 'Sheet 1',
+      name: targetSheetName || 'Sheet 1',
       index: 0,
       type: 'pl' as const,
       facilitiesFound: [facility.name],

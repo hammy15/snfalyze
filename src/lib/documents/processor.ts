@@ -51,10 +51,24 @@ export function classifyDocument(text: string, filename: string): string {
   if (lowerFilename.includes('environmental') || lowerFilename.includes('phase')) {
     return 'environmental';
   }
+  // Financial statements: proforma, P&L, income, financials, t12, t24, t36 trailing files
+  if (
+    lowerFilename.includes('proforma') ||
+    lowerFilename.includes('pro forma') ||
+    lowerFilename.includes('pro-forma') ||
+    lowerFilename.includes('p&l') ||
+    lowerFilename.includes('pnl') ||
+    lowerFilename.includes('income') ||
+    lowerFilename.includes('financial') ||
+    lowerFilename.includes('financials') ||
+    /\bt\d{2}\b/.test(lowerFilename) // T12, T24, T36 trailing files
+  ) {
+    return 'financial_statement';
+  }
 
   // Check content patterns
   if (lowerText.includes('income statement') || lowerText.includes('profit and loss') ||
-      lowerText.includes('p&l') || lowerText.includes('revenue') && lowerText.includes('expense')) {
+      lowerText.includes('p&l') || (lowerText.includes('revenue') && lowerText.includes('expense'))) {
     return 'financial_statement';
   }
   if (lowerText.includes('rent roll') || lowerText.includes('resident list') ||

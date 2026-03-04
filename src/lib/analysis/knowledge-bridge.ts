@@ -16,6 +16,10 @@ import { CASCADIA_SYSTEM_PROMPT } from './prompts';
 // Maximum knowledge context to inject (chars) — keeps prompt within token budget
 const MAX_KNOWLEDGE_CHARS = 25_000;
 
+// Per-brain knowledge budget (each brain gets its own allocation)
+const MAX_BRAIN_KNOWLEDGE_CHARS = 25_000;
+const MAX_BRAIN_KNOWLEDGE_FILES = 12;
+
 // Maximum files to include
 const MAX_KNOWLEDGE_FILES = 12;
 
@@ -116,6 +120,112 @@ function buildKnowledgeContext(files: KnowledgeFile[]): string {
   }
 
   return sections.join('\n\n---\n\n');
+}
+
+// =============================================================================
+// BRAIN-SPECIFIC KNOWLEDGE LOADING
+// =============================================================================
+
+/**
+ * Load knowledge biased toward operational/staffing/quality/reimbursement topics.
+ * Used by Newo brain for institutional operational intelligence.
+ */
+export async function loadNewoKnowledge(context: {
+  state?: string | null;
+  assetType?: string | null;
+  dealName?: string | null;
+}): Promise<string> {
+  try {
+    const state = context.state || undefined;
+    const assetType = context.assetType || undefined;
+    const dealName = context.dealName || undefined;
+
+    const [
+      stageKnowledge,
+      stateKnowledge,
+      staffingKnowledge,
+      qualityKnowledge,
+      reimbursementKnowledge,
+      operationalKnowledge,
+    ] = await Promise.all([
+      loadKnowledgeForStage('investment_memo', { state, assetType, query: dealName }),
+      state ? searchKnowledge(state, 3) : Promise.resolve([]),
+      searchKnowledge('staffing HPPD agency labor turnover', 3),
+      searchKnowledge('quality remediation deficiency survey CMS', 3),
+      searchKnowledge('reimbursement PDPM optimization revenue quality bonus', 3),
+      searchKnowledge('operational platform synergies GPO management', 2),
+    ]);
+
+    const fileMap = new Map<string, KnowledgeFile>();
+    for (const file of [...stageKnowledge, ...stateKnowledge, ...staffingKnowledge, ...qualityKnowledge, ...reimbursementKnowledge, ...operationalKnowledge]) {
+      const existing = fileMap.get(file.filename);
+      if (!existing || file.relevanceScore > existing.relevanceScore) {
+        fileMap.set(file.filename, file);
+      }
+    }
+
+    const files = [...fileMap.values()]
+      .sort((a, b) => b.relevanceScore - a.relevanceScore)
+      .slice(0, MAX_BRAIN_KNOWLEDGE_FILES);
+
+    if (files.length === 0) return '';
+    console.log(`[Knowledge Bridge] Newo: loaded ${files.length} operational intelligence files`);
+    return buildKnowledgeContext(files);
+  } catch (error) {
+    console.error('[Knowledge Bridge] Newo knowledge loading failed:', error);
+    return '';
+  }
+}
+
+/**
+ * Load knowledge biased toward financial/transactions/buyer/market intelligence.
+ * Used by Dev brain for strategic M&A intelligence.
+ */
+export async function loadDevKnowledge(context: {
+  state?: string | null;
+  assetType?: string | null;
+  dealName?: string | null;
+}): Promise<string> {
+  try {
+    const state = context.state || undefined;
+    const assetType = context.assetType || undefined;
+    const dealName = context.dealName || undefined;
+
+    const [
+      stageKnowledge,
+      transactionKnowledge,
+      buyerKnowledge,
+      financialKnowledge,
+      marketKnowledge,
+      learningKnowledge,
+    ] = await Promise.all([
+      loadKnowledgeForStage('investment_memo', { state, assetType, query: dealName }),
+      searchKnowledge('transaction acquisition deal valuation multiple', 3),
+      searchKnowledge('buyer intelligence PE REIT strategic partner', 3),
+      searchKnowledge('financial EBITDAR revenue cap rate', 3),
+      searchKnowledge('market intelligence competitive landscape', 2),
+      searchKnowledge('learning dual-brain analysis', 2),
+    ]);
+
+    const fileMap = new Map<string, KnowledgeFile>();
+    for (const file of [...stageKnowledge, ...transactionKnowledge, ...buyerKnowledge, ...financialKnowledge, ...marketKnowledge, ...learningKnowledge]) {
+      const existing = fileMap.get(file.filename);
+      if (!existing || file.relevanceScore > existing.relevanceScore) {
+        fileMap.set(file.filename, file);
+      }
+    }
+
+    const files = [...fileMap.values()]
+      .sort((a, b) => b.relevanceScore - a.relevanceScore)
+      .slice(0, MAX_BRAIN_KNOWLEDGE_FILES);
+
+    if (files.length === 0) return '';
+    console.log(`[Knowledge Bridge] Dev: loaded ${files.length} strategic intelligence files`);
+    return buildKnowledgeContext(files);
+  } catch (error) {
+    console.error('[Knowledge Bridge] Dev knowledge loading failed:', error);
+    return '';
+  }
 }
 
 /**

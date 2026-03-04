@@ -16,6 +16,8 @@ export type TaskType =
   | 'field_extraction'        // Phase 2: Extract — structured field extraction
   | 'vision_extraction'       // Phase 1/2: multimodal spreadsheet/chart analysis
   | 'deal_analysis'           // Phase 5: Analyze — Cascadia analysis engine
+  | 'newo_analysis'           // Dual-Brain: Newo (operations/institutional knowledge)
+  | 'dev_analysis'            // Dual-Brain: Dev (strategic M&A/deal intelligence)
   | 'clarification_reasoning' // Phase 3: Clarify — resolve ambiguities
   | 'market_intelligence'     // Phase 5: real-time market context
   | 'synthesis'               // Phase 7: Synthesize — executive summary

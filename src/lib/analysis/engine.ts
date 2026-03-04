@@ -1,6 +1,8 @@
 import { getRouter } from '@/lib/ai';
 import { CASCADIA_SYSTEM_PROMPT, ANALYSIS_PROMPT_TEMPLATE, getStateMarketData } from './prompts';
-import { buildEnrichedSystemPrompt } from './knowledge-bridge';
+import { buildEnrichedSystemPrompt, loadNewoKnowledge, loadDevKnowledge } from './knowledge-bridge';
+import { runDualBrainAnalysis } from './brains';
+import type { DualBrainResult } from './brains';
 import { calculateConfidenceDecay } from '@/lib/utils';
 import {
   getGeographicCapRate,
@@ -90,6 +92,93 @@ export async function analyzeDeal(deal: AnalysisInput): Promise<AnalysisResult> 
     console.error('AI Analysis Error:', error);
     throw error;
   }
+}
+
+/**
+ * Run dual-brain analysis (Newo + Dev in parallel).
+ * Falls back to single-brain analyzeDeal() on error.
+ */
+export async function analyzeDealDualBrain(deal: AnalysisInput): Promise<{
+  dualBrainResult: DualBrainResult;
+  analysisResult: AnalysisResult;
+}> {
+  const knowledgeContext = { state: deal.primaryState, assetType: deal.assetType, dealName: deal.name };
+
+  // Load brain-specific knowledge in parallel
+  const [newoKnowledge, devKnowledge] = await Promise.all([
+    loadNewoKnowledge(knowledgeContext),
+    loadDevKnowledge(knowledgeContext),
+  ]);
+
+  const dualBrainResult = await runDualBrainAnalysis(deal, {
+    newo: newoKnowledge || undefined,
+    dev: devKnowledge || undefined,
+  });
+
+  // Build backward-compatible AnalysisResult from synthesis
+  const analysisResult = mapDualBrainToAnalysisResult(dualBrainResult);
+
+  return { dualBrainResult, analysisResult };
+}
+
+/**
+ * Map DualBrainResult to legacy AnalysisResult for backward compatibility.
+ */
+function mapDualBrainToAnalysisResult(result: DualBrainResult): AnalysisResult {
+  const { newo, dev, synthesis } = result;
+
+  return {
+    confidenceScore: synthesis.confidence,
+    narrative: synthesis.unifiedNarrative,
+    thesis: synthesis.keyInsight,
+    financials: dev.valuationScenarios ? [{
+      label: 'Base Case',
+      ebitdar: dev.valuationScenarios.base.ebitdar,
+      ebitdarMargin: dev.valuationScenarios.base.ebitdarMargin,
+      value: dev.valuationScenarios.base.value,
+    }] : [],
+    valuations: dev.valuationScenarios ? [
+      {
+        viewType: 'external',
+        valueLow: dev.valuationScenarios.bear.value,
+        valueBase: dev.valuationScenarios.base.value,
+        valueHigh: dev.valuationScenarios.bull.value,
+        confidenceScore: dev.confidenceScore,
+        confidenceNarrative: `Dev confidence: ${dev.confidenceScore}%`,
+      },
+      {
+        viewType: 'cascadia',
+        valueLow: dev.valuationScenarios.base.value,
+        valueBase: dev.valuationScenarios.cascadiaNormalized.value,
+        valueHigh: dev.valuationScenarios.bull.value,
+        confidenceScore: newo.confidenceScore,
+        confidenceNarrative: `Newo confidence: ${newo.confidenceScore}%`,
+      },
+    ] : [],
+    assumptions: [],
+    riskFactors: [
+      ...newo.operationalRisks.map(r => ({
+        factor: `[Newo] ${r.risk}`,
+        severity: r.severity,
+        mitigationCost: r.mitigationCost,
+        cascadiaCanFix: r.cascadiaCanFix,
+      })),
+      ...(dev.strategicRisks || []).map(r => ({
+        factor: `[Dev] ${r.risk}`,
+        severity: r.severity,
+        category: r.category,
+        mitigation: r.mitigation,
+      })),
+    ],
+    partnerMatches: [],
+    selfValidation: {
+      weakestAssumption: synthesis.criticalQuestions.whatRiskIsUnderpriced[0] || 'Review both brain perspectives.',
+      sellerManipulationRisk: dev.companyIntelligence?.sellerMotivation === 'low' ? 'Low seller motivation — watch for inflated narratives.' : 'Standard seller behavior.',
+      recessionStressTest: dev.valuationScenarios?.bear ? `Bear case value: $${(dev.valuationScenarios.bear.value / 1_000_000).toFixed(1)}M` : 'No bear case modeled.',
+      coverageUnderStress: 'Review Dev valuation scenarios for stress coverage.',
+    },
+    criticalQuestions: synthesis.criticalQuestions,
+  };
 }
 
 function buildAnalysisPrompt(deal: AnalysisInput): string {

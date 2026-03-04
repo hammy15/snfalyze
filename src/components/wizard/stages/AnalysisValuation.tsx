@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { WizardStageData } from '../EnhancedDealWizard';
+import { DualBrainAnalysis } from './DualBrainAnalysis';
 
 interface AnalysisValuationProps {
   stageData: WizardStageData;
@@ -92,6 +93,7 @@ export function AnalysisValuation({ stageData, onUpdate, sessionId }: AnalysisVa
             riskAssessment: data.data.riskAssessment,
             selfValidation: data.data.selfValidation,
             criticalQuestions: data.data.criticalQuestions,
+            dualBrainResult: data.data.dualBrainResult || null,
           },
         });
       } else {
@@ -244,6 +246,16 @@ export function AnalysisValuation({ stageData, onUpdate, sessionId }: AnalysisVa
           </Button>
         </CardContent>
       </Card>
+    );
+  }
+
+  // Render dual-brain UI when available
+  if (analysisResult.dualBrainResult) {
+    return (
+      <DualBrainAnalysis
+        dualBrainResult={analysisResult.dualBrainResult}
+        analysisResult={analysisResult}
+      />
     );
   }
 

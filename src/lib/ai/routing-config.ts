@@ -54,6 +54,20 @@ export const DEFAULT_ROUTING_RULES: RoutingRule[] = [
     fallbacks: ['openai'],
     config: { maxTokens: 8000, temperature: 0.7 },
   },
+  // Dual-Brain: Newo — operational assessment (Claude primary for reasoning depth)
+  {
+    taskType: 'newo_analysis',
+    primary: 'anthropic',
+    fallbacks: ['openai'],
+    config: { maxTokens: 8000, temperature: 0.7 },
+  },
+  // Dual-Brain: Dev — strategic deal analysis (Claude primary for structured output)
+  {
+    taskType: 'dev_analysis',
+    primary: 'anthropic',
+    fallbacks: ['openai'],
+    config: { maxTokens: 8000, temperature: 0.7 },
+  },
   // Phase 3: Clarification — Claude's nuanced reasoning
   {
     taskType: 'clarification_reasoning',

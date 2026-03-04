@@ -199,6 +199,7 @@ export interface WizardStageData {
       totalBeds: number;
       facilityCount: number;
     };
+    dualBrainResult?: any; // DualBrainResult from Newo + Dev analysis
   };
   financialConsolidation?: {
     censusVerified?: boolean;

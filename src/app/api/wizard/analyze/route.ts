@@ -9,6 +9,7 @@ import { populateFromExtraction } from '@/lib/extraction/db-populator';
 import { crossReferenceValidate, type CrossReferenceResult } from '@/lib/extraction/cross-reference-validator';
 import { generateAISummary, generateQuickSummary, type AISummaryOutput } from '@/lib/extraction/ai-summary-generator';
 import { matchExtractedFacilityToCMS, type NormalizedProviderData } from '@/lib/cms';
+import { analyzeDealDualBrain, type AnalysisInput } from '@/lib/analysis/engine';
 
 // Vercel Pro: allow up to 5 minutes for AI analysis/extraction
 export const maxDuration = 300;
@@ -309,6 +310,49 @@ Return ONLY valid JSON.`;
         : `Weak coverage at ${rentCoverage.toFixed(2)}x — rent may stress operations`,
   };
 
+  // ===================================================================
+  // DUAL-BRAIN ANALYSIS (Newo + Dev in parallel)
+  // ===================================================================
+  let dualBrainResult = null;
+  try {
+    const primaryState = facilities[0]?.state || stageData.dealStructure?.state || null;
+    const dealInput: AnalysisInput = {
+      id: body.sessionId || `wizard-${Date.now()}`,
+      name: stageData.dealStructure?.dealName || `${facilities.length}-Facility Portfolio`,
+      assetType: stageData.dealStructure?.assetType || 'SNF',
+      beds: totalBeds || null,
+      primaryState,
+      askingPrice: stageData.dealStructure?.askingPrice || null,
+      brokerName: stageData.dealStructure?.brokerName || null,
+      brokerFirm: stageData.dealStructure?.brokerFirm || null,
+      facilities: facilities.map((f: any) => ({
+        name: f.name,
+        beds: f.beds,
+        state: f.state,
+        city: f.city,
+        cmsOverallRating: f.cmsOverallRating || null,
+        totalNursingHPPD: f.totalNursingHPPD || null,
+        totalDeficiencies: f.totalDeficiencies || null,
+        occupancyRate: f.occupancyRate || null,
+      })),
+      financialPeriods: facilityMetrics.map((m: any) => ({
+        periodLabel: m.name,
+        totalRevenue: m.revenue,
+        laborCost: m.nursing,
+        noi: m.noi,
+        ebitdar: m.noi, // approximate
+        occupancyRate: null,
+        agencyPercentage: null,
+      })),
+    };
+
+    const { dualBrainResult: dbr } = await analyzeDealDualBrain(dealInput);
+    dualBrainResult = dbr;
+    console.log(`[Wizard Analyze] Dual-brain complete: ${dbr.synthesis.recommendation} (${dbr.synthesis.confidence}%)`);
+  } catch (dualBrainError) {
+    console.error('[Wizard Analyze] Dual-brain analysis failed (non-blocking):', dualBrainError);
+  }
+
   // Build risk assessment
   const riskAssessment = {
     overallScore: noiMargin > 15 ? 72 : noiMargin > 10 ? 58 : 42,
@@ -347,12 +391,23 @@ Return ONLY valid JSON.`;
       `For a triple-net lease at ${(leaseYield*100).toFixed(1)}% yield, annual rent would be $${(annualRent/1000).toFixed(0)}K ($${totalBeds > 0 ? Math.round(rentPerBedMonth).toLocaleString() : '?'}/bed/month) with ${rentCoverage.toFixed(2)}x coverage.`;
   }
 
+  // Use dual-brain insights when available
+  const finalThesis = dualBrainResult?.synthesis.keyInsight || thesis;
+  const finalNarrative = dualBrainResult?.synthesis.unifiedNarrative || narrative;
+  const finalConfidence = dualBrainResult?.synthesis.confidence || confidenceScore;
+  const finalCriticalQuestions = dualBrainResult?.synthesis.criticalQuestions || {
+    whatMustGoRightFirst: ['Census must stabilize at current or higher levels', 'State reimbursement rates must remain stable'],
+    whatCannotGoWrong: ['Major survey deficiencies or sanctions', 'Key operational staff departures'],
+    whatBreaksThisDeal: ['State rate cuts exceeding 5%', 'Occupancy drops below 75%'],
+    whatRiskIsUnderpriced: ['Agency labor dependency', 'Deferred capital expenditures'],
+  };
+
   return NextResponse.json({
     success: true,
     data: {
-      thesis,
-      narrative,
-      confidenceScore,
+      thesis: finalThesis,
+      narrative: finalNarrative,
+      confidenceScore: finalConfidence,
       valuations,
       purchaseRecommendation,
       rentRecommendation,
@@ -367,12 +422,9 @@ Return ONLY valid JSON.`;
       },
       riskAssessment,
       selfValidation,
-      criticalQuestions: {
-        whatMustGoRightFirst: ['Census must stabilize at current or higher levels', 'State reimbursement rates must remain stable'],
-        whatCannotGoWrong: ['Major survey deficiencies or sanctions', 'Key operational staff departures'],
-        whatBreaksThisDeal: ['State rate cuts exceeding 5%', 'Occupancy drops below 75%'],
-        whatRiskIsUnderpriced: ['Agency labor dependency', 'Deferred capital expenditures'],
-      },
+      criticalQuestions: finalCriticalQuestions,
+      // Dual-brain result — full Newo + Dev analysis when available
+      dualBrainResult,
     },
   });
 }

@@ -43,6 +43,13 @@
       "when": 1771859450644,
       "tag": "0005_brown_randall",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1772600770196,
+      "tag": "0006_perpetual_toad_men",
+      "breakpoints": true
     }
   ]
 }

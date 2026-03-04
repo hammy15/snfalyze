@@ -229,7 +229,7 @@ export default function ResearchPage() {
   const dealSuggestions = suggestions.filter((s) => s.source === 'deal-specific');
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 space-y-6 max-w-5xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold text-surface-800 dark:text-surface-100 flex items-center gap-2">
           <Search className="w-6 h-6 text-primary-500" />

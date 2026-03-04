@@ -17,7 +17,7 @@ interface SenseIndicatorProps {
 
 export function SenseIndicator({ senses, activeSenses = [], className }: SenseIndicatorProps) {
   return (
-    <div className={cn('flex items-center gap-3', className)}>
+    <div className={cn('flex flex-wrap items-center justify-center gap-2 sm:gap-3', className)}>
       {senses.map((sense) => {
         const isActive = activeSenses.includes(sense.id);
         return (

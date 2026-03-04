@@ -76,7 +76,7 @@ export default function AnalyzePage() {
   }, []);
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-8">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6 sm:space-y-8">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-surface-800 dark:text-surface-100 flex items-center gap-2">
@@ -102,7 +102,7 @@ export default function AnalyzePage() {
         </div>
 
         {/* Upload Drop Zone */}
-        <div className="mt-8 border-2 border-dashed border-primary-200 dark:border-primary-500/30 rounded-xl p-8 text-center hover:border-primary-400 dark:hover:border-primary-500/50 transition-colors bg-primary-50/30 dark:bg-primary-500/5">
+        <div className="mt-6 sm:mt-8 border-2 border-dashed border-primary-200 dark:border-primary-500/30 rounded-xl p-4 sm:p-8 text-center hover:border-primary-400 dark:hover:border-primary-500/50 transition-colors bg-primary-50/30 dark:bg-primary-500/5">
           <Upload className="w-8 h-8 text-primary-400 mx-auto mb-3" />
           <h3 className="text-sm font-bold text-surface-700 dark:text-surface-200">
             Start a New Analysis
@@ -111,7 +111,7 @@ export default function AnalyzePage() {
             Create a deal first, then upload your deal package — CIMs, T12s, rent rolls, proformas.
             CIL will identify documents, activate senses, and run dual-brain analysis.
           </p>
-          <div className="mt-4 flex items-center justify-center gap-3">
+          <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
               href="/app/deals/new"
               className="inline-flex items-center gap-2 px-6 py-2.5 neu-button-primary rounded-xl text-sm font-medium"

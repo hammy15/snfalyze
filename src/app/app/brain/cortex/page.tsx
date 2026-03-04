@@ -62,7 +62,7 @@ export default function CortexPage() {
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold text-surface-800 dark:text-surface-100 flex items-center gap-2">
           <Database className="w-6 h-6 text-primary-500" />
@@ -110,7 +110,7 @@ export default function CortexPage() {
       </div>
 
       {/* Two-column: File Brain Split */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Newo's Domain */}
         <div className="neu-card-warm p-4">
           <div className="flex items-center gap-2 mb-3">

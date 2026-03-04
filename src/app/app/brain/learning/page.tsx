@@ -107,7 +107,7 @@ export default function LearningPage() {
     .sort((a, b) => ((b[1] as StatePerf).dealCount || 0) - ((a[1] as StatePerf).dealCount || 0));
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold text-surface-800 dark:text-surface-100 flex items-center gap-2">
           <GraduationCap className="w-6 h-6 text-primary-500" />
@@ -181,7 +181,7 @@ export default function LearningPage() {
               )}
 
               {/* Growth Stats */}
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
                   { label: 'Deals Learned', value: growth.length > 0 ? growth[growth.length - 1]!.dealsLearned : 0, color: 'text-primary-500' },
                   { label: 'Avg Confidence', value: `${growth.length > 0 ? growth[growth.length - 1]!.avgConfidence : 0}%`, color: 'text-emerald-500' },
@@ -290,7 +290,7 @@ export default function LearningPage() {
                 ))}
               </div>
 
-              <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
+              <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
                 {(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA',
                   'HI','ID','IL','IN','IA','KS','KY','LA','ME','MD',
                   'MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ',

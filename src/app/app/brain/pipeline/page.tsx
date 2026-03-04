@@ -109,8 +109,8 @@ export default function PipelinePage() {
   }));
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-surface-800 dark:text-surface-100 flex items-center gap-2">
             <Layers className="w-6 h-6 text-primary-500" />
@@ -206,13 +206,13 @@ export default function PipelinePage() {
       )}
 
       {loading ? (
-        <div className="grid grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {[...Array(6)].map((_, i) => (
             <div key={i} className="h-64 shimmer-warm rounded-xl" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-6 gap-3 overflow-x-auto">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 overflow-x-auto">
           {groupedDeals.map((col) => (
             <div key={col.key} className="space-y-2">
               <button

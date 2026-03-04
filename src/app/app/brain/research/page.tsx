@@ -23,6 +23,31 @@ const STATUS_CONFIG = {
   failed: { icon: XCircle, color: 'text-red-500', label: 'Failed' },
 };
 
+interface PipelineDeal {
+  primaryState: string;
+  assetType: string;
+  name: string;
+}
+
+function generateSuggestions(deals: PipelineDeal[]): string[] {
+  const suggestions: string[] = [];
+  const states = [...new Set(deals.map((d) => d.primaryState).filter(Boolean))];
+  const types = [...new Set(deals.map((d) => d.assetType).filter(Boolean))];
+
+  states.forEach((st) => {
+    suggestions.push(`${st} Medicaid rate trends 2026`);
+    suggestions.push(`${st} SNF staffing pool depth and wage analysis`);
+    suggestions.push(`${st} Certificate of Need requirements`);
+  });
+  types.forEach((t) => {
+    suggestions.push(`${t} national cap rate benchmarks Q1 2026`);
+  });
+  if (states.length > 0) {
+    suggestions.push(`${states[0]} survey body enforcement patterns`);
+  }
+  return [...new Set(suggestions)].slice(0, 8);
+}
+
 export default function ResearchPage() {
   const [missions, setMissions] = useState<ResearchMission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,9 +57,19 @@ export default function ResearchPage() {
   const [contextAssetType, setContextAssetType] = useState('');
   const [selectedMission, setSelectedMission] = useState<ResearchMission | null>(null);
   const [importing, setImporting] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
-    loadMissions();
+    Promise.all([
+      loadMissions(),
+      fetch('/api/deals?limit=30')
+        .then((r) => r.json())
+        .then((data) => {
+          const pipelineDeals = (data.data || []).filter((d: PipelineDeal) => d.primaryState);
+          setSuggestions(generateSuggestions(pipelineDeals));
+        })
+        .catch(() => {}),
+    ]);
   }, []);
 
   const loadMissions = async () => {
@@ -132,6 +167,24 @@ export default function ResearchPage() {
           </button>
         </div>
       </div>
+
+      {/* Auto-Suggested Topics from Pipeline */}
+      {suggestions.length > 0 && (
+        <div className="neu-card-warm p-4">
+          <h2 className="text-xs font-bold text-surface-500 mb-2">Suggested from Pipeline</h2>
+          <div className="flex flex-wrap gap-2">
+            {suggestions.map((s) => (
+              <button
+                key={s}
+                onClick={() => setTopic(s)}
+                className="px-3 py-1.5 text-[10px] rounded-lg bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-500/20 transition-colors"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Missions List */}
       <div className="space-y-2">

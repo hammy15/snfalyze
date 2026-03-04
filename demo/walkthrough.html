@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SNFalyze — Product Walkthrough</title>
+<style>
+  /* ============================================================
+     SNFalyze Product Walkthrough
+     Cascadia Healthcare AI — Self-Contained Slideshow
+     ============================================================ */
+
+  *, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  :root {
+    --teal: #0D9488;
+    --teal-light: #14B8A6;
+    --teal-dark: #0F766E;
+    --teal-glow: rgba(13, 148, 136, 0.35);
+    --navy: #0F172A;
+    --navy-light: #1E293B;
+    --slate: #334155;
+    --slate-light: #64748B;
+    --white: #FFFFFF;
+    --gray-50: #F8FAFC;
+    --gray-100: #F1F5F9;
+    --gray-200: #E2E8F0;
+    --gray-800: #1E293B;
+    --transition-fast: 200ms ease;
+    --transition-med: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-slow: 700ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, Oxygen, Ubuntu, sans-serif;
+    background: var(--navy);
+    color: var(--white);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* ---- Layout Shell ---- */
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ---- Progress Bar (top edge) ---- */
+  .progress-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--teal), var(--teal-light));
+    transition: width var(--transition-med);
+    z-index: 100;
+    box-shadow: 0 0 12px var(--teal-glow);
+  }
+
+  /* ---- Header ---- */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    height: 56px;
+    min-height: 56px;
+    background: var(--navy);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    z-index: 50;
+    position: relative;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .logo-mark {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, var(--teal), var(--teal-dark));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 16px;
+    color: var(--white);
+    letter-spacing: -0.5px;
+    box-shadow: 0 2px 8px var(--teal-glow);
+  }
+
+  .logo-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+  }
+
+  .logo-text .brand {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--white);
+    letter-spacing: -0.3px;
+  }
+
+  .logo-text .subtitle {
+    font-size: 11px;
+    color: var(--slate-light);
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+
+  .header-center {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .slide-counter {
+    font-size: 13px;
+    color: var(--slate-light);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .slide-counter .current {
+    color: var(--teal-light);
+    font-weight: 700;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ---- Icon Buttons ---- */
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.04);
+    color: var(--slate-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    position: relative;
+  }
+
+  .icon-btn:hover {
+    background: rgba(255,255,255,0.08);
+    color: var(--white);
+    border-color: rgba(255,255,255,0.15);
+  }
+
+  .icon-btn:active {
+    transform: scale(0.95);
+  }
+
+  .icon-btn svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .icon-btn.active {
+    background: var(--teal);
+    border-color: var(--teal);
+    color: var(--white);
+  }
+
+  /* ---- Main Stage ---- */
+  .stage {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0A0F1A;
+  }
+
+  /* ---- Slide ---- */
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity var(--transition-slow);
+    pointer-events: none;
+    padding: 16px;
+  }
+
+  .slide.active {
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 10;
+  }
+
+  /* Screenshot slides */
+  .slide-screenshot {
+    position: relative;
+    max-width: 100%;
+    max-height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .slide-screenshot img {
+    max-width: 100%;
+    max-height: calc(100vh - 180px);
+    max-height: calc(100dvh - 180px);
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow:
+      0 4px 24px rgba(0,0,0,0.5),
+      0 0 0 1px rgba(255,255,255,0.05);
+  }
+
+  /* ---- Annotation Overlay ---- */
+  .annotation {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 48px);
+    max-width: 840px;
+    background: rgba(15, 23, 42, 0.92);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 18px 24px;
+    z-index: 20;
+    opacity: 0;
+    transform: translateX(-50%) translateY(12px);
+    transition: opacity 500ms ease 200ms, transform 500ms ease 200ms;
+  }
+
+  .slide.active .annotation {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .annotation-stage {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--teal-light);
+    background: rgba(13, 148, 136, 0.15);
+    border: 1px solid rgba(13, 148, 136, 0.25);
+    padding: 3px 10px;
+    border-radius: 20px;
+    margin-bottom: 8px;
+  }
+
+  .annotation-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--teal-light);
+    margin-bottom: 6px;
+    letter-spacing: -0.2px;
+  }
+
+  .annotation-desc {
+    font-size: 14px;
+    color: rgba(255,255,255,0.78);
+    line-height: 1.55;
+    font-weight: 400;
+  }
+
+  /* ---- Title / Closing Cards ---- */
+  .card-content {
+    text-align: center;
+    max-width: 680px;
+    padding: 40px;
+  }
+
+  .card-content .card-icon {
+    width: 72px;
+    height: 72px;
+    background: linear-gradient(135deg, var(--teal), var(--teal-dark));
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 28px;
+    font-size: 32px;
+    font-weight: 900;
+    color: var(--white);
+    box-shadow: 0 8px 32px var(--teal-glow);
+  }
+
+  .card-content h1 {
+    font-size: clamp(28px, 5vw, 44px);
+    font-weight: 800;
+    letter-spacing: -1px;
+    line-height: 1.15;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, var(--white) 0%, var(--gray-200) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .card-content h1 .accent {
+    background: linear-gradient(135deg, var(--teal-light), var(--teal));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .card-content .tagline {
+    font-size: clamp(16px, 2.5vw, 20px);
+    color: var(--slate-light);
+    font-weight: 400;
+    line-height: 1.5;
+    margin-bottom: 32px;
+  }
+
+  .card-content .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 36px;
+  }
+
+  .card-content .badge {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--teal-light);
+    background: rgba(13, 148, 136, 0.1);
+    border: 1px solid rgba(13, 148, 136, 0.2);
+    padding: 6px 16px;
+    border-radius: 24px;
+    letter-spacing: 0.2px;
+  }
+
+  .card-content .start-hint {
+    font-size: 13px;
+    color: var(--slate-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    animation: pulse-hint 2s ease-in-out infinite;
+  }
+
+  .card-content .start-hint kbd {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-family: inherit;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 4px;
+    color: var(--gray-200);
+  }
+
+  @keyframes pulse-hint {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+
+  /* Closing card specifics */
+  .card-content .cta-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 32px;
+    background: linear-gradient(135deg, var(--teal), var(--teal-dark));
+    color: var(--white);
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 16px;
+    border-radius: 12px;
+    transition: all var(--transition-fast);
+    box-shadow: 0 4px 16px var(--teal-glow);
+    margin-bottom: 24px;
+  }
+
+  .card-content .cta-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px var(--teal-glow);
+  }
+
+  .card-content .cta-link svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .card-content .powered-by {
+    font-size: 12px;
+    color: var(--slate-light);
+    letter-spacing: 0.5px;
+  }
+
+  .card-content .powered-by strong {
+    color: var(--teal-light);
+    font-weight: 600;
+  }
+
+  /* ---- Bottom Controls ---- */
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 24px 16px;
+    gap: 12px;
+    background: var(--navy);
+    border-top: 1px solid rgba(255,255,255,0.06);
+    z-index: 50;
+    position: relative;
+  }
+
+  /* Nav arrows */
+  .nav-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.04);
+    color: var(--slate-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+  }
+
+  .nav-btn:hover:not(:disabled) {
+    background: rgba(255,255,255,0.1);
+    color: var(--white);
+    border-color: rgba(255,255,255,0.2);
+  }
+
+  .nav-btn:disabled {
+    opacity: 0.25;
+    cursor: not-allowed;
+  }
+
+  .nav-btn:active:not(:disabled) {
+    transform: scale(0.93);
+  }
+
+  .nav-btn svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Dot indicators */
+  .dots {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border: none;
+    padding: 0;
+    position: relative;
+  }
+
+  .dot:hover {
+    background: rgba(255,255,255,0.3);
+    transform: scale(1.2);
+  }
+
+  .dot.active {
+    background: var(--teal);
+    box-shadow: 0 0 8px var(--teal-glow);
+    width: 24px;
+    border-radius: 4px;
+  }
+
+  .dot.visited {
+    background: rgba(13, 148, 136, 0.4);
+  }
+
+  /* Play button */
+  .play-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid var(--teal);
+    background: transparent;
+    color: var(--teal-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+    margin-left: 4px;
+  }
+
+  .play-btn:hover {
+    background: var(--teal);
+    color: var(--white);
+  }
+
+  .play-btn:active {
+    transform: scale(0.93);
+  }
+
+  .play-btn svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+    stroke: none;
+  }
+
+  /* ---- Keyboard Shortcut Tooltip ---- */
+  .shortcut-toast {
+    position: fixed;
+    bottom: 90px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 10px 18px;
+    font-size: 13px;
+    color: var(--gray-200);
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 300ms ease;
+    white-space: nowrap;
+  }
+
+  .shortcut-toast.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .shortcut-toast kbd {
+    display: inline-block;
+    padding: 1px 6px;
+    margin: 0 2px;
+    font-size: 11px;
+    font-family: inherit;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 3px;
+  }
+
+  /* ---- Fullscreen adjustments ---- */
+  .app:fullscreen .header,
+  .app:-webkit-full-screen .header {
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(12px);
+  }
+
+  .app:fullscreen .controls,
+  .app:-webkit-full-screen .controls {
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(12px);
+  }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 768px) {
+    .header {
+      padding: 0 12px;
+      height: 48px;
+      min-height: 48px;
+    }
+
+    .logo-mark {
+      width: 28px;
+      height: 28px;
+      font-size: 14px;
+      border-radius: 6px;
+    }
+
+    .logo-text .brand { font-size: 14px; }
+    .logo-text .subtitle { font-size: 9px; }
+
+    .header-center { display: none; }
+
+    .slide { padding: 8px; }
+
+    .slide-screenshot img {
+      max-height: calc(100vh - 160px);
+      max-height: calc(100dvh - 160px);
+      border-radius: 4px;
+    }
+
+    .annotation {
+      bottom: 12px;
+      width: calc(100% - 24px);
+      padding: 14px 16px;
+      border-radius: 10px;
+    }
+
+    .annotation-title { font-size: 14px; }
+    .annotation-desc { font-size: 12px; }
+
+    .controls {
+      padding: 8px 12px 12px;
+      gap: 8px;
+    }
+
+    .dots { gap: 4px; }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+    }
+
+    .dot.active {
+      width: 18px;
+    }
+
+    .nav-btn, .play-btn {
+      width: 36px;
+      height: 36px;
+    }
+
+    .card-content { padding: 24px; }
+    .card-content .card-icon {
+      width: 56px;
+      height: 56px;
+      font-size: 24px;
+      border-radius: 14px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .logo-text .subtitle { display: none; }
+
+    .annotation-stage { font-size: 9px; padding: 2px 8px; }
+    .annotation-desc { font-size: 11px; }
+
+    .badge-row { gap: 6px; }
+    .badge { font-size: 10px; padding: 4px 10px; }
+  }
+
+  /* ---- Preloader ---- */
+  .preloader {
+    position: fixed;
+    inset: 0;
+    background: var(--navy);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 20px;
+    transition: opacity 500ms ease;
+  }
+
+  .preloader.done {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .preloader-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255,255,255,0.08);
+    border-top-color: var(--teal);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .preloader-text {
+    font-size: 13px;
+    color: var(--slate-light);
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+</style>
+</head>
+<body>
+
+<!-- Preloader -->
+<div class="preloader" id="preloader">
+  <div class="preloader-spinner"></div>
+  <div class="preloader-text">Loading walkthrough...</div>
+</div>
+
+<!-- App -->
+<div class="app" id="app">
+
+  <!-- Progress Bar -->
+  <div class="progress-bar" id="progressBar"></div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo-mark">S</div>
+      <div class="logo-text">
+        <span class="brand">SNFalyze</span>
+        <span class="subtitle">Product Walkthrough</span>
+      </div>
+    </div>
+    <div class="header-center">
+      <span class="slide-counter" id="slideCounter">
+        <span class="current">1</span> of 13
+      </span>
+    </div>
+    <div class="header-right">
+      <button class="icon-btn" id="fullscreenBtn" title="Fullscreen (F)">
+        <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+      </button>
+      <button class="icon-btn" id="shortcutsBtn" title="Keyboard shortcuts">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Stage -->
+  <div class="stage" id="stage">
+
+    <!-- Slide 0: Title Card -->
+    <div class="slide active" data-index="0">
+      <div class="card-content">
+        <div class="card-icon">S</div>
+        <h1>SNFalyze<br><span class="accent">AI-Powered Healthcare Underwriting</span></h1>
+        <p class="tagline">The intelligent deal workspace for skilled nursing facility acquisitions. Five stages from intake to investment memo — powered by Cascadia Intelligence.</p>
+        <div class="badge-row">
+          <span class="badge">Deal Intake</span>
+          <span class="badge">Comp Analysis</span>
+          <span class="badge">Pro Forma</span>
+          <span class="badge">Risk Scoring</span>
+          <span class="badge">Investment Memo</span>
+        </div>
+        <div class="start-hint">
+          Press <kbd>&#8594;</kbd> or click Next to begin &nbsp;&middot;&nbsp; <kbd>Space</kbd> to auto-play
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 1: Dashboard -->
+    <div class="slide" data-index="1">
+      <div class="slide-screenshot">
+        <img src="slides/01-dashboard.png" alt="Platform Dashboard" loading="eager">
+      </div>
+      <div class="annotation">
+        <div class="annotation-stage">Overview</div>
+        <div class="annotation-title">Platform Dashboard</div>
+        <div class="annotation-desc">SNFalyze dashboard showing 22 active deals worth $567M in pipeline. Quick actions: Screen a Deal, Create a Deal, or Work the Pipeline through the 5-stage workspace.</div>
+      </div>
+    </div>
+
+    <!-- Slide 2: Deal Pipeline -->
+    <div class="slide" data-index="2">
+      <div class="slide-screenshot">
+        <img src="slides/02-dashboard-deals.png" alt="Deal Pipeline" loading="eager">
+      </div>
+      <div class="annotation">
+        <div class="annotation-stage">Overview</div>
+        <div class="annotation-title">Deal Pipeline</div>
+        <div class="annotation-desc">Recently updated deals including Anacortes Campus (3 Facilities) and Cascadia CHC &amp; Olympus Portfolio &mdash; both actively being analyzed through the workspace.</div>
+      </div>
+    </div>
+
+    <!-- Slide 3: Deal Details -->
+    <div class="slide" data-index="3">
+      <div class="slide-screenshot">
+        <img src="slides/03-deal-details.png" alt="Deal Details" loading="lazy">
+      </div>
+      <div class="annotation">
+        <div class="annotation-stage">Deal View</div>
+        <div class="annotation-title">Deal Details</div>
+        <div class="annotation-desc">Deal overview page showing facility information, financial summary, and quick navigation into the AI-powered workspace.</div>
+      </div>
+    </div>
+
+    <!-- Slide 4: Stage 1 — Deal Intake -->
+    <div class="slide" data-index="4">
+      <div class="slide-screenshot">
+        <img src="slides/07-deal-intake.png" alt="Stage 1: Deal Intake" loading="lazy">
+      </div>
+      <div class="annotation">
+        <div class="annotation-stage">Stage 1 of 5</div>
+        <div class="annotation-title">Deal Intake</div>
+        <div class="annotation-desc">Capture facility, financial, and market data. Supports document upload (P&amp;L, census, financials) with AI auto-fill. Five intake sections: Facility ID, Ownership, Financial Snapshot, Operational, and Market Context.</div>
+      </div>
+    </div>
+
+    <!-- Slide 5: Stage 2 — Comparable Transactions -->
+    <div class="slide" data-index="5">
+      <div class="slide-screenshot">
+        <img src="slides/04-comp-pull-transactions.png" alt="Stage 2: Comparable Transactions" loading="lazy">
+      </div>
+      <div class="annotation">
+        <div class="annotation-stage">Stage 2 of 5 &mdash; Transactions</div>
+        <div class="annotation-title">Comparable Transactions</div>
+        <div class="annotation-desc">AI-powered comp engine found 10 comparable transactions across WA, OR, CA, and ID. Each scored by relevance (82&ndash;100%) with key metrics: beds, sale price, $/bed, cap rate, and EBITDA multiple.</div>
+      </div>
+    </div>
+
+    <!-- Slide 6: Stage 2 — Operating Benchmarks -->
+    <div class="slide" data-index="6">
+      <div class="slide-screenshot">
+        <img src="slides/05-comp-pull-benchmarks.png" alt="Stage 2: Operating Benchmarks" loading="lazy">
+      </div>
+      <div class="annotation">
+        <div class="annotation-stage">Stage 2 of 5 &mdash; Benchmarks</div>
+        <div class="annotation-title">Operating Benchmarks</div>
+        <div class="annotation-desc">Operating benchmarks compare the target facility against state and national averages across Medicare reimbursement, Medicaid rates, quality scores, labor costs, and occupancy.</div>
+      </div>
+    </div>
+
+    <!-- Slide 7: Stage 2 — Market Summary -->
+    <div class="slide" data-index="7">
+      <div class="slide-screenshot">
+        <img src="slides/06-comp-pull-market.png" alt="Stage 2: Market Summary" loading="lazy">
+      </div>
+      <div class="annotation">
+        <div class="annotation-stage">Stage 2 of 5 &mdash; Market</div>
+        <div class="annotation-title">Market Summary</div>
+        <div class="annotation-desc">Market position analysis showing where this deal sits relative to comparable transactions. Median price/bed, cap rate range, and EBITDA multiple context.</div>
+      </div>
+    </div>
+
+    <!-- Slide 8: Stage 3 — Pro Forma -->
+    <div class="slide" data-index="8">
+      <div class="slide-screenshot">
+        <img src="slides/08-pro-forma.png" alt="Stage 3: Pro Forma" loading="lazy">
+      </div>
+      <div class="annotation">
+        <div class="annotation-stage">Stage 3 of 5</div>
+        <div class="annotation-title">Pro Forma</div>
+        <div class="annotation-desc">Generate a 5-year financial model with base, bull, and bear scenarios using intake data and market benchmarks. One-click generation powered by AI.</div>
+      </div>
+    </div>
+
+    <!-- Slide 9: Stage 4 — Risk Score -->
+    <div class="slide" data-index="9">
+      <div class="slide-screenshot">
+        <img src="slides/09-risk-score.png" alt="Stage 4: Risk Score" loading="lazy">
+      </div>
+      <div class="annotation">
+        <div class="annotation-stage">Stage 4 of 5</div>
+        <div class="annotation-title">Risk Score</div>
+        <div class="annotation-desc">Composite risk assessment: 71/100 HIGH RISK across 6 domains. Regulatory (60), Operational (78), Financial (82), Market (50), Ownership/Legal (55). Each category weighted for overall deal risk profile.</div>
+      </div>
+    </div>
+
+    <!-- Slide 10: Stage 5 — Investment Memo -->
+    <div class="slide" data-index="10">
+      <div class="slide-screenshot">
+        <img src="slides/10-investment-memo.png" alt="Stage 5: Investment Memo" loading="lazy">
+      </div>
+      <div class="annotation">
+        <div class="annotation-stage">Stage 5 of 5</div>
+        <div class="annotation-title">Investment Memo</div>
+        <div class="annotation-desc">AI-generated 8-section investment memorandum. Sections include Executive Summary, Facility Overview, Market Analysis, Financial Analysis, Risk Assessment, Investment Thesis, Due Diligence, and Recommendation. Editable with section-by-section regeneration.</div>
+      </div>
+    </div>
+
+    <!-- Slide 11: CIL Panel -->
+    <div class="slide" data-index="11">
+      <div class="slide-screenshot">
+        <img src="slides/11-cil-panel.png" alt="CIL Advisor (AI Intelligence)" loading="lazy">
+      </div>
+      <div class="annotation">
+        <div class="annotation-stage">AI Intelligence</div>
+        <div class="annotation-title">CIL Advisor</div>
+        <div class="annotation-desc">Cascadia Intelligence Layer &mdash; contextual AI insights powered by 160+ institutional knowledge files. Provides stage-specific guidance, market intelligence, and strategic recommendations. Includes Ask CIL chat interface.</div>
+      </div>
+    </div>
+
+    <!-- Slide 12: Closing Card -->
+    <div class="slide" data-index="12">
+      <div class="card-content">
+        <div class="card-icon">S</div>
+        <h1>Ready to see it <span class="accent">live</span>?</h1>
+        <p class="tagline">SNFalyze transforms skilled nursing facility underwriting from weeks of manual analysis into an intelligent, AI-powered workflow.</p>
+        <a href="https://snfalyze.ai" class="cta-link" target="_blank" rel="noopener">
+          Visit snfalyze.ai
+          <svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
+        </a>
+        <p class="powered-by">Powered by <strong>Cascadia Healthcare AI</strong></p>
+      </div>
+    </div>
+
+  </div><!-- /stage -->
+
+  <!-- Bottom Controls -->
+  <div class="controls">
+    <button class="nav-btn" id="prevBtn" title="Previous (Left Arrow)">
+      <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+
+    <div class="dots" id="dots"></div>
+
+    <button class="nav-btn" id="nextBtn" title="Next (Right Arrow)">
+      <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+    </button>
+
+    <button class="play-btn" id="playBtn" title="Auto-play (Space)">
+      <svg id="playIcon" viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>
+      <svg id="pauseIcon" viewBox="0 0 24 24" style="display:none"><rect x="5" y="3" width="4" height="18"/><rect x="15" y="3" width="4" height="18"/></svg>
+    </button>
+  </div>
+
+</div><!-- /app -->
+
+<!-- Shortcut Toast -->
+<div class="shortcut-toast" id="shortcutToast">
+  <kbd>&larr;</kbd> <kbd>&rarr;</kbd> Navigate &nbsp;&middot;&nbsp; <kbd>Space</kbd> Play/Pause &nbsp;&middot;&nbsp; <kbd>F</kbd> Fullscreen
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ---- Config ----
+  const TOTAL_SLIDES = 13; // 0=title, 1-11=screenshots, 12=closing
+  const AUTO_PLAY_MS = 5000;
+
+  // ---- State ----
+  let currentSlide = 0;
+  let isPlaying = false;
+  let autoPlayTimer = null;
+  let visited = new Set([0]);
+
+  // ---- DOM ----
+  const slides = document.querySelectorAll('.slide');
+  const progressBar = document.getElementById('progressBar');
+  const slideCounter = document.getElementById('slideCounter');
+  const dotsContainer = document.getElementById('dots');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const playBtn = document.getElementById('playBtn');
+  const playIcon = document.getElementById('playIcon');
+  const pauseIcon = document.getElementById('pauseIcon');
+  const fullscreenBtn = document.getElementById('fullscreenBtn');
+  const shortcutsBtn = document.getElementById('shortcutsBtn');
+  const shortcutToast = document.getElementById('shortcutToast');
+  const appEl = document.getElementById('app');
+  const preloader = document.getElementById('preloader');
+
+  // ---- Build Dots ----
+  for (let i = 0; i < TOTAL_SLIDES; i++) {
+    const dot = document.createElement('button');
+    dot.className = 'dot' + (i === 0 ? ' active' : '');
+    dot.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+    dot.dataset.index = i;
+    dot.addEventListener('click', function() {
+      goToSlide(parseInt(this.dataset.index));
+    });
+    dotsContainer.appendChild(dot);
+  }
+
+  // ---- Core Navigation ----
+  function goToSlide(index) {
+    if (index < 0 || index >= TOTAL_SLIDES || index === currentSlide) return;
+
+    // Remove active from old slide
+    slides[currentSlide].classList.remove('active');
+
+    // Set new
+    currentSlide = index;
+    visited.add(index);
+
+    // Add active to new slide
+    slides[currentSlide].classList.add('active');
+
+    updateUI();
+    resetAutoPlayTimer();
+  }
+
+  function next() {
+    if (currentSlide < TOTAL_SLIDES - 1) {
+      goToSlide(currentSlide + 1);
+    } else {
+      stopAutoPlay();
+    }
+  }
+
+  function prev() {
+    if (currentSlide > 0) {
+      goToSlide(currentSlide - 1);
+    }
+  }
+
+  // ---- UI Updates ----
+  function updateUI() {
+    // Progress bar
+    const pct = (currentSlide / (TOTAL_SLIDES - 1)) * 100;
+    progressBar.style.width = pct + '%';
+
+    // Counter
+    slideCounter.innerHTML = '<span class="current">' + (currentSlide + 1) + '</span> of ' + TOTAL_SLIDES;
+
+    // Dots
+    const dots = dotsContainer.querySelectorAll('.dot');
+    dots.forEach(function(dot, i) {
+      dot.classList.toggle('active', i === currentSlide);
+      dot.classList.toggle('visited', visited.has(i) && i !== currentSlide);
+    });
+
+    // Nav buttons
+    prevBtn.disabled = currentSlide === 0;
+    nextBtn.disabled = currentSlide === TOTAL_SLIDES - 1;
+  }
+
+  // ---- Auto-play ----
+  function startAutoPlay() {
+    isPlaying = true;
+    playIcon.style.display = 'none';
+    pauseIcon.style.display = 'block';
+    playBtn.title = 'Pause (Space)';
+    autoPlayTimer = setInterval(function() {
+      if (currentSlide < TOTAL_SLIDES - 1) {
+        next();
+      } else {
+        stopAutoPlay();
+      }
+    }, AUTO_PLAY_MS);
+  }
+
+  function stopAutoPlay() {
+    isPlaying = false;
+    playIcon.style.display = 'block';
+    pauseIcon.style.display = 'none';
+    playBtn.title = 'Auto-play (Space)';
+    clearInterval(autoPlayTimer);
+    autoPlayTimer = null;
+  }
+
+  function toggleAutoPlay() {
+    if (isPlaying) {
+      stopAutoPlay();
+    } else {
+      startAutoPlay();
+    }
+  }
+
+  function resetAutoPlayTimer() {
+    if (isPlaying) {
+      clearInterval(autoPlayTimer);
+      autoPlayTimer = setInterval(function() {
+        if (currentSlide < TOTAL_SLIDES - 1) {
+          next();
+        } else {
+          stopAutoPlay();
+        }
+      }, AUTO_PLAY_MS);
+    }
+  }
+
+  // ---- Fullscreen ----
+  function toggleFullscreen() {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      if (appEl.requestFullscreen) {
+        appEl.requestFullscreen();
+      } else if (appEl.webkitRequestFullscreen) {
+        appEl.webkitRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      }
+    }
+  }
+
+  // ---- Shortcut Toast ----
+  let toastTimeout = null;
+  function showShortcutToast() {
+    shortcutToast.classList.add('visible');
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(function() {
+      shortcutToast.classList.remove('visible');
+    }, 3000);
+  }
+
+  // ---- Event Listeners ----
+
+  // Navigation buttons
+  prevBtn.addEventListener('click', prev);
+  nextBtn.addEventListener('click', next);
+  playBtn.addEventListener('click', toggleAutoPlay);
+  fullscreenBtn.addEventListener('click', toggleFullscreen);
+  shortcutsBtn.addEventListener('click', showShortcutToast);
+
+  // Keyboard
+  document.addEventListener('keydown', function(e) {
+    // Ignore if focused on an input
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    switch (e.key) {
+      case 'ArrowRight':
+      case 'Right':
+        e.preventDefault();
+        next();
+        break;
+      case 'ArrowLeft':
+      case 'Left':
+        e.preventDefault();
+        prev();
+        break;
+      case ' ':
+        e.preventDefault();
+        toggleAutoPlay();
+        break;
+      case 'f':
+      case 'F':
+        e.preventDefault();
+        toggleFullscreen();
+        break;
+      case 'Escape':
+        if (isPlaying) stopAutoPlay();
+        break;
+    }
+  });
+
+  // Touch / swipe support
+  let touchStartX = 0;
+  let touchStartY = 0;
+  const stage = document.getElementById('stage');
+
+  stage.addEventListener('touchstart', function(e) {
+    touchStartX = e.changedTouches[0].screenX;
+    touchStartY = e.changedTouches[0].screenY;
+  }, { passive: true });
+
+  stage.addEventListener('touchend', function(e) {
+    const dx = e.changedTouches[0].screenX - touchStartX;
+    const dy = e.changedTouches[0].screenY - touchStartY;
+    // Only if horizontal swipe is dominant
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx < 0) next();
+      else prev();
+    }
+  }, { passive: true });
+
+  // ---- Preloader ----
+  // Preload first few images, then remove preloader
+  var imagesToPreload = [
+    'slides/01-dashboard.png',
+    'slides/02-dashboard-deals.png',
+    'slides/03-deal-details.png'
+  ];
+
+  var loaded = 0;
+  var totalToLoad = imagesToPreload.length;
+
+  function checkPreloadDone() {
+    loaded++;
+    if (loaded >= totalToLoad) {
+      setTimeout(function() {
+        preloader.classList.add('done');
+        setTimeout(function() {
+          preloader.style.display = 'none';
+        }, 500);
+      }, 200);
+    }
+  }
+
+  imagesToPreload.forEach(function(src) {
+    var img = new Image();
+    img.onload = checkPreloadDone;
+    img.onerror = checkPreloadDone;
+    img.src = src;
+  });
+
+  // Fallback: remove preloader after 3s no matter what
+  setTimeout(function() {
+    if (!preloader.classList.contains('done')) {
+      preloader.classList.add('done');
+      setTimeout(function() {
+        preloader.style.display = 'none';
+      }, 500);
+    }
+  }, 3000);
+
+  // ---- Initial State ----
+  updateUI();
+
+})();
+</script>
+
+</body>
+</html>

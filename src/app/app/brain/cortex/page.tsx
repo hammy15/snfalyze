@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Database, Search, FileText, Brain } from 'lucide-react';
+import { useState } from 'react';
+import { Database, Search, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface KnowledgeFile {
@@ -21,19 +21,40 @@ const TOPIC_CATEGORIES = [
   { key: 'benchmarks', label: 'Benchmarks', color: 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' },
 ];
 
+function RelevanceBadge({ score }: { score: number }) {
+  const pct = Math.round(score * 100);
+  return (
+    <span className={cn(
+      'text-[9px] font-bold px-1.5 py-0.5 rounded-full',
+      pct >= 80 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' :
+      pct >= 50 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' :
+      'bg-surface-100 text-surface-500 dark:bg-surface-800 dark:text-surface-400'
+    )}>
+      {pct}%
+    </span>
+  );
+}
+
 export default function CortexPage() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<KnowledgeFile[]>([]);
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState<KnowledgeFile | null>(null);
+  const [totalFiles, setTotalFiles] = useState<number | null>(null);
 
-  const doSearch = async () => {
-    if (!query.trim()) return;
+  const doSearch = async (searchQuery?: string) => {
+    const q = searchQuery || query;
+    if (!q.trim()) return;
+    if (searchQuery) setQuery(searchQuery);
     setSearching(true);
     try {
-      const r = await fetch(`/api/knowledge/search?q=${encodeURIComponent(query)}`);
+      const r = await fetch(`/api/knowledge/search?q=${encodeURIComponent(q)}`);
       const data = await r.json();
-      setResults(data.files || []);
+      const files = (data.files || []).sort((a: KnowledgeFile, b: KnowledgeFile) =>
+        (b.relevanceScore || 0) - (a.relevanceScore || 0)
+      );
+      setResults(files);
+      if (data.totalFiles) setTotalFiles(data.totalFiles);
     } catch {
       setResults([]);
     }
@@ -49,6 +70,7 @@ export default function CortexPage() {
         </h1>
         <p className="text-sm text-surface-400 mt-1">
           Browse and search Cascadia&apos;s institutional intelligence — what Newo and Dev know
+          {totalFiles && <span className="ml-1 text-primary-500 font-medium">({totalFiles} files)</span>}
         </p>
       </div>
 
@@ -66,7 +88,7 @@ export default function CortexPage() {
           />
         </div>
         <button
-          onClick={doSearch}
+          onClick={() => doSearch()}
           disabled={searching}
           className="px-5 py-2.5 neu-button-primary rounded-xl text-sm font-medium"
         >
@@ -79,7 +101,7 @@ export default function CortexPage() {
         {TOPIC_CATEGORIES.map((cat) => (
           <button
             key={cat.key}
-            onClick={() => { setQuery(cat.key); }}
+            onClick={() => doSearch(cat.key)}
             className={cn('px-3 py-1 rounded-full text-xs font-medium', cat.color)}
           >
             {cat.label}
@@ -102,7 +124,7 @@ export default function CortexPage() {
             {['staffing', 'quality', 'pdpm', 'reimbursement', 'operational', 'clinical'].map((topic) => (
               <button
                 key={topic}
-                onClick={() => { setQuery(topic); doSearch(); }}
+                onClick={() => doSearch(topic)}
                 className="block w-full text-left px-3 py-2 rounded-lg text-xs text-surface-600 hover:bg-teal-50 dark:hover:bg-teal-500/5 transition-colors"
               >
                 <FileText className="w-3 h-3 inline mr-2 text-teal-400" />
@@ -125,7 +147,7 @@ export default function CortexPage() {
             {['transactions', 'buyers', 'market', 'valuations', 'deal-intelligence', 'ipo'].map((topic) => (
               <button
                 key={topic}
-                onClick={() => { setQuery(topic); doSearch(); }}
+                onClick={() => doSearch(topic)}
                 className="block w-full text-left px-3 py-2 rounded-lg text-xs text-surface-600 hover:bg-orange-50 dark:hover:bg-orange-500/5 transition-colors"
               >
                 <FileText className="w-3 h-3 inline mr-2 text-orange-400" />
@@ -136,7 +158,7 @@ export default function CortexPage() {
         </div>
       </div>
 
-      {/* Search Results */}
+      {/* Search Results with Relevance Scores */}
       {results.length > 0 && (
         <div className="neu-card-warm p-4 space-y-2">
           <h2 className="text-sm font-bold text-surface-700 dark:text-surface-200">
@@ -153,12 +175,24 @@ export default function CortexPage() {
                   : 'hover:bg-[#EFEDE8] dark:hover:bg-surface-800/50'
               )}
             >
-              <div className="text-xs font-medium text-surface-700 dark:text-surface-200">
-                {file.filename}
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-medium text-surface-700 dark:text-surface-200">
+                  {file.filename}
+                </div>
+                {file.relevanceScore > 0 && <RelevanceBadge score={file.relevanceScore} />}
               </div>
               <div className="text-[10px] text-surface-400 mt-1 line-clamp-2">
                 {file.content.slice(0, 200)}
               </div>
+              {file.topics?.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {file.topics.slice(0, 4).map((t) => (
+                    <span key={t} className="text-[8px] px-1.5 py-0.5 rounded-full bg-surface-100 dark:bg-surface-800 text-surface-500">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              )}
             </button>
           ))}
         </div>
@@ -168,9 +202,12 @@ export default function CortexPage() {
       {selected && (
         <div className="neu-card-warm p-4">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-bold text-surface-700 dark:text-surface-200">
-              {selected.filename}
-            </h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-bold text-surface-700 dark:text-surface-200">
+                {selected.filename}
+              </h2>
+              {selected.relevanceScore > 0 && <RelevanceBadge score={selected.relevanceScore} />}
+            </div>
             <button
               onClick={() => setSelected(null)}
               className="text-xs text-surface-400 hover:text-surface-600"

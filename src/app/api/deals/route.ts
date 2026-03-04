@@ -41,6 +41,21 @@ export async function GET(request: NextRequest) {
         const riskScore = riskData?.compositeScore as number | null ?? null;
         const riskRating = riskData?.rating as string | null ?? null;
 
+        // Extract financials from pro_forma stage
+        const proFormaStage = workspaceStages.find(s => s.stage === 'pro_forma');
+        const pfData = proFormaStage?.stageData as Record<string, unknown> | null;
+        const t12m = pfData?.t12m as Record<string, unknown> | undefined;
+        const valuation = pfData?.valuation as Record<string, unknown> | undefined;
+        const proforma = pfData?.proforma as Record<string, unknown> | undefined;
+        const y1 = proforma?.year1 as Record<string, unknown> | undefined;
+
+        const ebitdar = (t12m?.ebitdar as number) ?? (y1?.ebitdar as number) ?? null;
+        const valuationLow = (valuation?.lowValue as number) ?? null;
+        const valuationHigh = (valuation?.highValue as number) ?? null;
+        const capRate = (valuation?.method as string)?.includes('Cap')
+          ? ((valuation?.lowMultiple as number) ?? null)?.toString() ?? null
+          : null;
+
         // Calculate workspace completion
         const completedStages = workspaceStages.filter(s => s.status === 'completed').length;
         const totalStages = workspaceStages.length;
@@ -48,6 +63,11 @@ export async function GET(request: NextRequest) {
 
         return {
           ...deal,
+          ebitdar,
+          valuationLow,
+          valuationHigh,
+          capRate,
+          pricePerBed: deal.askingPrice && deal.beds ? Number(deal.askingPrice) / deal.beds : null,
           facilities: dealFacilities,
           workspace: totalStages > 0 ? {
             currentStage: deal.workspaceCurrentStage,

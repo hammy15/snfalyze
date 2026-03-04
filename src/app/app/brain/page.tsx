@@ -5,6 +5,7 @@ import { BrainVisualization } from '@/components/brain/BrainVisualization';
 import { CILStatusBar } from '@/components/brain/CILStatusBar';
 import { ActivityFeed } from '@/components/brain/ActivityFeed';
 import { SenseIndicator } from '@/components/brain/SenseIndicator';
+import { cn } from '@/lib/utils';
 
 interface CILStatus {
   knowledgeFileCount: number;
@@ -112,6 +113,55 @@ export default function BrainDashboard() {
           ipoProgress={status.ipoProgress}
         />
       )}
+
+      {/* Staffing Intelligence Quick View (Newo's Domain) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="neu-card-warm p-4 border-l-4 border-teal-400">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-3 h-3 rounded-full bg-teal-500" />
+            <h2 className="text-sm font-bold text-teal-700 dark:text-teal-400">Newo — Operational Benchmarks</h2>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Nat. Avg HPPD', value: '3.9', target: '4.0+', color: 'text-teal-600' },
+              { label: 'Nat. Turnover', value: '46.4%', target: '<40%', color: 'text-amber-600' },
+              { label: 'Agency Threshold', value: '<5%', target: 'Red >15%', color: 'text-emerald-600' },
+            ].map((m) => (
+              <div key={m.label} className="text-center">
+                <div className={cn('text-lg font-bold', m.color)}>{m.value}</div>
+                <div className="text-[9px] text-surface-400">{m.label}</div>
+                <div className="text-[8px] text-surface-300 mt-0.5">Target: {m.target}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 text-[10px] text-surface-400">
+            Cascadia platform lift: 200-400bps EBITDAR margin improvement within 24 months
+          </div>
+        </div>
+
+        <div className="neu-card-warm p-4 border-l-4 border-orange-400">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-3 h-3 rounded-full bg-orange-500" />
+            <h2 className="text-sm font-bold text-orange-700 dark:text-orange-400">Dev — Market Benchmarks</h2>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'SNF Cap Rate', value: '12.5%', target: '14% lender', color: 'text-orange-600' },
+              { label: 'ALF Cap Rate', value: '6.5-7.5%', target: 'National', color: 'text-orange-600' },
+              { label: 'Leased Multiple', value: '2.5x', target: '2.0x lender', color: 'text-orange-600' },
+            ].map((m) => (
+              <div key={m.label} className="text-center">
+                <div className={cn('text-lg font-bold', m.color)}>{m.value}</div>
+                <div className="text-[9px] text-surface-400">{m.label}</div>
+                <div className="text-[8px] text-surface-300 mt-0.5">{m.target}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 text-[10px] text-surface-400">
+            IPO target: 120-130+ operations (~$1B+ revenue). Current: 58 ops.
+          </div>
+        </div>
+      </div>
 
       {/* Two-column layout: Activity + Brain Health */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -26,12 +26,20 @@ export async function createResearchMission(
     metadata: { missionId: row.id, context },
   });
 
-  // Fire and forget — execute async
-  executeResearchMission(row.id, topic, context).catch((err) =>
-    console.error('[CIL Research] Mission execution failed:', err)
-  );
+  // Execute synchronously — Vercel serverless kills background work after response
+  try {
+    await executeResearchMission(row.id, topic, context);
+  } catch (err) {
+    console.error('[CIL Research] Mission execution failed:', err);
+  }
 
-  return mapMissionRow(row);
+  // Re-fetch to get updated status
+  const [updated] = await db
+    .select()
+    .from(researchMissions)
+    .where(eq(researchMissions.id, row.id));
+
+  return mapMissionRow(updated || row);
 }
 
 export async function executeResearchMission(

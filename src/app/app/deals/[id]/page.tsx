@@ -768,15 +768,27 @@ export default function DealDetailPage() {
       riskCount={risks.length}
       hasFinancials={documents.some(d => d.category === 'financials')}
     >
-      {/* Workspace Entry Button */}
-      <div className="mb-4">
-        <Link
-          href={`/app/deals/${dealId}/workspace`}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary-500 hover:bg-primary-600 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
-        >
-          <ListChecks className="w-4 h-4" />
-          Open Deal Workspace
-        </Link>
+      {/* Workspace Summary Banner */}
+      <div className="mb-4 p-4 rounded-xl bg-gradient-to-r from-teal-50 to-orange-50 dark:from-teal-500/5 dark:to-orange-500/5 border border-surface-200/50 dark:border-surface-700/50">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-teal-500" title="Newo" />
+              <span className="w-2.5 h-2.5 rounded-full bg-orange-500" title="Dev" />
+            </div>
+            <div>
+              <div className="text-sm font-bold text-surface-800 dark:text-surface-100">CIL Workspace</div>
+              <div className="text-[10px] text-surface-400">Dual-brain analysis pipeline</div>
+            </div>
+          </div>
+          <Link
+            href={`/app/deals/${dealId}/workspace`}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-xs font-medium rounded-lg transition-colors shadow-sm"
+          >
+            <ListChecks className="w-3.5 h-3.5" />
+            Open Workspace
+          </Link>
+        </div>
       </div>
 
       {/* Tabs Content (now inside workbench canvas) */}

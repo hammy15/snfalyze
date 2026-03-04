@@ -2425,3 +2425,59 @@ export const statePerformance = pgTable(
     tierIdx: index('idx_state_performance_tier').on(table.performanceTier),
   })
 );
+
+// =============================================================================
+// PAGE ANALYTICS — Visitor tracking
+// =============================================================================
+
+export const pageViews = pgTable(
+  'page_views',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    path: varchar('path', { length: 500 }).notNull(),
+    visitorId: varchar('visitor_id', { length: 64 }).notNull(), // hashed fingerprint
+    userAgent: text('user_agent'),
+    referrer: text('referrer'),
+    ip: varchar('ip', { length: 45 }),
+    country: varchar('country', { length: 2 }),
+    sessionId: varchar('session_id', { length: 64 }).notNull(),
+    duration: integer('duration'), // seconds on page, updated via beacon
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    visitorIdx: index('idx_page_views_visitor').on(table.visitorId),
+    pathIdx: index('idx_page_views_path').on(table.path),
+    sessionIdx: index('idx_page_views_session').on(table.sessionId),
+    createdAtIdx: index('idx_page_views_created_at').on(table.createdAt),
+  })
+);
+
+// =============================================================================
+// AHA MOMENTS — Breakthroughs from Newo+Dev debates
+// =============================================================================
+
+export const ahaMoments = pgTable(
+  'aha_moments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    dealId: uuid('deal_id').references(() => deals.id, { onDelete: 'set null' }),
+    dealName: varchar('deal_name', { length: 300 }),
+    title: varchar('title', { length: 500 }).notNull(), // The AHA moment headline
+    insight: text('insight').notNull(), // The breakthrough finding
+    newoPosition: text('newo_position'), // What Newo argued
+    devPosition: text('dev_position'), // What Dev argued
+    resolution: text('resolution'), // How it was resolved
+    category: varchar('category', { length: 50 }), // 'valuation', 'risk', 'operations', 'strategy', 'market'
+    significance: varchar('significance', { length: 20 }).default('medium'), // 'high', 'medium', 'low'
+    confidence: integer('confidence'), // 0-100
+    tags: jsonb('tags'), // string[]
+    metadata: jsonb('metadata'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    dealIdx: index('idx_aha_moments_deal').on(table.dealId),
+    categoryIdx: index('idx_aha_moments_category').on(table.category),
+    significanceIdx: index('idx_aha_moments_significance').on(table.significance),
+    createdAtIdx: index('idx_aha_moments_created_at').on(table.createdAt),
+  })
+);

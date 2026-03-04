@@ -12,6 +12,8 @@ import {
   Layers,
   Database,
   Search,
+  Lightbulb,
+  BarChart3,
   ArrowLeft,
 } from 'lucide-react';
 
@@ -28,6 +30,8 @@ const BRAIN_NAV: NavItem[] = [
   { href: '/app/brain/pipeline', icon: Layers, label: 'Pipeline' },
   { href: '/app/brain/cortex', icon: Database, label: 'Cortex' },
   { href: '/app/brain/research', icon: Search, label: 'Research' },
+  { href: '/app/brain/aha', icon: Lightbulb, label: 'AHA' },
+  { href: '/app/brain/analytics', icon: BarChart3, label: 'Analytics' },
 ];
 
 export function NeuralRail() {

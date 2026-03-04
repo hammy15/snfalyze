@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
           updatedAt: new Date(),
         }).where(eq(deals.id, deal.id));
 
-        await logActivity('dual_brain_analysis', `Dual-brain analysis complete: ${deal.name} — ${dualBrainResult.synthesis.recommendation} (${dualBrainResult.synthesis.confidence}%)`, {
+        await logActivity('analysis', `Dual-brain analysis complete: ${deal.name} — ${dualBrainResult.synthesis.recommendation} (${dualBrainResult.synthesis.confidence}%)`, {
           metadata: {
             dealId: deal.id,
             newoConfidence: dualBrainResult.newo?.confidenceScore,

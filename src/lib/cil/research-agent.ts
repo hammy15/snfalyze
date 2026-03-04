@@ -9,6 +9,7 @@ import { desc } from 'drizzle-orm';
 import { getRouter } from '../ai/singleton';
 import { logActivity } from './state-manager';
 import type { ResearchMission } from './types';
+import { extractAhaMoments } from './aha-extractor';
 
 export async function createResearchMission(
   topic: string,
@@ -93,6 +94,15 @@ export async function executeResearchMission(
     await logActivity('research', `Research complete: "${topic}" (${(latencyMs / 1000).toFixed(1)}s)`, {
       metadata: { missionId, sourceCount: sources.length },
     });
+
+    // Auto-extract AHA moments from research findings (non-blocking)
+    extractAhaMoments({
+      dealName: topic,
+      narrative: findings,
+      state: context?.state,
+      assetType: context?.assetType,
+      source: 'research',
+    }).catch(err => console.error('[AHA] Research extract failed:', err));
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     await db

@@ -10,6 +10,7 @@ import {
   aggregatedPreferences,
   historicalDeals,
   deals,
+  ahaMoments as ahaMomentsTable,
 } from '@/db/schema';
 import { eq, sql, count, avg, desc } from 'drizzle-orm';
 import type { CILState, CILActivity, StatePerformanceModel } from './types';
@@ -25,16 +26,18 @@ export async function getCILState(): Promise<CILState> {
     return _cachedState;
   }
 
-  const [knowledgeCount, dealsAnalyzed, historicalCount, prefCount, missionCount] =
+  const [knowledgeCount, dealRows, historicalCount, prefCount, missionCount, ahaCount] =
     await Promise.all([
       countKnowledgeFiles(),
       db.select({ count: count() }).from(deals),
       db.select({ count: count() }).from(historicalDeals),
       db.select({ count: count() }).from(aggregatedPreferences),
       db.select({ count: count() }).from(researchMissions),
+      countAhaMoments(),
     ]);
 
-  const totalDeals = (dealsAnalyzed[0]?.count ?? 0) + (historicalCount[0]?.count ?? 0);
+  const dealsInPipeline = dealRows[0]?.count ?? 0;
+  const totalDeals = dealsInPipeline + (historicalCount[0]?.count ?? 0);
 
   // Compute overall confidence from aggregated preferences
   const confResult = await db
@@ -44,11 +47,12 @@ export async function getCILState(): Promise<CILState> {
 
   _cachedState = {
     knowledgeFileCount: knowledgeCount,
-    dealsAnalyzed: dealsAnalyzed[0]?.count ?? 0,
+    dealsAnalyzed: dealsInPipeline,
     dealsLearned: historicalCount[0]?.count ?? 0,
     totalDeals,
     preferenceCount: prefCount[0]?.count ?? 0,
     researchMissions: missionCount[0]?.count ?? 0,
+    ahaMoments: ahaCount,
     avgConfidence: Math.round(avgConfidence),
     ipoProgress: {
       currentOps: 58,
@@ -193,6 +197,15 @@ export async function refreshStatePerformance(): Promise<void> {
 }
 
 // ── Knowledge file counter ─────────────────────────────────────────
+
+async function countAhaMoments(): Promise<number> {
+  try {
+    const result = await db.select({ count: count() }).from(ahaMomentsTable);
+    return result[0]?.count ?? 0;
+  } catch {
+    return 0;
+  }
+}
 
 async function countKnowledgeFiles(): Promise<number> {
   try {

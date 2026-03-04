@@ -3,6 +3,7 @@ import { db, deals } from '@/db';
 import { eq, inArray, isNull } from 'drizzle-orm';
 import { analyzeDealDualBrain } from '@/lib/analysis/engine';
 import { logActivity } from '@/lib/cil/state-manager';
+import { extractAhaMoments } from '@/lib/cil/aha-extractor';
 
 // Allow up to 5 minutes for dual-brain analysis
 export const maxDuration = 300;
@@ -63,6 +64,18 @@ export async function POST(request: NextRequest) {
             totalLatencyMs: dualBrainResult.metadata.totalLatencyMs,
           },
         });
+
+        // Auto-extract AHA moments from the analysis (non-blocking)
+        extractAhaMoments({
+          dealId: deal.id,
+          dealName: deal.name,
+          narrative: dualBrainResult.synthesis.unifiedNarrative || '',
+          thesis: dualBrainResult.synthesis.keyInsight || '',
+          state: deal.primaryState,
+          assetType: deal.assetType,
+          confidence: dualBrainResult.synthesis.confidence,
+          source: 'dual_brain',
+        }).catch(err => console.error('[AHA] Auto-extract failed:', err));
 
         results.push({
           dealId: deal.id,

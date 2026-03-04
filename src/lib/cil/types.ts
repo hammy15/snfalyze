@@ -14,6 +14,7 @@ export interface CILState {
   totalDeals: number;
   preferenceCount: number;
   researchMissions: number;
+  ahaMoments: number;
   avgConfidence: number; // 0-100
   ipoProgress: {
     currentOps: number;

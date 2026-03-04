@@ -2333,3 +2333,95 @@ export const facilityAlertsRelations = relations(facilityAlerts, ({ one }) => ({
     references: [facilityWatchlist.id],
   }),
 }));
+
+// ============================================================================
+// CIL (Cascadia Intelligence Layer) Tables
+// ============================================================================
+
+export const researchMissionStatusEnum = pgEnum('research_mission_status', [
+  'queued',
+  'researching',
+  'complete',
+  'failed',
+]);
+
+export const cilActivityTypeEnum = pgEnum('cil_activity_type', [
+  'analysis',
+  'learning',
+  'research',
+  'sense_activation',
+  'knowledge_import',
+  'rerun',
+  'insight',
+]);
+
+export const performanceTierEnum = pgEnum('performance_tier', [
+  'strong',
+  'developing',
+  'limited',
+  'no_data',
+]);
+
+export const researchMissions = pgTable(
+  'research_missions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    topic: varchar('topic', { length: 500 }).notNull(),
+    context: jsonb('context'), // { state?, assetType?, target? }
+    status: researchMissionStatusEnum('status').default('queued'),
+    findings: text('findings'),
+    sources: jsonb('sources'), // Array of { url, title, snippet }
+    importedToKnowledge: boolean('imported_to_knowledge').default(false),
+    knowledgeFilePath: text('knowledge_file_path'),
+    error: text('error'),
+    latencyMs: integer('latency_ms'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (table) => ({
+    statusIdx: index('idx_research_missions_status').on(table.status),
+    createdAtIdx: index('idx_research_missions_created_at').on(table.createdAt),
+  })
+);
+
+export const cilActivityLog = pgTable(
+  'cil_activity_log',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    activityType: cilActivityTypeEnum('activity_type').notNull(),
+    brainId: varchar('brain_id', { length: 20 }), // 'newo', 'dev', or null for CIL-level
+    senseId: varchar('sense_id', { length: 50 }), // 'cms', 'financial', 'market', 'regulatory', 'deal'
+    dealId: uuid('deal_id').references(() => deals.id, { onDelete: 'set null' }),
+    summary: text('summary').notNull(),
+    metadata: jsonb('metadata'), // Flexible payload per activity type
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    activityTypeIdx: index('idx_cil_activity_type').on(table.activityType),
+    brainIdIdx: index('idx_cil_activity_brain').on(table.brainId),
+    dealIdIdx: index('idx_cil_activity_deal').on(table.dealId),
+    createdAtIdx: index('idx_cil_activity_created_at').on(table.createdAt),
+  })
+);
+
+export const statePerformance = pgTable(
+  'state_performance',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    state: varchar('state', { length: 2 }).notNull(),
+    assetType: assetTypeEnum('asset_type'),
+    dealCount: integer('deal_count').default(0),
+    avgConfidence: decimal('avg_confidence', { precision: 5, scale: 2 }),
+    avgCapRate: decimal('avg_cap_rate', { precision: 5, scale: 4 }),
+    avgPricePerBed: decimal('avg_price_per_bed', { precision: 15, scale: 2 }),
+    performanceTier: performanceTierEnum('performance_tier').default('no_data'),
+    topPatterns: jsonb('top_patterns'), // Array of key learnings for this state
+    metadata: jsonb('metadata'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    stateIdx: uniqueIndex('idx_state_performance_state_asset').on(table.state, table.assetType),
+    tierIdx: index('idx_state_performance_tier').on(table.performanceTier),
+  })
+);

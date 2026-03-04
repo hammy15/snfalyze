@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { GraduationCap, RefreshCw, Map, TrendingUp, Upload, Brain, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { GraduationCap, RefreshCw, Map, TrendingUp, Upload, Brain, Loader2, Search, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface HistoricalDeal {
@@ -12,6 +13,19 @@ interface HistoricalDeal {
   primaryState: string;
   beds: number;
   dealDate: string;
+}
+
+interface PipelineDeal {
+  id: string;
+  name: string;
+  status: string;
+  assetType: string;
+  primaryState: string;
+  beds: number;
+  dataHealth: 'good' | 'partial' | 'shell';
+  hasT12: boolean;
+  hasProforma: boolean;
+  hasRisk: boolean;
 }
 
 interface GrowthPoint {
@@ -29,10 +43,12 @@ interface StatePerf {
 }
 
 export default function LearningPage() {
+  const router = useRouter();
   const [tab, setTab] = useState<'overview' | 'deals' | 'map' | 'rerun'>('overview');
   const [growth, setGrowth] = useState<GrowthPoint[]>([]);
   const [performance, setPerformance] = useState<Record<string, StatePerf>>({});
   const [deals, setDeals] = useState<HistoricalDeal[]>([]);
+  const [pipelineDeals, setPipelineDeals] = useState<PipelineDeal[]>([]);
   const [loading, setLoading] = useState(true);
   const [rerunning, setRerunning] = useState<string | null>(null);
   const [rerunResult, setRerunResult] = useState<string | null>(null);
@@ -42,13 +58,21 @@ export default function LearningPage() {
       fetch('/api/learning/growth').then((r) => r.json()).catch(() => []),
       fetch('/api/cil/performance').then((r) => r.json()).catch(() => ({})),
       fetch('/api/learning/deals?limit=50').then((r) => r.json()).catch(() => []),
-    ]).then(([g, p, d]) => {
+      fetch('/api/deals?limit=50').then((r) => r.json()).catch(() => ({ data: [] })),
+    ]).then(([g, p, d, pipeline]) => {
       setGrowth(Array.isArray(g) ? g : []);
       setPerformance(p || {});
       setDeals(Array.isArray(d) ? d : d.data || []);
+      setPipelineDeals(pipeline.data || []);
       setLoading(false);
     });
   }, []);
+
+  // Calculate unlearned deals
+  const learnedIds = new Set(deals.map((d) => d.id));
+  const unlearnedDeals = pipelineDeals.filter(
+    (d) => !learnedIds.has(d.id) && d.status !== 'new'
+  );
 
   const handleRerun = async (dealId: string) => {
     setRerunning(dealId);
@@ -122,6 +146,40 @@ export default function LearningPage() {
           {/* Overview Tab */}
           {tab === 'overview' && (
             <div className="space-y-6">
+              {/* Unlearned Deals Banner */}
+              {unlearnedDeals.length > 0 && (
+                <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200/50 dark:border-amber-500/20 flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="text-sm font-bold text-amber-700 dark:text-amber-400">
+                      {unlearnedDeals.length} deal{unlearnedDeals.length > 1 ? 's' : ''} available to learn from
+                    </div>
+                    <p className="text-xs text-amber-600/80 dark:text-amber-300/70 mt-0.5">
+                      These pipeline deals haven&apos;t been ingested into the learning engine yet.
+                      Upload their proformas and outcomes to make Newo + Dev smarter.
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {unlearnedDeals.slice(0, 5).map((d) => (
+                        <span key={d.id} className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                          {d.name}
+                        </span>
+                      ))}
+                      {unlearnedDeals.length > 5 && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                          +{unlearnedDeals.length - 5} more
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setTab('deals')}
+                      className="mt-3 px-4 py-1.5 text-xs font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
+                    >
+                      View Unlearned Deals
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Growth Stats */}
               <div className="grid grid-cols-4 gap-3">
                 {[
@@ -241,20 +299,38 @@ export default function LearningPage() {
                   const perf = performance[state] as StatePerf | undefined;
                   const tier = perf?.performanceTier || 'no_data';
                   const tierColor = TIER_COLORS[tier] || TIER_COLORS.no_data;
+                  const isNoData = !perf || perf.dealCount === 0;
                   return (
-                    <div
+                    <button
                       key={state}
-                      className="neu-card-warm p-2 flex flex-col items-center cursor-default"
-                      title={perf ? `${state}: ${perf.dealCount} deals, ${perf.avgConfidence}% confidence` : `${state}: No data`}
+                      onClick={() => {
+                        if (isNoData) {
+                          router.push(`/app/brain/research?topic=${encodeURIComponent(`${state} SNF market analysis 2026`)}`);
+                        }
+                      }}
+                      className={cn(
+                        'neu-card-warm p-2 flex flex-col items-center transition-colors',
+                        isNoData ? 'cursor-pointer hover:border-primary-300 group' : 'cursor-default'
+                      )}
+                      title={
+                        isNoData
+                          ? `${state}: No data — Click to research`
+                          : `${state}: ${perf.dealCount} deals, ${perf.avgConfidence}% confidence`
+                      }
                     >
                       <div className={cn('w-4 h-4 rounded-sm mb-1', tierColor)} />
                       <span className="text-[10px] font-bold text-surface-600">{state}</span>
-                      {perf && perf.dealCount > 0 && (
+                      {perf && perf.dealCount > 0 ? (
                         <span className="text-[8px] text-surface-300">{perf.dealCount}</span>
+                      ) : (
+                        <Search className="w-2.5 h-2.5 text-surface-300 opacity-0 group-hover:opacity-100 transition-opacity" />
                       )}
-                    </div>
+                    </button>
                   );
                 })}
+              </div>
+              <div className="text-[10px] text-surface-300 mt-2">
+                Click any gray (no data) state to dispatch a research agent
               </div>
             </div>
           )}

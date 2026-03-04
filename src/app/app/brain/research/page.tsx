@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Search, Plus, ExternalLink, Download, Clock, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { Search, Plus, ExternalLink, Download, Clock, CheckCircle2, XCircle, Loader2, Lightbulb } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ResearchMission {
@@ -27,28 +28,131 @@ interface PipelineDeal {
   primaryState: string;
   assetType: string;
   name: string;
+  thesis: string | null;
+  specialCircumstances: string | null;
+  beds: number;
+  status: string;
 }
 
-function generateSuggestions(deals: PipelineDeal[]): string[] {
-  const suggestions: string[] = [];
+interface Suggestion {
+  topic: string;
+  source: string; // 'pipeline' | 'deal-specific'
+  dealName?: string;
+}
+
+function generateSuggestions(deals: PipelineDeal[]): Suggestion[] {
+  const suggestions: Suggestion[] = [];
   const states = [...new Set(deals.map((d) => d.primaryState).filter(Boolean))];
   const types = [...new Set(deals.map((d) => d.assetType).filter(Boolean))];
 
+  // State-level suggestions
   states.forEach((st) => {
-    suggestions.push(`${st} Medicaid rate trends 2026`);
-    suggestions.push(`${st} SNF staffing pool depth and wage analysis`);
-    suggestions.push(`${st} Certificate of Need requirements`);
+    suggestions.push({ topic: `${st} Medicaid rate trends 2026`, source: 'pipeline' });
+    suggestions.push({ topic: `${st} SNF staffing pool depth and wage analysis`, source: 'pipeline' });
+    suggestions.push({ topic: `${st} Certificate of Need requirements`, source: 'pipeline' });
   });
   types.forEach((t) => {
-    suggestions.push(`${t} national cap rate benchmarks Q1 2026`);
+    suggestions.push({ topic: `${t} national cap rate benchmarks Q1 2026`, source: 'pipeline' });
   });
   if (states.length > 0) {
-    suggestions.push(`${states[0]} survey body enforcement patterns`);
+    suggestions.push({ topic: `${states[0]} survey body enforcement patterns`, source: 'pipeline' });
   }
-  return [...new Set(suggestions)].slice(0, 8);
+
+  // Deal-specific suggestions from thesis and special circumstances
+  deals.forEach((deal) => {
+    if (deal.thesis) {
+      // Extract keywords from thesis for targeted research
+      const thesis = deal.thesis.toLowerCase();
+      if (thesis.includes('vent') || thesis.includes('respiratory')) {
+        suggestions.push({
+          topic: `${deal.primaryState || ''} ventilator/respiratory reimbursement rates and regulations`.trim(),
+          source: 'deal-specific',
+          dealName: deal.name,
+        });
+      }
+      if (thesis.includes('memory care') || thesis.includes('alzheimer') || thesis.includes('dementia')) {
+        suggestions.push({
+          topic: `${deal.primaryState || ''} memory care unit licensing and staffing requirements`.trim(),
+          source: 'deal-specific',
+          dealName: deal.name,
+        });
+      }
+      if (thesis.includes('medicaid') || thesis.includes('managed care')) {
+        suggestions.push({
+          topic: `${deal.primaryState || ''} Medicaid managed care penetration and rate adequacy`.trim(),
+          source: 'deal-specific',
+          dealName: deal.name,
+        });
+      }
+      if (thesis.includes('turnaround') || thesis.includes('distressed')) {
+        suggestions.push({
+          topic: `${deal.primaryState || ''} distressed SNF acquisition playbook and regulatory timeline`.trim(),
+          source: 'deal-specific',
+          dealName: deal.name,
+        });
+      }
+      if (thesis.includes('campus') || thesis.includes('ccrc') || thesis.includes('continuum')) {
+        suggestions.push({
+          topic: `CCRC continuum of care market trends and conversion economics 2026`,
+          source: 'deal-specific',
+          dealName: deal.name,
+        });
+      }
+    }
+
+    if (deal.specialCircumstances) {
+      const special = deal.specialCircumstances.toLowerCase();
+      if (special.includes('sff') || special.includes('special focus')) {
+        suggestions.push({
+          topic: `${deal.primaryState || ''} Special Focus Facility graduation timeline and acquisition discount`.trim(),
+          source: 'deal-specific',
+          dealName: deal.name,
+        });
+      }
+      if (special.includes('receivership') || special.includes('bankruptcy')) {
+        suggestions.push({
+          topic: `${deal.primaryState || ''} SNF receivership acquisition process and regulatory approval timeline`.trim(),
+          source: 'deal-specific',
+          dealName: deal.name,
+        });
+      }
+      if (special.includes('leaseback') || special.includes('sale-leaseback')) {
+        suggestions.push({
+          topic: `Healthcare sale-leaseback market terms and REIT buyer landscape 2026`,
+          source: 'deal-specific',
+          dealName: deal.name,
+        });
+      }
+      if (special.includes('competition') || special.includes('competing')) {
+        suggestions.push({
+          topic: `${deal.primaryState || ''} ${deal.assetType || 'SNF'} market competition and bed supply analysis`.trim(),
+          source: 'deal-specific',
+          dealName: deal.name,
+        });
+      }
+    }
+
+    // Generic deal-context research if deal has state + type
+    if (deal.primaryState && deal.beds > 100) {
+      suggestions.push({
+        topic: `${deal.primaryState} large ${deal.assetType || 'SNF'} portfolio acquisition financing and lender appetite`,
+        source: 'deal-specific',
+        dealName: deal.name,
+      });
+    }
+  });
+
+  // Deduplicate by topic
+  const seen = new Set<string>();
+  return suggestions.filter((s) => {
+    if (seen.has(s.topic)) return false;
+    seen.add(s.topic);
+    return true;
+  }).slice(0, 16);
 }
 
 export default function ResearchPage() {
+  const searchParams = useSearchParams();
   const [missions, setMissions] = useState<ResearchMission[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -57,7 +161,13 @@ export default function ResearchPage() {
   const [contextAssetType, setContextAssetType] = useState('');
   const [selectedMission, setSelectedMission] = useState<ResearchMission | null>(null);
   const [importing, setImporting] = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+
+  // Pre-fill topic from URL params (e.g., from state map click)
+  useEffect(() => {
+    const urlTopic = searchParams.get('topic');
+    if (urlTopic) setTopic(urlTopic);
+  }, [searchParams]);
 
   useEffect(() => {
     Promise.all([
@@ -115,6 +225,9 @@ export default function ResearchPage() {
     setImporting(null);
   };
 
+  const pipelineSuggestions = suggestions.filter((s) => s.source === 'pipeline');
+  const dealSuggestions = suggestions.filter((s) => s.source === 'deal-specific');
+
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
       <div>
@@ -168,18 +281,45 @@ export default function ResearchPage() {
         </div>
       </div>
 
-      {/* Auto-Suggested Topics from Pipeline */}
-      {suggestions.length > 0 && (
+      {/* Deal-Specific Suggestions */}
+      {dealSuggestions.length > 0 && (
+        <div className="neu-card-warm p-4 border-l-4 border-orange-300">
+          <h2 className="text-xs font-bold text-orange-600 dark:text-orange-400 mb-1 flex items-center gap-1.5">
+            <Lightbulb className="w-3.5 h-3.5" />
+            Deal Intelligence Gaps
+          </h2>
+          <p className="text-[10px] text-surface-400 mb-2">
+            Research suggestions mined from deal thesis and special circumstances
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {dealSuggestions.map((s) => (
+              <button
+                key={s.topic}
+                onClick={() => setTopic(s.topic)}
+                className="px-3 py-1.5 text-[10px] rounded-lg bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-500/20 transition-colors text-left"
+              >
+                <span>{s.topic}</span>
+                {s.dealName && (
+                  <span className="block text-[8px] text-orange-400/70 mt-0.5">from: {s.dealName}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Pipeline-Level Suggestions */}
+      {pipelineSuggestions.length > 0 && (
         <div className="neu-card-warm p-4">
           <h2 className="text-xs font-bold text-surface-500 mb-2">Suggested from Pipeline</h2>
           <div className="flex flex-wrap gap-2">
-            {suggestions.map((s) => (
+            {pipelineSuggestions.map((s) => (
               <button
-                key={s}
-                onClick={() => setTopic(s)}
+                key={s.topic}
+                onClick={() => setTopic(s.topic)}
                 className="px-3 py-1.5 text-[10px] rounded-lg bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-500/20 transition-colors"
               >
-                {s}
+                {s.topic}
               </button>
             ))}
           </div>

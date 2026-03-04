@@ -88,7 +88,7 @@ export default function AnalyzePage() {
         </p>
       </div>
 
-      {/* Brain Status + Start Analysis */}
+      {/* Brain Status + Upload Zone */}
       <div className="neu-card-warm p-8">
         <div className="flex flex-col items-center">
           <BrainVisualization
@@ -99,14 +99,41 @@ export default function AnalyzePage() {
           <div className="mt-6">
             <SenseIndicator senses={SENSES} />
           </div>
-          <Link
-            href="/app/deals"
-            className="mt-8 inline-flex items-center gap-2 px-8 py-3.5 neu-button-primary rounded-xl text-sm font-medium"
-          >
-            <Upload className="w-4 h-4" />
-            Upload Deal Package
-            <ArrowRight className="w-4 h-4" />
-          </Link>
+        </div>
+
+        {/* Upload Drop Zone */}
+        <div className="mt-8 border-2 border-dashed border-primary-200 dark:border-primary-500/30 rounded-xl p-8 text-center hover:border-primary-400 dark:hover:border-primary-500/50 transition-colors bg-primary-50/30 dark:bg-primary-500/5">
+          <Upload className="w-8 h-8 text-primary-400 mx-auto mb-3" />
+          <h3 className="text-sm font-bold text-surface-700 dark:text-surface-200">
+            Start a New Analysis
+          </h3>
+          <p className="text-xs text-surface-400 mt-1 max-w-md mx-auto">
+            Create a deal first, then upload your deal package — CIMs, T12s, rent rolls, proformas.
+            CIL will identify documents, activate senses, and run dual-brain analysis.
+          </p>
+          <div className="mt-4 flex items-center justify-center gap-3">
+            <Link
+              href="/app/deals/new"
+              className="inline-flex items-center gap-2 px-6 py-2.5 neu-button-primary rounded-xl text-sm font-medium"
+            >
+              <FileText className="w-4 h-4" />
+              Create New Deal
+            </Link>
+            <Link
+              href="/app/deals"
+              className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-surface-500 hover:text-surface-700 transition-colors"
+            >
+              View Existing Deals
+              <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <div className="mt-4 flex items-center justify-center gap-4 text-[10px] text-surface-300">
+            <span>PDF, Excel, CSV accepted</span>
+            <span>·</span>
+            <span>Max 50MB per file</span>
+            <span>·</span>
+            <span>CIL auto-extracts financials</span>
+          </div>
         </div>
       </div>
 

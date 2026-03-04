@@ -61,6 +61,16 @@ export async function GET(request: NextRequest) {
         const totalStages = workspaceStages.length;
         const workspaceCompletion = totalStages > 0 ? Math.round((completedStages / totalStages) * 100) : 0;
 
+        // Data completeness scoring
+        const hasT12 = !!t12m;
+        const hasProforma = !!proforma;
+        const hasRisk = !!riskStage?.stageData;
+        const hasFacilities = dealFacilities.length > 0;
+        const hasFinancials = !!ebitdar;
+        const completenessChecks = [hasT12, hasProforma, hasRisk, hasFacilities, hasFinancials];
+        const dataCompleteness = Math.round((completenessChecks.filter(Boolean).length / completenessChecks.length) * 100);
+        const dataHealth = dataCompleteness >= 60 ? 'good' : dataCompleteness >= 20 ? 'partial' : 'shell';
+
         return {
           ...deal,
           ebitdar,
@@ -68,6 +78,13 @@ export async function GET(request: NextRequest) {
           valuationHigh,
           capRate,
           pricePerBed: deal.askingPrice && deal.beds ? Number(deal.askingPrice) / deal.beds : null,
+          dataCompleteness,
+          dataHealth,
+          hasT12,
+          hasProforma,
+          hasRisk,
+          hasFacilities,
+          hasFinancials,
           facilities: dealFacilities,
           workspace: totalStages > 0 ? {
             currentStage: deal.workspaceCurrentStage,

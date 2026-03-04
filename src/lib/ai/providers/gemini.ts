@@ -21,7 +21,7 @@ export class GeminiProvider implements ProviderClient {
   constructor(defaultModel = 'gemini-2.0-flash') {
     this.defaultModel = defaultModel;
     if (process.env.GOOGLE_AI_API_KEY) {
-      this.genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
+      this.genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY.trim().replace(/\\n$/, ''));
     }
   }
 

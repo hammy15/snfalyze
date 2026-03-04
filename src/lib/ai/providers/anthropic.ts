@@ -19,7 +19,7 @@ export class AnthropicProvider implements ProviderClient {
   }
 
   constructor(defaultModel = 'claude-sonnet-4-20250514') {
-    this.client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    this.client = new Anthropic({ apiKey: (process.env.ANTHROPIC_API_KEY || '').trim().replace(/\\n$/, '') });
     this.defaultModel = defaultModel;
   }
 

@@ -21,7 +21,7 @@ export class OpenAIProvider implements ProviderClient {
   constructor(defaultModel = 'gpt-4o') {
     this.defaultModel = defaultModel;
     if (process.env.OPENAI_API_KEY) {
-      this.client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      this.client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY.trim().replace(/\\n$/, '') });
     }
   }
 

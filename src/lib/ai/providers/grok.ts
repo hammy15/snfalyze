@@ -24,7 +24,7 @@ export class GrokProvider implements ProviderClient {
     this.defaultModel = defaultModel;
     if (process.env.XAI_API_KEY) {
       this.client = new OpenAI({
-        apiKey: process.env.XAI_API_KEY,
+        apiKey: process.env.XAI_API_KEY.trim().replace(/\\n$/, ''),
         baseURL: 'https://api.x.ai/v1',
       });
     }

@@ -25,7 +25,7 @@ export class PerplexityProvider implements ProviderClient {
     this.defaultModel = defaultModel;
     if (process.env.PERPLEXITY_API_KEY) {
       this.client = new OpenAI({
-        apiKey: process.env.PERPLEXITY_API_KEY,
+        apiKey: process.env.PERPLEXITY_API_KEY.trim().replace(/\\n$/, ''),
         baseURL: 'https://api.perplexity.ai',
       });
     }

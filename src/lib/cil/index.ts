@@ -38,3 +38,7 @@ export { createResearchMission, listResearchMissions, getResearchMission, import
 
 // Senses
 export { ALL_SENSES, SENSE_MAP, getSense, getSenseList } from './senses';
+
+// Brain Health
+export { getBrainHealth, resetBrainHealth } from '../analysis/brains';
+export type { BrainHealth } from '../analysis/brains';

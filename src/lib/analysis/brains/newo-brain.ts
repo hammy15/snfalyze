@@ -273,7 +273,7 @@ function parseNewoResponse(content: string): NewoResult {
 // FALLBACK RESULT
 // =============================================================================
 
-function buildFallbackNewoResult(deal: AnalysisInput): NewoResult {
+export function buildFallbackNewoResult(deal: AnalysisInput): NewoResult {
   const beds = typeof deal.beds === 'number' ? deal.beds : 100;
   return {
     brainId: 'newo',

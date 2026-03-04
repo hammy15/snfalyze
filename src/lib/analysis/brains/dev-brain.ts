@@ -318,7 +318,7 @@ function parseDevResponse(content: string): DevResult {
 // FALLBACK RESULT
 // =============================================================================
 
-function buildFallbackDevResult(deal: AnalysisInput): DevResult {
+export function buildFallbackDevResult(deal: AnalysisInput): DevResult {
   const beds = typeof deal.beds === 'number' ? deal.beds : 100;
   const facilityCount = deal.facilities?.length || 1;
   const estimatedRevenue = facilityCount * 9000000;

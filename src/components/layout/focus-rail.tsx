@@ -34,6 +34,7 @@ interface NavItem {
 // ── Primary: the core 1-2-3 workflow ──
 const PRIMARY_NAV: NavItem[] = [
   { href: '/app', icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/app/brain', icon: Brain, label: 'CIL Brain' },
   { href: '/app/deals', icon: Crosshair, label: 'Deals' },
   { href: '/app/tools', icon: Wrench, label: 'Tools' },
 ];

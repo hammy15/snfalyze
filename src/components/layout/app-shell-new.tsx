@@ -27,8 +27,21 @@ export function AppShellNew({ children }: AppShellNewProps) {
   // Workspace pages need full-bleed layout (no padding wrapper)
   const isWorkspacePage = pathname.includes('/workspace');
 
+  // Brain pages have their own NeuralRail — skip standard shell chrome
+  const isBrainPage = pathname.startsWith('/app/brain');
+
   // App pages - Focus Rail + Context Breadcrumb + Command Bar
   if (isAppPage) {
+    // Brain pages render their own NeuralRail layout
+    if (isBrainPage) {
+      return (
+        <div className="min-h-screen bg-[#F8F7F4] dark:bg-surface-900">
+          <CommandBar />
+          {children}
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-[#F8F7F4] dark:bg-surface-900">
         <FocusRail />

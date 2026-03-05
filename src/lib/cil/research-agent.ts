@@ -10,6 +10,7 @@ import { getRouter } from '../ai/singleton';
 import { logActivity } from './state-manager';
 import type { ResearchMission } from './types';
 import { extractAhaMoments } from './aha-extractor';
+import { notifyResearchComplete } from '@/lib/notifications/telegram';
 
 export async function createResearchMission(
   topic: string,
@@ -94,6 +95,9 @@ export async function executeResearchMission(
     await logActivity('research', `Research complete: "${topic}" (${(latencyMs / 1000).toFixed(1)}s)`, {
       metadata: { missionId, sourceCount: sources.length },
     });
+
+    // Telegram notification (non-blocking)
+    notifyResearchComplete(topic, latencyMs).catch(() => {});
 
     // Auto-extract AHA moments from research findings (non-blocking)
     extractAhaMoments({

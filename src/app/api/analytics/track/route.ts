@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { pageViews } from '@/db/schema';
+import { eq, count } from 'drizzle-orm';
+import { notifyNewVisitor } from '@/lib/notifications/telegram';
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,6 +19,10 @@ export async function POST(request: NextRequest) {
     const userAgent = request.headers.get('user-agent') || '';
     const country = request.headers.get('x-vercel-ip-country') || null;
 
+    // Check if this is a first-time visitor
+    const existing = await db.select({ count: count() }).from(pageViews).where(eq(pageViews.visitorId, visitorId));
+    const isNewVisitor = (existing[0]?.count ?? 0) === 0;
+
     await db.insert(pageViews).values({
       path,
       visitorId,
@@ -27,6 +33,11 @@ export async function POST(request: NextRequest) {
       country,
       duration: duration || null,
     });
+
+    // Notify on first-time visitors only
+    if (isNewVisitor) {
+      notifyNewVisitor(ip, country, path).catch(() => {});
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

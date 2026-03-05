@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { deals, ahaMoments } from '@/db/schema';
+import { deals } from '@/db/schema';
 import { isNotNull } from 'drizzle-orm';
-import { getRouter } from '@/lib/ai/singleton';
+import { extractAhaMoments } from '@/lib/cil/aha-extractor';
 
 export const maxDuration = 120;
 
@@ -26,63 +26,27 @@ export async function POST() {
       return NextResponse.json({ message: 'No analyzed deals to extract from', count: 0 });
     }
 
-    const router = getRouter();
-    const results: Array<{ dealName: string; moments: number }> = [];
+    const results: Array<{ dealName: string; moments: number; skipped?: boolean }> = [];
 
     for (const deal of analyzedDeals) {
       try {
-        const response = await router.route({
-          taskType: 'deal_analysis',
-          systemPrompt: `You extract AHA moments — breakthrough insights that emerge when two AI brains (Newo=operations, Dev=strategy) debate a deal. These are NOT summaries — they are specific, actionable "eureka" findings where the operational and strategic perspectives clashed and produced a deeper truth.`,
-          userPrompt: `Analyze this dual-brain output for a deal called "${deal.name}" (${deal.primaryState} ${deal.assetType}, confidence: ${deal.confidenceScore}%).
-
-NARRATIVE:
-${deal.narrative}
-
-THESIS:
-${deal.thesis || 'N/A'}
-
-Extract 2-3 AHA moments. For each, provide:
-- title: A punchy headline (max 80 chars)
-- insight: The breakthrough finding (2-3 sentences)
-- newoPosition: What the operations brain argued
-- devPosition: What the strategy brain argued
-- resolution: How the tension was resolved
-- category: One of: valuation, risk, operations, strategy, market, regulatory
-- significance: high, medium, or low
-
-Return ONLY valid JSON array, no markdown:
-[{"title":"...","insight":"...","newoPosition":"...","devPosition":"...","resolution":"...","category":"...","significance":"..."}]`,
-          maxTokens: 2000,
-          temperature: 0.4,
+        // Uses shared extractor which has built-in deduplication
+        const momentCount = await extractAhaMoments({
+          dealId: deal.id,
+          dealName: deal.name,
+          narrative: deal.narrative || '',
+          thesis: deal.thesis || undefined,
+          state: deal.primaryState,
+          assetType: deal.assetType,
+          confidence: deal.confidenceScore ?? undefined,
+          source: 'dual_brain',
         });
 
-        let moments: Array<Record<string, string>> = [];
-        try {
-          const cleaned = response.content.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
-          moments = JSON.parse(cleaned);
-        } catch {
-          console.warn(`[AHA Extract] Failed to parse response for ${deal.name}`);
-          continue;
-        }
-
-        for (const m of moments) {
-          await db.insert(ahaMoments).values({
-            dealId: deal.id,
-            dealName: deal.name,
-            title: m.title || 'Untitled Insight',
-            insight: m.insight || '',
-            newoPosition: m.newoPosition || null,
-            devPosition: m.devPosition || null,
-            resolution: m.resolution || null,
-            category: m.category || 'general',
-            significance: m.significance || 'medium',
-            confidence: deal.confidenceScore,
-            tags: [deal.primaryState, deal.assetType].filter(Boolean),
-          });
-        }
-
-        results.push({ dealName: deal.name, moments: moments.length });
+        results.push({
+          dealName: deal.name,
+          moments: momentCount,
+          skipped: momentCount === 0,
+        });
       } catch (err) {
         console.error(`[AHA Extract] Failed for ${deal.name}:`, err);
         results.push({ dealName: deal.name, moments: 0 });
@@ -90,8 +54,9 @@ Return ONLY valid JSON array, no markdown:
     }
 
     const total = results.reduce((s, r) => s + r.moments, 0);
+    const skipped = results.filter(r => r.skipped).length;
     return NextResponse.json({
-      message: `Extracted ${total} AHA moments from ${analyzedDeals.length} deals`,
+      message: `Extracted ${total} AHA moments from ${analyzedDeals.length} deals (${skipped} skipped — already extracted)`,
       results,
     });
   } catch (error) {

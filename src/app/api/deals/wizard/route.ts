@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, deals, facilities, analysisStages, saleLeaseback, capitalPartners } from '@/db';
 import { eq } from 'drizzle-orm';
 import { DEFAULT_CAP_RATES, DEFAULT_MIN_COVERAGE_RATIOS, AssetType } from '@/lib/sale-leaseback';
+import { notifyNewDeal } from '@/lib/notifications/telegram';
 
 interface WizardFacilityInput {
   name: string;
@@ -242,6 +243,9 @@ export async function POST(request: NextRequest) {
         )
       );
     }
+
+    // Telegram notification (non-blocking)
+    notifyNewDeal(newDeal.name, primaryState, totalBeds, null).catch(() => {});
 
     return NextResponse.json({
       success: true,

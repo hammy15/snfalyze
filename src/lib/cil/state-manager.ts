@@ -56,7 +56,7 @@ export async function getCILState(): Promise<CILState> {
     avgConfidence: Math.round(avgConfidence),
     ipoProgress: {
       currentOps: 58,
-      targetOps: 125,
+      targetOps: 200,
       currentRevenue: 0,
       targetRevenue: 0,
     },

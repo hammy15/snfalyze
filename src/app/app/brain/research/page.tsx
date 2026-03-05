@@ -40,6 +40,14 @@ interface Suggestion {
   dealName?: string;
 }
 
+interface AhaSuggestion {
+  topic: string;
+  reason: string;
+  fromAha: string;
+  category: string;
+  significance: string;
+}
+
 function generateSuggestions(deals: PipelineDeal[]): Suggestion[] {
   const suggestions: Suggestion[] = [];
   const states = [...new Set(deals.map((d) => d.primaryState).filter(Boolean))];
@@ -162,6 +170,7 @@ export default function ResearchPage() {
   const [selectedMission, setSelectedMission] = useState<ResearchMission | null>(null);
   const [importing, setImporting] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [ahaSuggestions, setAhaSuggestions] = useState<AhaSuggestion[]>([]);
 
   // Pre-fill topic from URL params (e.g., from state map click)
   useEffect(() => {
@@ -178,6 +187,10 @@ export default function ResearchPage() {
           const pipelineDeals = (data.data || []).filter((d: PipelineDeal) => d.primaryState);
           setSuggestions(generateSuggestions(pipelineDeals));
         })
+        .catch(() => {}),
+      fetch('/api/aha/suggest-research')
+        .then((r) => r.json())
+        .then((data) => setAhaSuggestions(Array.isArray(data) ? data : []))
         .catch(() => {}),
     ]);
   }, []);
@@ -280,6 +293,38 @@ export default function ResearchPage() {
           </button>
         </div>
       </div>
+
+      {/* AHA-Driven Research Suggestions */}
+      {ahaSuggestions.length > 0 && (
+        <div className="neu-card-warm p-4 border-l-4 border-amber-300">
+          <h2 className="text-xs font-bold text-amber-600 dark:text-amber-400 mb-1 flex items-center gap-1.5">
+            <Lightbulb className="w-3.5 h-3.5" />
+            AHA-Driven Research Gaps
+          </h2>
+          <p className="text-[10px] text-surface-400 mb-2">
+            Knowledge gaps detected from Newo + Dev debate tensions
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {ahaSuggestions.map((s) => (
+              <button
+                key={s.topic}
+                onClick={() => setTopic(s.topic)}
+                className={cn(
+                  'px-3 py-1.5 text-[10px] rounded-lg text-left transition-colors',
+                  s.significance === 'high'
+                    ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/20 ring-1 ring-amber-200/50'
+                    : 'bg-amber-50/60 dark:bg-amber-500/5 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/15'
+                )}
+              >
+                <span>{s.topic}</span>
+                <span className="block text-[8px] text-amber-400/70 mt-0.5">
+                  {s.reason} — from: &ldquo;{s.fromAha.slice(0, 40)}{s.fromAha.length > 40 ? '...' : ''}&rdquo;
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Deal-Specific Suggestions */}
       {dealSuggestions.length > 0 && (

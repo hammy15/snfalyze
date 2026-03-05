@@ -4,8 +4,10 @@
 
 import { db } from '@/db';
 import { ahaMoments } from '@/db/schema';
+import { eq, and, count } from 'drizzle-orm';
 import { getRouter } from '@/lib/ai/singleton';
 import { logActivity } from './state-manager';
+import { notifyAhaMoment } from '@/lib/notifications/telegram';
 
 interface AhaMomentInput {
   dealId?: string;
@@ -24,6 +26,18 @@ interface AhaMomentInput {
  */
 export async function extractAhaMoments(input: AhaMomentInput): Promise<number> {
   try {
+    // Deduplication: skip if this deal already has AHA moments from this source
+    if (input.dealId) {
+      const existing = await db
+        .select({ count: count() })
+        .from(ahaMoments)
+        .where(eq(ahaMoments.dealId, input.dealId));
+      if ((existing[0]?.count ?? 0) > 0) {
+        console.log(`[AHA] Skipping ${input.dealName} — already has AHA moments`);
+        return 0;
+      }
+    }
+
     const router = getRouter();
 
     const sourceContext = input.source === 'research'
@@ -80,6 +94,13 @@ Return ONLY valid JSON array, no markdown:
         confidence: input.confidence || null,
         tags: [input.state, input.assetType].filter(Boolean),
       });
+
+      // Telegram notification for high-significance AHA moments
+      notifyAhaMoment(
+        m.title || 'Untitled Insight',
+        input.dealName || null,
+        m.significance || 'medium'
+      ).catch(() => {});
     }
 
     await logActivity('insight', `${moments.length} AHA moments extracted from ${input.dealName || 'research'}`, {

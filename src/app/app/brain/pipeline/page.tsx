@@ -121,17 +121,24 @@ export default function PipelinePage() {
           </p>
         </div>
         <div className="flex items-center gap-4">
+          <Link
+            href="/app/brain/compare"
+            className="flex items-center gap-2 px-4 py-2 neu-button-secondary rounded-xl text-xs font-medium"
+          >
+            <GitCompareArrows className="w-3.5 h-3.5" />
+            Full Compare
+          </Link>
           {compareIds.size > 0 && (
             <button
               onClick={() => setShowCompare(true)}
               className="flex items-center gap-2 px-4 py-2 neu-button-primary rounded-xl text-xs font-medium"
             >
               <GitCompareArrows className="w-3.5 h-3.5" />
-              Compare ({compareIds.size})
+              Quick Compare ({compareIds.size})
             </button>
           )}
           <div className="text-xs text-surface-400">
-            IPO Target: <span className="font-bold text-orange-500">58 → 125+ ops</span>
+            IPO Target: <span className="font-bold text-orange-500">58 → 200 ops</span>
           </div>
         </div>
       </div>

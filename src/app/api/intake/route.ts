@@ -6,6 +6,7 @@ import { analyzeDocument } from '@/lib/documents/ai-analyzer';
 import pdfParse from 'pdf-parse';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
+import { notifyNewDeal } from '@/lib/notifications/telegram';
 
 // =============================================================================
 // TYPES
@@ -219,6 +220,9 @@ export async function PUT(request: NextRequest) {
         })
       );
     }
+
+    // Telegram notification (non-blocking)
+    notifyNewDeal(newDeal.name, primaryState, totalBeds, null).catch(() => {});
 
     return NextResponse.json({
       success: true,

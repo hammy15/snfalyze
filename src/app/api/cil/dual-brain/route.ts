@@ -4,6 +4,7 @@ import { eq, inArray, isNull } from 'drizzle-orm';
 import { analyzeDealDualBrain } from '@/lib/analysis/engine';
 import { logActivity } from '@/lib/cil/state-manager';
 import { extractAhaMoments } from '@/lib/cil/aha-extractor';
+import { notifyAnalysisComplete } from '@/lib/notifications/telegram';
 
 // Allow up to 5 minutes for dual-brain analysis
 export const maxDuration = 300;
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
 
         // Save results back to deal
         await db.update(deals).set({
-          status: deal.status === 'analyzing' ? 'reviewed' : deal.status,
+          status: 'reviewed',
           confidenceScore: dualBrainResult.synthesis.confidence,
           analysisNarrative: dualBrainResult.synthesis.unifiedNarrative,
           thesis: dualBrainResult.synthesis.keyInsight,
@@ -76,6 +77,13 @@ export async function POST(request: NextRequest) {
           confidence: dualBrainResult.synthesis.confidence,
           source: 'dual_brain',
         }).catch(err => console.error('[AHA] Auto-extract failed:', err));
+
+        // Telegram notification (non-blocking)
+        notifyAnalysisComplete(
+          deal.name,
+          dualBrainResult.synthesis.confidence,
+          dualBrainResult.synthesis.recommendation
+        ).catch(() => {});
 
         results.push({
           dealId: deal.id,

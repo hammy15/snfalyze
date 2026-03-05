@@ -48,6 +48,17 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   const userId = parseToken(token);
   if (!userId) return null;
 
+  // Handle shared/legacy sessions (from shared password login)
+  if (userId === 'shared') {
+    return {
+      id: 'shared',
+      name: 'Cascadia User',
+      email: '',
+      role: 'admin' as UserRole,
+      avatarUrl: null,
+    };
+  }
+
   const [user] = await db
     .select({
       id: users.id,

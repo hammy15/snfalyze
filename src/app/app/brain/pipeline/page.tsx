@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { Layers, GitCompareArrows, X, TrendingUp, DollarSign, Building2, Circle } from 'lucide-react';
+import { Layers, GitCompareArrows, X, TrendingUp, DollarSign, Building2, Circle, Download } from 'lucide-react';
 
 interface Deal {
   id: string;
@@ -219,7 +219,7 @@ export default function PipelinePage() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 overflow-x-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 overflow-x-auto">
           {groupedDeals.map((col) => (
             <div key={col.key} className="space-y-2">
               <button
@@ -306,6 +306,13 @@ export default function PipelinePage() {
                           className={cn('w-2 h-2 rounded-full', HEALTH_COLORS[deal.dataHealth || 'shell'])}
                           title={`${HEALTH_LABELS[deal.dataHealth || 'shell']} (${deal.dataCompleteness || 0}%)`}
                         />
+                        <button
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(`/api/deals/${deal.id}/export/one-pager`, '_blank'); }}
+                          className="text-surface-300 hover:text-primary-500 transition-colors"
+                          title="Export One-Pager"
+                        >
+                          <Download className="w-3 h-3" />
+                        </button>
                       </div>
                     </div>
                   </Link>

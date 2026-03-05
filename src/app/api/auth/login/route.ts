@@ -4,8 +4,8 @@ import { users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { createSession, SESSION_COOKIE } from '@/lib/auth/session';
 
-// Simple hash comparison — uses the shared password as fallback for migration
-const SHARED_PASSWORD = (process.env.NEXT_PUBLIC_APP_PASSWORD || '').trim();
+// Server-side only password — NOT exposed to client bundle
+const SHARED_PASSWORD = (process.env.APP_PASSWORD || process.env.NEXT_PUBLIC_APP_PASSWORD || '').trim();
 
 export async function POST(request: NextRequest) {
   try {

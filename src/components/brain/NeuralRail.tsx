@@ -17,6 +17,8 @@ import {
   ArrowLeft,
   Menu,
   X,
+  Sun,
+  Moon,
 } from 'lucide-react';
 
 interface NavItem {
@@ -43,10 +45,30 @@ export function NeuralRail() {
   const pathname = usePathname();
   const [expanded, setExpanded] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
   const [brainHealth, setBrainHealth] = useState<{
     newo: { status: 'online' | 'degraded' | 'offline' };
     dev: { status: 'online' | 'degraded' | 'offline' };
   }>({ newo: { status: 'online' }, dev: { status: 'online' } });
+
+  useEffect(() => {
+    const saved = localStorage.getItem('snf_dark_mode');
+    if (saved === 'true') {
+      document.documentElement.classList.add('dark');
+      setDarkMode(true);
+    }
+  }, []);
+
+  const toggleDark = () => {
+    const next = !darkMode;
+    setDarkMode(next);
+    localStorage.setItem('snf_dark_mode', String(next));
+    if (next) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  };
 
   useEffect(() => {
     fetch('/api/cil/status')
@@ -138,6 +160,19 @@ export function NeuralRail() {
           ))}
         </div>
 
+        {/* Dark Mode Toggle */}
+        <div className="px-2 mb-1">
+          <button
+            onClick={toggleDark}
+            className="flex items-center gap-2 w-full px-2.5 py-2 rounded-lg text-surface-400 hover:text-surface-600 hover:bg-[#EFEDE8] dark:hover:bg-surface-800 transition-colors"
+          >
+            {darkMode ? <Sun className="w-4 h-4 shrink-0" /> : <Moon className="w-4 h-4 shrink-0" />}
+            <span className={cn('text-xs whitespace-nowrap transition-opacity duration-200', expanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden')}>
+              {darkMode ? 'Light Mode' : 'Dark Mode'}
+            </span>
+          </button>
+        </div>
+
         {/* Back to SNFalyze */}
         <div className="p-2 border-t border-[#E2DFD8] dark:border-surface-800">
           <Link
@@ -218,6 +253,15 @@ export function NeuralRail() {
                 <span className="text-sm font-medium">{item.label}</span>
               </Link>
             ))}
+
+            {/* Dark Mode Toggle */}
+            <button
+              onClick={toggleDark}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-surface-600 dark:text-surface-300 hover:bg-[#EFEDE8] dark:hover:bg-surface-800 transition-colors w-full"
+            >
+              {darkMode ? <Sun className="w-4.5 h-4.5 shrink-0" /> : <Moon className="w-4.5 h-4.5 shrink-0" />}
+              <span className="text-sm font-medium">{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
+            </button>
 
             <div className="pt-2 border-t border-[#E2DFD8] dark:border-surface-800 mt-2">
               <Link

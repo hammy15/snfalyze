@@ -33,16 +33,34 @@ const DEFAULT_SENSES = [
 export default function BrainDashboard() {
   const [status, setStatus] = useState<CILStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    fetch('/api/cil/status')
-      .then((r) => r.json())
-      .then((data) => {
-        setStatus(data);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    const loadStatus = () => {
+      fetch('/api/cil/status')
+        .then((r) => r.json())
+        .then((data) => {
+          setStatus(data);
+          setLoading(false);
+        })
+        .catch(() => setLoading(false));
+    };
+
+    loadStatus();
+    const interval = setInterval(loadStatus, 30000);
+    return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!localStorage.getItem('snf_onboarding_dismissed')) {
+      setShowOnboarding(true);
+    }
+  }, []);
+
+  const dismissOnboarding = () => {
+    setShowOnboarding(false);
+    localStorage.setItem('snf_onboarding_dismissed', '1');
+  };
 
   if (loading) {
     return (
@@ -87,6 +105,35 @@ export default function BrainDashboard() {
           </div>
         )}
       </div>
+
+      {/* Onboarding Quick-Start */}
+      {showOnboarding && (
+        <div className="neu-card-warm p-5 border border-primary-200/50 dark:border-primary-500/20 bg-gradient-to-r from-primary-50/30 to-transparent dark:from-primary-500/5">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-surface-800 dark:text-surface-100">Welcome to CIL</h2>
+              <p className="text-xs text-surface-400 mt-1">Here&apos;s how to get started with Cascadia Intelligence:</p>
+            </div>
+            <button onClick={dismissOnboarding} className="text-surface-300 hover:text-surface-500 text-xs">Dismiss</button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mt-4">
+            {[
+              { step: '1', title: 'Upload a Deal', desc: 'Drop documents into Analyze', href: '/app/brain/analyze', color: 'bg-blue-500' },
+              { step: '2', title: 'Run Analysis', desc: 'Newo + Dev dual-brain', href: '/app/brain/pipeline', color: 'bg-teal-500' },
+              { step: '3', title: 'Deploy Research', desc: 'Send agents for intel', href: '/app/brain/research', color: 'bg-orange-500' },
+              { step: '4', title: 'Review AHA Moments', desc: 'Brain breakthroughs', href: '/app/brain/aha', color: 'bg-amber-500' },
+            ].map((s) => (
+              <a key={s.step} href={s.href} className="flex items-start gap-2.5 p-3 rounded-lg hover:bg-white/50 dark:hover:bg-surface-800/50 transition-colors group">
+                <span className={cn('w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0', s.color)}>{s.step}</span>
+                <div>
+                  <div className="text-xs font-bold text-surface-700 dark:text-surface-200 group-hover:text-primary-600">{s.title}</div>
+                  <div className="text-[10px] text-surface-400">{s.desc}</div>
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Brain Visualization Hero */}
       <div className="neu-card-warm p-8 flex flex-col items-center">
@@ -158,7 +205,7 @@ export default function BrainDashboard() {
             ))}
           </div>
           <div className="mt-3 text-[10px] text-surface-400">
-            IPO target: 120-130+ operations (~$1B+ revenue). Current: 58 ops.
+            IPO target: 200 operations (~$1B+ revenue). Current: 58 ops.
           </div>
         </div>
       </div>

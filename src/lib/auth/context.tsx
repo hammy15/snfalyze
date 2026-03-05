@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import type { UserRole } from './roles';
 
 export interface AuthUser {
@@ -22,63 +22,35 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const AUTH_STORAGE_KEY = 'snfalyze_auth';
-
-// Keep shared password for backward compatibility
-const SHARED_PASSWORD = (process.env.NEXT_PUBLIC_APP_PASSWORD || '').trim();
-
-// TODO: Remove auth bypass before production launch
-const AUTH_BYPASS = true;
-
-const BYPASS_USER: AuthUser = {
-  id: 'bypass-admin',
-  name: 'Test Admin',
-  email: 'admin@cascadia.com',
-  role: 'admin',
-  avatarUrl: null,
-  loginTime: new Date(),
-};
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(AUTH_BYPASS ? BYPASS_USER : null);
-  const [isLoading, setIsLoading] = useState(AUTH_BYPASS ? false : true);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-  const pathname = usePathname();
 
-  // Load auth state from localStorage on mount
+  // Check session on mount via server API
   useEffect(() => {
-    if (AUTH_BYPASS) return; // Skip auth check when bypassed
-    const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        setUser({
-          id: parsed.id || 'shared',
-          name: parsed.name,
-          email: parsed.email || '',
-          role: parsed.role || 'analyst',
-          avatarUrl: parsed.avatarUrl || null,
-          loginTime: new Date(parsed.loginTime),
-        });
-      } catch {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
-      }
-    }
-    setIsLoading(false);
+    fetch('/api/auth/me')
+      .then((r) => {
+        if (r.ok) return r.json();
+        return { user: null };
+      })
+      .then((data) => {
+        if (data.user) {
+          setUser({
+            id: data.user.id,
+            name: data.user.name,
+            email: data.user.email || '',
+            role: data.user.role || 'analyst',
+            avatarUrl: data.user.avatarUrl || null,
+            loginTime: new Date(),
+          });
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
   }, []);
 
-  // Public routes
-  const publicRoutes = ['/login', '/design-demo'];
-
-  useEffect(() => {
-    if (AUTH_BYPASS) return; // Skip redirect when bypassed
-    if (!isLoading && !user && !publicRoutes.includes(pathname)) {
-      router.push('/login');
-    }
-  }, [user, isLoading, pathname, router]);
-
   const login = async (emailOrName: string, password: string): Promise<boolean> => {
-    // Try API login first
     try {
       const isEmail = emailOrName.includes('@');
       const res = await fetch('/api/auth/login', {
@@ -94,67 +66,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
-          const authUser: AuthUser = {
+          setUser({
             id: data.user.id,
             name: data.user.name,
             email: data.user.email || '',
             role: data.user.role || 'analyst',
             avatarUrl: data.user.avatarUrl || null,
             loginTime: new Date(),
-          };
-
-          setUser(authUser);
-          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
-            ...authUser,
-            loginTime: authUser.loginTime.toISOString(),
-          }));
-
-          router.push('/');
+          });
+          router.push('/app/brain');
           return true;
         }
       }
     } catch {
-      // API not available, fall through to legacy
+      // Login failed
     }
-
-    // Legacy fallback: shared password
-    if (password === SHARED_PASSWORD && SHARED_PASSWORD) {
-      const authUser: AuthUser = {
-        id: 'shared',
-        name: emailOrName.includes('@') ? emailOrName.split('@')[0] : emailOrName,
-        email: emailOrName.includes('@') ? emailOrName : '',
-        role: 'analyst',
-        avatarUrl: null,
-        loginTime: new Date(),
-      };
-
-      setUser(authUser);
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
-        ...authUser,
-        loginTime: authUser.loginTime.toISOString(),
-      }));
-
-      router.push('/');
-      return true;
-    }
-
     return false;
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    // Clear the session cookie
     document.cookie = 'snfalyze_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
     router.push('/login');
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-500">Loading...</p>
+      <div className="min-h-screen flex items-center justify-center bg-[#F8F7F4]">
+        <div className="flex items-center gap-3">
+          <div className="w-3 h-3 rounded-full bg-teal-500 animate-pulse" />
+          <div className="w-3 h-3 rounded-full bg-orange-500 animate-pulse" style={{ animationDelay: '0.5s' }} />
         </div>
       </div>
     );

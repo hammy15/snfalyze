@@ -15,6 +15,7 @@ import {
   Shield,
   Brain,
   Lightbulb,
+  Download,
 } from 'lucide-react';
 
 interface ComparisonDeal {
@@ -293,7 +294,7 @@ export default function ComparePage() {
       ) : comparison.length >= 2 ? (
         <div className="space-y-6">
           {/* Brain Confidence Hero */}
-          <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${comparison.length}, 1fr)` }}>
+          <div className={cn('grid gap-4', comparison.length === 2 ? 'grid-cols-2' : comparison.length === 3 ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-4')}>
             {comparison.map((deal) => {
               const basic = allDeals.find((d) => d.id === deal.id);
               const conf = basic?.confidenceScore ?? null;
@@ -304,6 +305,12 @@ export default function ComparePage() {
                     <div className="text-sm font-bold text-surface-800 dark:text-surface-100">{deal.name}</div>
                   </Link>
                   <div className="text-[10px] text-surface-400 mt-0.5">{deal.assetType} · {deal.primaryState}</div>
+                  <button
+                    onClick={() => window.open(`/api/deals/${deal.id}/export/one-pager`, '_blank')}
+                    className="text-[10px] text-primary-500 hover:text-primary-600 mt-1 flex items-center gap-1 mx-auto"
+                  >
+                    <Download className="w-3 h-3" /> Export
+                  </button>
 
                   {/* Brain orbs */}
                   <div className="flex items-center justify-center gap-2 mt-3">

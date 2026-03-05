@@ -1,6 +1,3 @@
-import { db } from '@/db';
-import { users } from '@/db/schema';
-import { eq } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 import type { UserRole } from './roles';
 
@@ -14,29 +11,23 @@ export interface SessionUser {
   avatarUrl: string | null;
 }
 
-// Simple token: base64(userId:timestamp)
-function generateToken(userId: string): string {
-  const payload = `${userId}:${Date.now()}`;
-  return Buffer.from(payload).toString('base64');
-}
-
-function parseToken(token: string): string | null {
+function parseToken(token: string): { name: string; timestamp: number } | null {
   try {
     const decoded = Buffer.from(token, 'base64').toString('utf-8');
-    const [userId] = decoded.split(':');
-    return userId || null;
+    const parts = decoded.split(':');
+    if (parts.length < 2) return null;
+    // Name may contain colons, so rejoin everything except last part (timestamp)
+    const timestamp = parseInt(parts[parts.length - 1], 10);
+    const name = parts.slice(0, -1).join(':');
+    if (!name || isNaN(timestamp)) return null;
+    return { name, timestamp };
   } catch {
     return null;
   }
 }
 
-export async function createSession(userId: string): Promise<string> {
-  const token = generateToken(userId);
-
-  // Update last login
-  await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, userId));
-
-  return token;
+export async function createSession(name: string): Promise<string> {
+  return Buffer.from(`${name}:${Date.now()}`).toString('base64');
 }
 
 export async function getSessionUser(): Promise<SessionUser | null> {
@@ -45,41 +36,19 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 
   if (!token) return null;
 
-  const userId = parseToken(token);
-  if (!userId) return null;
+  const parsed = parseToken(token);
+  if (!parsed) return null;
 
-  // Handle shared/legacy sessions (from shared password login)
-  if (userId === 'shared') {
-    return {
-      id: 'shared',
-      name: 'Cascadia User',
-      email: '',
-      role: 'admin' as UserRole,
-      avatarUrl: null,
-    };
-  }
-
-  const [user] = await db
-    .select({
-      id: users.id,
-      name: users.name,
-      email: users.email,
-      role: users.role,
-      avatarUrl: users.avatarUrl,
-      isActive: users.isActive,
-    })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-
-  if (!user || !user.isActive) return null;
+  // Check token age (7 days max)
+  const maxAge = 7 * 24 * 60 * 60 * 1000;
+  if (Date.now() - parsed.timestamp > maxAge) return null;
 
   return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role as UserRole,
-    avatarUrl: user.avatarUrl,
+    id: 'user',
+    name: parsed.name,
+    email: '',
+    role: 'admin' as UserRole,
+    avatarUrl: null,
   };
 }
 

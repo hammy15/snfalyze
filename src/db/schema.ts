@@ -2481,3 +2481,21 @@ export const ahaMoments = pgTable(
     createdAtIdx: index('idx_aha_moments_created_at').on(table.createdAt),
   })
 );
+
+// ═══ Login Logs ═══
+export const loginLogs = pgTable(
+  'login_logs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: varchar('name', { length: 200 }).notNull(),
+    ip: varchar('ip', { length: 100 }),
+    userAgent: text('user_agent'),
+    country: varchar('country', { length: 100 }),
+    success: boolean('success').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    createdAtIdx: index('idx_login_logs_created_at').on(table.createdAt),
+    nameIdx: index('idx_login_logs_name').on(table.name),
+  })
+);

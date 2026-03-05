@@ -14,12 +14,12 @@ import {
   Search,
   Lightbulb,
   BarChart3,
-  ArrowLeft,
   Menu,
   X,
   Sun,
   Moon,
   LogOut,
+  User,
 } from 'lucide-react';
 
 interface NavItem {
@@ -47,6 +47,7 @@ export function NeuralRail() {
   const [expanded, setExpanded] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+  const [userName, setUserName] = useState<string | null>(null);
   const [brainHealth, setBrainHealth] = useState<{
     newo: { status: 'online' | 'degraded' | 'offline' };
     dev: { status: 'online' | 'degraded' | 'offline' };
@@ -81,6 +82,12 @@ export function NeuralRail() {
       .then((r) => r.json())
       .then((data) => {
         if (data.brains) setBrainHealth(data.brains);
+      })
+      .catch(() => {});
+    fetch('/api/auth/me')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.user?.name) setUserName(data.user.name);
       })
       .catch(() => {});
   }, []);
@@ -181,6 +188,21 @@ export function NeuralRail() {
 
         {/* Bottom actions */}
         <div className="p-2 border-t border-[#E2DFD8] dark:border-surface-800 space-y-0.5">
+          {userName && (
+            <div className="flex items-center gap-2 px-2.5 py-2">
+              <div className="w-6 h-6 rounded-full bg-primary-500/15 flex items-center justify-center shrink-0">
+                <User className="w-3.5 h-3.5 text-primary-500" />
+              </div>
+              <span
+                className={cn(
+                  'text-xs font-medium text-surface-600 dark:text-surface-300 whitespace-nowrap truncate transition-opacity duration-200',
+                  expanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'
+                )}
+              >
+                {userName}
+              </span>
+            </div>
+          )}
           <button
             onClick={handleLogout}
             className="flex items-center gap-2 w-full px-2.5 py-2 rounded-lg text-surface-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
@@ -269,7 +291,15 @@ export function NeuralRail() {
               <span className="text-sm font-medium">{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
             </button>
 
-            <div className="pt-2 border-t border-[#E2DFD8] dark:border-surface-800 mt-2">
+            <div className="pt-2 border-t border-[#E2DFD8] dark:border-surface-800 mt-2 space-y-1">
+              {userName && (
+                <div className="flex items-center gap-3 px-3 py-2">
+                  <div className="w-7 h-7 rounded-full bg-primary-500/15 flex items-center justify-center">
+                    <User className="w-4 h-4 text-primary-500" />
+                  </div>
+                  <span className="text-sm font-medium text-surface-600 dark:text-surface-300">{userName}</span>
+                </div>
+              )}
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-3 px-3 py-2 rounded-lg text-surface-400 hover:text-red-500 transition-colors w-full"

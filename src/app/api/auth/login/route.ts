@@ -1,84 +1,75 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { users } from '@/db/schema';
-import { eq } from 'drizzle-orm';
-import { createSession, SESSION_COOKIE } from '@/lib/auth/session';
+import { loginLogs } from '@/db/schema';
+import { SESSION_COOKIE } from '@/lib/auth/session';
 
-// Server-side only password — NOT exposed to client bundle
-const SHARED_PASSWORD = (process.env.APP_PASSWORD || process.env.NEXT_PUBLIC_APP_PASSWORD || '').trim();
+// Server-side only password
+const SITE_PASSWORD = (process.env.APP_PASSWORD || process.env.NEXT_PUBLIC_APP_PASSWORD || '').trim();
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, name } = await request.json();
+    const body = await request.json();
+    const name = (body.name || '').trim();
+    const password = (body.password || '').trim();
 
-    // Try database user lookup first
-    if (email) {
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, email.toLowerCase().trim()))
-        .limit(1);
+    // Get client info for logging
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || request.headers.get('x-real-ip')
+      || 'unknown';
+    const userAgent = request.headers.get('user-agent') || '';
+    const country = request.headers.get('x-vercel-ip-country') || null;
 
-      if (user && user.isActive) {
-        // Compare password hash (simple comparison for now)
-        if (user.passwordHash === password) {
-          const token = await createSession(user.id);
-
-          const response = NextResponse.json({
-            success: true,
-            user: {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              role: user.role,
-              avatarUrl: user.avatarUrl,
-            },
-          });
-
-          response.cookies.set(SESSION_COOKIE, token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 60 * 60 * 24 * 7, // 7 days
-            path: '/',
-          });
-
-          return response;
-        }
-      }
+    if (!name) {
+      return NextResponse.json({ success: false, error: 'Name is required' }, { status: 400 });
     }
 
-    // Fallback: shared password mode (backward compatible)
-    if (password === SHARED_PASSWORD && SHARED_PASSWORD) {
-      const displayName = name || email?.split('@')[0] || 'User';
+    // Verify password
+    if (!SITE_PASSWORD || password !== SITE_PASSWORD) {
+      // Log failed attempt
+      await db.insert(loginLogs).values({
+        name,
+        ip,
+        userAgent,
+        country,
+        success: false,
+      }).catch(() => {});
 
-      const response = NextResponse.json({
-        success: true,
-        user: {
-          id: 'shared',
-          name: displayName,
-          email: email || '',
-          role: 'analyst',
-          avatarUrl: null,
-        },
-        legacy: true,
-      });
-
-      // Set a legacy session cookie
-      const legacyToken = Buffer.from(`shared:${Date.now()}`).toString('base64');
-      response.cookies.set(SESSION_COOKIE, legacyToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 7,
-        path: '/',
-      });
-
-      return response;
+      return NextResponse.json({ success: false, error: 'Invalid password' }, { status: 401 });
     }
 
-    return NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 });
-  } catch (error: any) {
+    // Log successful login
+    await db.insert(loginLogs).values({
+      name,
+      ip,
+      userAgent,
+      country,
+      success: true,
+    }).catch(() => {});
+
+    // Create session token: base64(name:timestamp)
+    const token = Buffer.from(`${name}:${Date.now()}`).toString('base64');
+
+    const response = NextResponse.json({
+      success: true,
+      user: {
+        id: 'user',
+        name,
+        email: '',
+        role: 'analyst',
+        avatarUrl: null,
+      },
+    });
+
+    response.cookies.set(SESSION_COOKIE, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: '/',
+    });
+
+    return response;
+  } catch (error: unknown) {
     console.error('Login error:', error);
     return NextResponse.json({ success: false, error: 'Login failed' }, { status: 500 });
   }

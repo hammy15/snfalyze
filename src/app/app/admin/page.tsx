@@ -433,8 +433,32 @@ export default function AdminPage() {
   const [hasChanges, setHasChanges] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [activeTab, setActiveTab] = useState<string>('valuation');
+  const [activeTab, setActiveTab] = useState<string>('activity');
   const [activeAssetType, setActiveAssetType] = useState<AssetType>('SNF');
+
+  // Login logs state
+  const [loginLogs, setLoginLogs] = useState<Array<{
+    id: string;
+    name: string;
+    ip: string | null;
+    userAgent: string | null;
+    country: string | null;
+    success: boolean;
+    createdAt: string;
+  }>>([]);
+  const [loginStats, setLoginStats] = useState<{
+    totalLogins: number;
+    failedAttempts: number;
+    uniqueUsers: number;
+    todayLogins: number;
+  }>({ totalLogins: 0, failedAttempts: 0, uniqueUsers: 0, todayLogins: 0 });
+  const [activeUsers, setActiveUsers] = useState<Array<{
+    name: string;
+    lastLogin: string;
+    loginCount: number;
+    lastIp: string | null;
+  }>>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
 
   // Handle login — verify via API (server-side password check)
   const handleLogin = async () => {
@@ -445,7 +469,7 @@ export default function AdminPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: 'admin', password }),
+        body: JSON.stringify({ name: 'Admin', password }),
       });
       const data = await res.json();
       if (data.success) {
@@ -563,6 +587,32 @@ export default function AdminPage() {
     };
     loadSettings();
   }, [isAuthenticated]);
+
+  // Load login logs when Activity tab is active
+  useEffect(() => {
+    if (!isAuthenticated || activeTab !== 'activity') return;
+
+    const loadLogs = async () => {
+      setLogsLoading(true);
+      try {
+        const res = await fetch('/api/admin/login-logs', {
+          headers: { 'x-admin-password': password },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            setLoginLogs(data.logs || []);
+            setLoginStats(data.stats || { totalLogins: 0, failedAttempts: 0, uniqueUsers: 0, todayLogins: 0 });
+            setActiveUsers(data.activeUsers || []);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load login logs:', error);
+      }
+      setLogsLoading(false);
+    };
+    loadLogs();
+  }, [isAuthenticated, activeTab]);
 
   // Helper to update cap rate settings for current asset type
   const updateCapRateForAssetType = useCallback(
@@ -762,6 +812,7 @@ export default function AdminPage() {
     { id: 'market', label: 'Market', icon: <MapPin className="w-4 h-4" /> },
     { id: 'proforma', label: 'Proforma', icon: <FileSpreadsheet className="w-4 h-4" /> },
     { id: 'display', label: 'Display', icon: <Palette className="w-4 h-4" /> },
+    { id: 'activity', label: 'Activity', icon: <Users className="w-4 h-4" /> },
   ];
 
   // Get current asset type settings
@@ -4038,16 +4089,153 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* Activity Tab */}
+        {activeTab === 'activity' && (
+          <div className="space-y-6">
+            {logsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-primary-500" />
+              </div>
+            ) : (
+              <>
+                {/* Stats Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-white dark:bg-surface-900 rounded-xl border border-surface-200 dark:border-surface-700 p-4">
+                    <div className="text-2xl font-bold text-surface-800 dark:text-white">{loginStats.todayLogins}</div>
+                    <div className="text-xs text-surface-400 mt-1">Logins Today</div>
+                  </div>
+                  <div className="bg-white dark:bg-surface-900 rounded-xl border border-surface-200 dark:border-surface-700 p-4">
+                    <div className="text-2xl font-bold text-surface-800 dark:text-white">{loginStats.uniqueUsers}</div>
+                    <div className="text-xs text-surface-400 mt-1">Unique Users</div>
+                  </div>
+                  <div className="bg-white dark:bg-surface-900 rounded-xl border border-surface-200 dark:border-surface-700 p-4">
+                    <div className="text-2xl font-bold text-teal-600">{loginStats.totalLogins}</div>
+                    <div className="text-xs text-surface-400 mt-1">Total Sign-Ins</div>
+                  </div>
+                  <div className="bg-white dark:bg-surface-900 rounded-xl border border-surface-200 dark:border-surface-700 p-4">
+                    <div className="text-2xl font-bold text-red-500">{loginStats.failedAttempts}</div>
+                    <div className="text-xs text-surface-400 mt-1">Failed Attempts</div>
+                  </div>
+                </div>
+
+                {/* Active Users */}
+                <Section title="Known Users" icon={<Users className="w-5 h-5" />} description="All users who have signed in" defaultOpen>
+                  {activeUsers.length === 0 ? (
+                    <p className="text-sm text-surface-400 py-4">No sign-ins recorded yet.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-surface-200 dark:border-surface-700">
+                            <th className="text-left py-2.5 px-3 font-medium text-surface-500">Name</th>
+                            <th className="text-left py-2.5 px-3 font-medium text-surface-500">Last Login</th>
+                            <th className="text-left py-2.5 px-3 font-medium text-surface-500">Total Logins</th>
+                            <th className="text-left py-2.5 px-3 font-medium text-surface-500">Last IP</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {activeUsers.map((user, i) => (
+                            <tr key={i} className="border-b border-surface-100 dark:border-surface-800 hover:bg-surface-50 dark:hover:bg-surface-800/50">
+                              <td className="py-2.5 px-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 rounded-full bg-primary-500/15 flex items-center justify-center">
+                                    <span className="text-xs font-bold text-primary-600">{user.name.charAt(0).toUpperCase()}</span>
+                                  </div>
+                                  <span className="font-medium text-surface-800 dark:text-surface-100">{user.name}</span>
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-3 text-surface-500">
+                                {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : '-'}
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <span className="px-2 py-0.5 bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-400 rounded-full text-xs font-medium">
+                                  {user.loginCount}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 text-surface-400 font-mono text-xs">{user.lastIp || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Section>
+
+                {/* Recent Login Log */}
+                <Section title="Login History" icon={<Activity className="w-5 h-5" />} description="Most recent 100 sign-in attempts" defaultOpen>
+                  {loginLogs.length === 0 ? (
+                    <p className="text-sm text-surface-400 py-4">No login history yet.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-surface-200 dark:border-surface-700">
+                            <th className="text-left py-2.5 px-3 font-medium text-surface-500">Status</th>
+                            <th className="text-left py-2.5 px-3 font-medium text-surface-500">Name</th>
+                            <th className="text-left py-2.5 px-3 font-medium text-surface-500">Time</th>
+                            <th className="text-left py-2.5 px-3 font-medium text-surface-500">IP</th>
+                            <th className="text-left py-2.5 px-3 font-medium text-surface-500">Location</th>
+                            <th className="text-left py-2.5 px-3 font-medium text-surface-500">Device</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {loginLogs.map((log) => (
+                            <tr key={log.id} className={cn(
+                              'border-b border-surface-100 dark:border-surface-800',
+                              !log.success && 'bg-red-50/50 dark:bg-red-500/5'
+                            )}>
+                              <td className="py-2 px-3">
+                                {log.success ? (
+                                  <span className="flex items-center gap-1 text-green-600">
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span className="text-xs">OK</span>
+                                  </span>
+                                ) : (
+                                  <span className="flex items-center gap-1 text-red-500">
+                                    <X className="w-3.5 h-3.5" />
+                                    <span className="text-xs">Fail</span>
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-2 px-3 font-medium text-surface-800 dark:text-surface-100">{log.name}</td>
+                              <td className="py-2 px-3 text-surface-500 text-xs">
+                                {log.createdAt ? new Date(log.createdAt).toLocaleString() : '-'}
+                              </td>
+                              <td className="py-2 px-3 text-surface-400 font-mono text-xs">{log.ip || '-'}</td>
+                              <td className="py-2 px-3 text-surface-400 text-xs">{log.country || '-'}</td>
+                              <td className="py-2 px-3 text-surface-400 text-xs max-w-[200px] truncate">
+                                {log.userAgent ? (
+                                  log.userAgent.includes('Mobile') ? 'Mobile' :
+                                  log.userAgent.includes('Chrome') ? 'Chrome' :
+                                  log.userAgent.includes('Firefox') ? 'Firefox' :
+                                  log.userAgent.includes('Safari') ? 'Safari' :
+                                  'Other'
+                                ) : '-'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Section>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Reset to Defaults Button */}
-        <div className="pt-6 border-t border-[var(--color-border-default)]">
-          <button
-            type="button"
-            onClick={handleResetToDefaults}
-            className="text-sm text-red-600 hover:text-red-700 font-medium"
-          >
-            Reset All Settings to Factory Defaults
-          </button>
-        </div>
+        {activeTab !== 'activity' && (
+          <div className="pt-6 border-t border-[var(--color-border-default)]">
+            <button
+              type="button"
+              onClick={handleResetToDefaults}
+              className="text-sm text-red-600 hover:text-red-700 font-medium"
+            >
+              Reset All Settings to Factory Defaults
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

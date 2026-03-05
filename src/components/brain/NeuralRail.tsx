@@ -19,6 +19,7 @@ import {
   X,
   Sun,
   Moon,
+  LogOut,
 } from 'lucide-react';
 
 interface NavItem {
@@ -68,6 +69,11 @@ export function NeuralRail() {
     } else {
       document.documentElement.classList.remove('dark');
     }
+  };
+
+  const handleLogout = () => {
+    document.cookie = 'snfalyze_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    window.location.href = '/login';
   };
 
   useEffect(() => {
@@ -173,22 +179,22 @@ export function NeuralRail() {
           </button>
         </div>
 
-        {/* Back to SNFalyze */}
-        <div className="p-2 border-t border-[#E2DFD8] dark:border-surface-800">
-          <Link
-            href="/app/deals"
-            className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-surface-400 hover:text-surface-600 hover:bg-[#EFEDE8] dark:hover:bg-surface-800 transition-colors"
+        {/* Bottom actions */}
+        <div className="p-2 border-t border-[#E2DFD8] dark:border-surface-800 space-y-0.5">
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 w-full px-2.5 py-2 rounded-lg text-surface-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
           >
-            <ArrowLeft className="w-4 h-4 shrink-0" />
+            <LogOut className="w-4 h-4 shrink-0" />
             <span
               className={cn(
                 'text-xs whitespace-nowrap transition-opacity duration-200',
                 expanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'
               )}
             >
-              Back to SNFalyze
+              Sign Out
             </span>
-          </Link>
+          </button>
         </div>
       </nav>
 
@@ -264,13 +270,13 @@ export function NeuralRail() {
             </button>
 
             <div className="pt-2 border-t border-[#E2DFD8] dark:border-surface-800 mt-2">
-              <Link
-                href="/app/deals"
-                className="flex items-center gap-3 px-3 py-2 rounded-lg text-surface-400 hover:text-surface-600 transition-colors"
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-3 px-3 py-2 rounded-lg text-surface-400 hover:text-red-500 transition-colors w-full"
               >
-                <ArrowLeft className="w-4 h-4" />
-                <span className="text-xs">Back to SNFalyze</span>
-              </Link>
+                <LogOut className="w-4 h-4" />
+                <span className="text-xs">Sign Out</span>
+              </button>
             </div>
           </div>
         </>

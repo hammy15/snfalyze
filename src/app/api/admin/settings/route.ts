@@ -16,7 +16,7 @@ let currentAdminSettings: AdminSettings = { ...DEFAULT_ADMIN_SETTINGS };
 let settingsHistory: { settings: AlgorithmSettings; timestamp: string; changedBy: string }[] = [];
 
 // God mode password for super admin access (from environment variable)
-const GOD_MODE_PASSWORD = process.env.ADMIN_PASSWORD || '';
+const GOD_MODE_PASSWORD = process.env.ADMIN_PASSWORD || process.env.APP_PASSWORD || '';
 
 function validateAuth(request: NextRequest): boolean {
   const authHeader = request.headers.get('x-admin-password');

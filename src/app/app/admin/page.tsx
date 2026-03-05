@@ -417,8 +417,7 @@ function AdjustmentsGrid<T extends Record<string, number>>({
 // MAIN ADMIN PAGE
 // =============================================================================
 
-// God Mode Password (from environment variable)
-const GOD_MODE_PASSWORD = process.env.NEXT_PUBLIC_APP_PASSWORD || '';
+// Admin auth: verify via API since client can't access server-side env vars
 
 export default function AdminPage() {
   // Authentication state
@@ -437,16 +436,25 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<string>('valuation');
   const [activeAssetType, setActiveAssetType] = useState<AssetType>('SNF');
 
-  // Handle login
+  // Handle login — verify via API (server-side password check)
   const handleLogin = async () => {
     setIsLoggingIn(true);
     setLoginError('');
 
-    // Verify password
-    if (password === GOD_MODE_PASSWORD) {
-      setIsAuthenticated(true);
-    } else {
-      setLoginError('Invalid password. Access denied.');
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'admin', password }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsAuthenticated(true);
+      } else {
+        setLoginError('Invalid password. Access denied.');
+      }
+    } catch {
+      setLoginError('Connection error.');
     }
     setIsLoggingIn(false);
   };
@@ -539,7 +547,7 @@ export default function AdminPage() {
       try {
         const res = await fetch('/api/admin/settings', {
           headers: {
-            'x-admin-password': GOD_MODE_PASSWORD,
+            'x-admin-password': password,
           },
         });
         if (res.ok) {
@@ -683,7 +691,7 @@ export default function AdminPage() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': GOD_MODE_PASSWORD,
+          'x-admin-password': password,
         },
         body: JSON.stringify({ settings, changedBy: 'super_admin' }),
       });

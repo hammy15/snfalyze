@@ -55,12 +55,19 @@ export default function LearningPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/learning/growth').then((r) => r.json()).catch(() => []),
+      fetch('/api/learning/growth').then((r) => r.json()).catch(() => ({ timeline: [] })),
       fetch('/api/cil/performance').then((r) => r.json()).catch(() => ({})),
       fetch('/api/learning/deals?limit=50').then((r) => r.json()).catch(() => []),
       fetch('/api/deals?limit=50').then((r) => r.json()).catch(() => ({ data: [] })),
     ]).then(([g, p, d, pipeline]) => {
-      setGrowth(Array.isArray(g) ? g : []);
+      // Map API response {timeline, totals} to GrowthPoint[]
+      const timeline = g?.timeline || [];
+      setGrowth(timeline.map((t: Record<string, unknown>) => ({
+        date: t.date as string,
+        dealsLearned: (t.activities as number) || 0,
+        avgConfidence: (t.ahaMoments as number) || 0,
+        preferenceCount: (t.research as number) || 0,
+      })));
       setPerformance(p || {});
       setDeals(Array.isArray(d) ? d : d.data || []);
       setPipelineDeals(pipeline.data || []);

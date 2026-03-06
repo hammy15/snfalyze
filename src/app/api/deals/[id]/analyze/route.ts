@@ -97,10 +97,19 @@ export async function POST(
     if (analysisResult.financials) {
       for (const fp of analysisResult.financials) {
         try {
+          const r = fp as Record<string, unknown>;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await db.insert(financialPeriods).values({
-            dealId,
-            ...sanitizeFinancialPeriod(fp as Record<string, unknown>),
-          });
+            dealId, ...fp,
+            occupancyRate: asFraction(r.occupancyRate),
+            agencyPercentage: asFraction(r.agencyPercentage),
+            totalRevenue: safeNum(r.totalRevenue),
+            laborCost: safeNum(r.laborCost),
+            agencyLabor: safeNum(r.agencyLabor),
+            noi: safeNum(r.noi),
+            normalizedNoi: safeNum(r.normalizedNoi),
+            hppd: safeNum(r.hppd),
+          } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
         } catch (e) {
           console.warn('Skipping bad financialPeriod row:', e);
         }
@@ -110,10 +119,21 @@ export async function POST(
     if (analysisResult.valuations) {
       for (const val of analysisResult.valuations) {
         try {
+          const r = val as Record<string, unknown>;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await db.insert(valuations).values({
-            dealId,
-            ...sanitizeValuation(val as Record<string, unknown>),
-          });
+            dealId, ...val,
+            capRateLow: asFraction(r.capRateLow),
+            capRateBase: asFraction(r.capRateBase),
+            capRateHigh: asFraction(r.capRateHigh),
+            valueLow: safeNum(r.valueLow),
+            valueBase: safeNum(r.valueBase),
+            valueHigh: safeNum(r.valueHigh),
+            noiUsed: safeNum(r.noiUsed),
+            pricePerBed: safeNum(r.pricePerBed),
+            suggestedOffer: safeNum(r.suggestedOffer),
+            walkAwayThreshold: safeNum(r.walkAwayThreshold),
+          } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
         } catch (e) {
           console.warn('Skipping bad valuation row:', e);
         }

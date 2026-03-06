@@ -502,7 +502,7 @@ export function VisionExtractionVerification({
               <input
                 type="file"
                 multiple
-                accept=".pdf,.xlsx,.xls,.csv,.png,.jpg,.jpeg"
+                accept=".pdf,.xlsx,.xls,.csv,.docx,.doc,.png,.jpg,.jpeg"
                 onChange={(e) => {
                   const selectedFiles = e.target.files ? Array.from(e.target.files) : [];
                   if (selectedFiles.length > 0) {

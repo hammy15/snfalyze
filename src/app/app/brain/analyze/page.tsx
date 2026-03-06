@@ -82,7 +82,7 @@ const ACCEPTED_TYPES = [
   'application/vnd.ms-excel',
   'text/csv',
 ];
-const ACCEPTED_EXTENSIONS = ['.pdf', '.xlsx', '.xls', '.csv'];
+const ACCEPTED_EXTENSIONS = ['.pdf', '.xlsx', '.xls', '.csv', '.docx', '.doc'];
 
 const SENSES = [
   { id: 'cms', name: 'CMS', icon: '👁', description: 'Star ratings, deficiencies, SFF status' },
@@ -338,7 +338,7 @@ export default function AnalyzePage() {
               ref={fileInputRef}
               type="file"
               multiple
-              accept=".pdf,.xlsx,.xls,.csv"
+              accept=".pdf,.xlsx,.xls,.csv,.docx,.doc"
               className="hidden"
               onChange={(e) => {
                 if (e.target.files) addFiles(e.target.files);

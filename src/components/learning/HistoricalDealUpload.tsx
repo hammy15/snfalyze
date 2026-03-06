@@ -313,7 +313,7 @@ function DropZone({ role, icon, title, description, files, onDrop, onFileSelect,
         Browse Files
         <input
           type="file"
-          accept=".xlsx,.xls,.csv,.pdf"
+          accept=".xlsx,.xls,.csv,.pdf,.docx,.doc"
           multiple
           onChange={onFileSelect}
           className="hidden"

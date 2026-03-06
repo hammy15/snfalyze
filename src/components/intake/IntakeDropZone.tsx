@@ -150,7 +150,7 @@ export function IntakeDropZone({
                 ref={inputRef}
                 type="file"
                 multiple
-                accept=".pdf,.xlsx,.xls,.csv,.jpg,.jpeg,.png"
+                accept=".pdf,.xlsx,.xls,.csv,.docx,.doc,.jpg,.jpeg,.png"
                 onChange={handleFileChange}
                 className="hidden"
               />

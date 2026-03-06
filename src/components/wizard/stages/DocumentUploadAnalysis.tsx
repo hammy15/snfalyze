@@ -253,6 +253,8 @@ export function DocumentUploadAnalysis({
     onDrop,
     accept: {
       'application/pdf': ['.pdf'],
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+        'application/msword': ['.doc'],
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
       'application/vnd.ms-excel': ['.xls'],
       'text/csv': ['.csv'],
@@ -505,7 +507,7 @@ export function DocumentUploadAnalysis({
           <input
             type="file"
             multiple
-            accept=".pdf,.xlsx,.xls,.csv,.png,.jpg,.jpeg"
+            accept=".pdf,.xlsx,.xls,.csv,.docx,.doc,.png,.jpg,.jpeg"
             onChange={(e) => {
               const selectedFiles = e.target.files ? Array.from(e.target.files) : [];
               if (selectedFiles.length > 0) {

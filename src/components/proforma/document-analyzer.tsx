@@ -320,7 +320,7 @@ export function DocumentAnalyzer({ onExtractComplete, onClose }: DocumentAnalyze
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept=".pdf,.xlsx,.xls,.csv"
+                accept=".pdf,.xlsx,.xls,.csv,.docx,.doc"
                 onChange={handleFileSelect}
                 className="hidden"
               />

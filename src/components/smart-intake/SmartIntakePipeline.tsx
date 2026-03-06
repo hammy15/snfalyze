@@ -122,7 +122,7 @@ export function SmartIntakePipeline({ initialFiles, onCancel }: SmartIntakePipel
           <input
             type="file"
             multiple
-            accept=".pdf,.xlsx,.xls,.csv,.jpg,.jpeg,.png"
+            accept=".pdf,.xlsx,.xls,.csv,.docx,.doc,.jpg,.jpeg,.png"
             onChange={handleFileSelect}
             className="absolute inset-0 opacity-0 cursor-pointer"
           />

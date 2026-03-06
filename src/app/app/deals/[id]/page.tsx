@@ -215,7 +215,7 @@ export default function DealDetailPage() {
                 id: doc.id,
                 deal_id: doc.dealId,
                 name: doc.filename,
-                type: doc.filename.endsWith('.pdf') ? 'pdf' : doc.filename.endsWith('.xlsx') || doc.filename.endsWith('.xls') ? 'excel' : 'other',
+                type: doc.filename.endsWith('.pdf') ? 'pdf' : doc.filename.endsWith('.xlsx') || doc.filename.endsWith('.xls') ? 'excel' : doc.filename.endsWith('.docx') || doc.filename.endsWith('.doc') ? 'word' : 'other',
                 category: (validCategories.includes(doc.type as typeof validCategories[number]) ? doc.type : 'other') as 'financials' | 'rent_roll' | 'survey' | 'license' | 'lease' | 'other',
                 size: 0,
                 extracted: doc.status === 'complete',

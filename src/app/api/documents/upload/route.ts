@@ -9,6 +9,52 @@ import { extractRatesFromText, extractRatesFromTable } from '@/lib/extraction/ra
 import pdfParse from 'pdf-parse';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
+import { inflateRawSync } from 'zlib';
+
+// ── DOCX text extraction (zero new dependencies) ─────────────────────────────
+// DOCX = ZIP archive. We scan for word/document.xml, decompress with
+// Node's built-in zlib, and strip XML tags to get plain text.
+function extractDocxText(buffer: Buffer): string {
+  try {
+    const xml = extractZipEntry(buffer, 'word/document.xml');
+    if (!xml) return '[Error: word/document.xml not found in DOCX]';
+    return xml
+      .replace(/<w:t(\s[^>]*)?>/g, ' ')   // word text runs → space-separated
+      .replace(/<\/w:p>/g, '\n')            // paragraph end → newline
+      .replace(/<[^>]+>/g, '')              // strip all remaining XML tags
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/&apos;/g, "'").replace(/&quot;/g, '"')
+      .replace(/ +/g, ' ').trim();
+  } catch (e) {
+    return `[Error extracting DOCX: ${e instanceof Error ? e.message : 'Unknown'}]`;
+  }
+}
+
+function extractZipEntry(zip: Buffer, targetPath: string): string | null {
+  let offset = 0;
+  while (offset < zip.length - 30) {
+    // Local file header signature: PK\x03\x04
+    if (zip[offset] !== 0x50 || zip[offset+1] !== 0x4B ||
+        zip[offset+2] !== 0x03 || zip[offset+3] !== 0x04) {
+      offset++;
+      continue;
+    }
+    const compression  = zip.readUInt16LE(offset + 8);
+    const compressedSz = zip.readUInt32LE(offset + 18);
+    const filenameSz   = zip.readUInt16LE(offset + 26);
+    const extraSz      = zip.readUInt16LE(offset + 28);
+    const filename     = zip.slice(offset + 30, offset + 30 + filenameSz).toString('utf8');
+    const dataStart    = offset + 30 + filenameSz + extraSz;
+    if (filename === targetPath) {
+      const compressed = zip.slice(dataStart, dataStart + compressedSz);
+      if (compression === 0) return compressed.toString('utf8');   // stored
+      if (compression === 8) return inflateRawSync(compressed).toString('utf8'); // deflate
+      return null;
+    }
+    offset = dataStart + compressedSz;
+  }
+  return null;
+}
 
 // Vercel Pro: allow up to 5 minutes for full document processing pipeline
 export const maxDuration = 300;
@@ -139,6 +185,9 @@ export async function POST(request: NextRequest) {
       } catch (e) {
         rawText = `[Error extracting CSV: ${e instanceof Error ? e.message : 'Unknown'}]`;
       }
+    } else if (lowerName.endsWith('.docx') || lowerName.endsWith('.doc')) {
+      rawText = extractDocxText(fileBuffer);
+      extractedData = { sourceFormat: lowerName.endsWith('.docx') ? 'docx' : 'doc' };
     } else {
       rawText = fileBuffer.toString('utf-8');
     }
@@ -286,6 +335,10 @@ async function processDocument(documentId: string, buffer: Buffer, originalFileN
         console.error('CSV parsing error:', csvError);
         rawText = `[Error extracting CSV: ${csvError instanceof Error ? csvError.message : 'Unknown error'}]`;
       }
+    } else if (fileName.endsWith('.docx') || fileName.endsWith('.doc')) {
+      rawText = extractDocxText(buffer);
+      extractedData.sourceFormat = fileName.endsWith('.docx') ? 'docx' : 'doc';
+      console.log(`Extracted ${rawText.length} characters from Word document`);
     } else if (fileType.includes('image')) {
       // Use AI vision to extract text/data from images
       try {

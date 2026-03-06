@@ -158,7 +158,7 @@ export function DocUploadWithAnalysis({
           ref={fileInputRef}
           type="file"
           multiple
-          accept=".pdf,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.tiff"
+          accept=".pdf,.xlsx,.xls,.csv,.docx,.doc,.png,.jpg,.jpeg,.tiff"
           className="hidden"
           onChange={(e) => e.target.files && handleFiles(e.target.files)}
         />

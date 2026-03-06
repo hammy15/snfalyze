@@ -59,10 +59,14 @@ export async function POST(
     }
 
     if (analysisResult.assumptions) {
+      // Sanitize assumption categories — DB enum only allows: minor | census | labor | regulatory
+      const validCategories = new Set(['minor', 'census', 'labor', 'regulatory']);
       for (const assumption of analysisResult.assumptions) {
+        const category = validCategories.has(assumption.category) ? assumption.category : 'minor';
         await db.insert(assumptions).values({
           dealId,
           ...assumption,
+          category,
         });
       }
     }

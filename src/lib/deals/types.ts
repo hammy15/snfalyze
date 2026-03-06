@@ -105,7 +105,7 @@ export interface DealDocument {
   deal_id: string;
 
   name: string;
-  type: 'pdf' | 'excel' | 'csv' | 'image' | 'other';
+  type: 'pdf' | 'excel' | 'csv' | 'image' | 'word' | 'other';
   category: 'financials' | 'rent_roll' | 'survey' | 'license' | 'lease' | 'other';
   size: number;
   url?: string;

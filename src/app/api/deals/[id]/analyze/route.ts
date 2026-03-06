@@ -111,8 +111,10 @@ export async function POST(
       .set({ status: 'new', updatedAt: new Date() })
       .where(eq(deals.id, params.id));
 
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? (error.stack || '').slice(0, 500) : '';
     return NextResponse.json(
-      { success: false, error: 'Failed to analyze deal' },
+      { success: false, error: 'Failed to analyze deal', debug: errMsg, stack: errStack },
       { status: 500 }
     );
   }

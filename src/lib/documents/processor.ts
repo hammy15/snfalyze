@@ -26,14 +26,15 @@ export function classifyDocument(text: string, filename: string): string {
   const lowerText = text.toLowerCase();
   const lowerFilename = filename.toLowerCase();
 
-  // Check filename first
+  // Check filename first — IMPORTANT: financial statement checks must precede the 'om' check
+  // because "income" contains the substring "om" (i-n-c-o-m-e), causing false om_package matches.
   if (lowerFilename.includes('rent roll') || lowerFilename.includes('rentroll')) {
     return 'rent_roll';
   }
-  if (lowerFilename.includes('census')) {
+  if (lowerFilename.includes('census') || lowerFilename.includes('occupancy')) {
     return 'census_report';
   }
-  if (lowerFilename.includes('staffing') || lowerFilename.includes('schedule')) {
+  if (lowerFilename.includes('staffing') || lowerFilename.includes('pbj') || lowerFilename.includes('hppd')) {
     return 'staffing_report';
   }
   if (lowerFilename.includes('survey') || lowerFilename.includes('deficiency')) {
@@ -42,19 +43,43 @@ export function classifyDocument(text: string, filename: string): string {
   if (lowerFilename.includes('cost report') || lowerFilename.includes('costreport')) {
     return 'cost_report';
   }
-  if (lowerFilename.includes('om') || lowerFilename.includes('offering')) {
-    return 'om_package';
-  }
   if (lowerFilename.includes('appraisal')) {
     return 'appraisal';
   }
   if (lowerFilename.includes('environmental') || lowerFilename.includes('phase')) {
     return 'environmental';
   }
+  // Financial statements: TTM, trailing 12, income statement, P&L, proforma, financials
+  // These MUST come before the OM check — "income" contains "om" as a substring
+  if (
+    lowerFilename.includes('ttm') ||
+    lowerFilename.includes('trailing') ||
+    lowerFilename.includes('income statement') ||
+    lowerFilename.includes('income') ||
+    lowerFilename.includes('proforma') ||
+    lowerFilename.includes('pro forma') ||
+    lowerFilename.includes('pro-forma') ||
+    lowerFilename.includes('p&l') ||
+    lowerFilename.includes('pnl') ||
+    lowerFilename.includes('financial') ||
+    lowerFilename.includes('financials') ||
+    /\bt\d{2}\b/.test(lowerFilename) // T12, T24, T36 trailing files
+  ) {
+    return 'financial_statement';
+  }
+  // OM/CIM: require whole-word "om" to avoid matching "income", "from", "home", etc.
+  if (
+    /\bom\b/.test(lowerFilename) ||
+    lowerFilename.includes('offering') ||
+    /\bcim\b/.test(lowerFilename) ||
+    lowerFilename.includes('confidential information memorandum')
+  ) {
+    return 'om_package';
+  }
 
   // Check content patterns
   if (lowerText.includes('income statement') || lowerText.includes('profit and loss') ||
-      lowerText.includes('p&l') || lowerText.includes('revenue') && lowerText.includes('expense')) {
+      lowerText.includes('p&l') || (lowerText.includes('revenue') && lowerText.includes('expense'))) {
     return 'financial_statement';
   }
   if (lowerText.includes('rent roll') || lowerText.includes('resident list') ||

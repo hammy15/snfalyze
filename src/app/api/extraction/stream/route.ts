@@ -183,12 +183,13 @@ export async function POST(request: NextRequest) {
               }
             }
 
-            // Update document status
+            // Update document status, write extraction_confidence, and store rawFinancials for analysis
             await db
               .update(documents)
               .set({
                 status: 'complete',
                 processedAt: new Date(),
+                extractionConfidence: Math.round(result.confidence * 100),
                 extractedData: {
                   sheetsCount: result.sheets.length,
                   financialPeriods: result.financialData.length,
@@ -203,6 +204,9 @@ export async function POST(request: NextRequest) {
                     facilities: s.facilitiesDetected,
                     periods: s.periodsDetected,
                   })),
+                  // Store raw financial data for analysis engine
+                  rawFinancials: result.financialData.length > 0 ? result.financialData : null,
+                  rawCensus: result.censusData.length > 0 ? result.censusData : null,
                 },
               })
               .where(eq(documents.id, doc.id));

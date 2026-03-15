@@ -82,7 +82,12 @@ export async function POST(request: NextRequest) {
     // Determine file type based on extension
     type DocumentType = 'financial_statement' | 'rent_roll' | 'census_report' | 'staffing_report' | 'survey_report' | 'cost_report' | 'om_package' | 'lease_agreement' | 'appraisal' | 'environmental' | 'other';
     let fileType: DocumentType = 'other';
-    if (lowerName.includes('financial') || lowerName.includes('income') || lowerName.includes('p&l') || lowerName.includes('pnl')) {
+    if (
+      lowerName.includes('financial') || lowerName.includes('financials') ||
+      lowerName.includes('income') || lowerName.includes('p&l') || lowerName.includes('pnl') ||
+      lowerName.includes('proforma') || lowerName.includes('pro forma') || lowerName.includes('pro-forma') ||
+      /\bt\d{2}\b/.test(lowerName) // T12, T24, T36 trailing files
+    ) {
       fileType = 'financial_statement';
     } else if (lowerName.includes('census') || lowerName.includes('occupancy')) {
       fileType = 'census_report';

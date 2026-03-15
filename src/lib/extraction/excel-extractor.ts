@@ -130,18 +130,41 @@ function classifySheet(data: (string | number | null)[][]): SheetType {
   return 'unknown';
 }
 
+// Words that indicate a cell is a P&L financial section/category label, NOT a facility name
+const FINANCIAL_LABEL_WORDS = new Set([
+  'total', 'subtotal', 'revenue', 'expense', 'expenses', 'income', 'nursing', 'dietary',
+  'housekeeping', 'laundry', 'activities', 'administration', 'admin', 'plant', 'ancillary',
+  'therapy', 'pharmacy', 'supplies', 'utilities', 'insurance', 'days', 'census', 'payroll',
+  'labor', 'salaries', 'wages', 'benefits', 'net', 'gross', 'operating', 'ebitda', 'ebitdar',
+  'noi', 'profit', 'loss', 'depreciation', 'amortization', 'management', 'services',
+  'maintenance', 'repairs', 'other', 'miscellaneous', 'overhead', 'statistics',
+]);
+
+/**
+ * Returns true if a string looks like a financial line item/section label, not a facility name
+ */
+function isFinancialLabel(text: string): boolean {
+  const lower = text.toLowerCase().trim();
+  const words = lower.split(/\s+/);
+  // If the first word is a known financial keyword, it's a section label
+  if (words[0] && FINANCIAL_LABEL_WORDS.has(words[0])) return true;
+  // If any word is a strong financial indicator as a suffix
+  if (words.length >= 2 && FINANCIAL_LABEL_WORDS.has(words[words.length - 1])) return true;
+  return false;
+}
+
 /**
  * Detect facility names from sheet content
  */
 function detectFacilities(data: (string | number | null)[][]): string[] {
   const facilities: Set<string> = new Set();
 
-  // Common facility name patterns
+  // Patterns that strongly indicate a real facility name (must have location/healthcare identifiers)
   const facilityPatterns = [
-    /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*(?:SNF|Nursing|Healthcare|Care\s+Center|Rehab)/i,
-    /facility[:\s]+([A-Z][a-zA-Z\s]+)/i,
-    /provider[:\s]+([A-Z][a-zA-Z\s]+)/i,
-    /location[:\s]+([A-Z][a-zA-Z\s]+)/i,
+    // "Sunrise SNF", "Valley Healthcare", "Oak Care Center" — name + healthcare type
+    /^([A-Z][a-zA-Z\s&'.-]{4,})\s+(?:SNF|ALF|ILF|Nursing\s+(?:Home|Facility)|Healthcare|Care\s+Center|Rehab(?:ilitation)?|Living\s+Center|Health\s+Center|Convalescent)/i,
+    // "facility: Name" or "provider: Name"
+    /^(?:facility|provider|location)[:\s]+([A-Z][a-zA-Z\s&'.-]{4,})/i,
   ];
 
   // Check first 20 rows for facility names
@@ -152,22 +175,29 @@ function detectFacilities(data: (string | number | null)[][]): string[] {
     for (const cell of row) {
       if (typeof cell !== 'string') continue;
       const text = cell.trim();
+      if (!text || text.length < 5) continue;
+
+      // Skip financial section labels
+      if (isFinancialLabel(text)) continue;
 
       for (const pattern of facilityPatterns) {
         const match = text.match(pattern);
         if (match && match[1]) {
-          facilities.add(match[1].trim());
+          const candidateName = match[1].trim();
+          // Extra guard: don't add names that are themselves financial labels
+          if (!isFinancialLabel(candidateName) && candidateName.length >= 4) {
+            facilities.add(candidateName);
+          }
         }
       }
 
       // Also check for CCN patterns (XXXXXX format)
       const ccnMatch = text.match(/CCN[:\s]*(\d{6})/i);
       if (ccnMatch) {
-        // We found a CCN, look for facility name nearby
         const idx = row.indexOf(cell);
         for (let j = Math.max(0, idx - 2); j < Math.min(row.length, idx + 3); j++) {
           const nearby = row[j];
-          if (typeof nearby === 'string' && nearby.length > 5 && !/\d{6}/.test(nearby)) {
+          if (typeof nearby === 'string' && nearby.length > 5 && !/\d{6}/.test(nearby) && !isFinancialLabel(nearby)) {
             facilities.add(nearby.trim());
             break;
           }
@@ -176,7 +206,6 @@ function detectFacilities(data: (string | number | null)[][]): string[] {
     }
   }
 
-  // If no facilities found, use sheet name if it looks like a facility
   return Array.from(facilities);
 }
 

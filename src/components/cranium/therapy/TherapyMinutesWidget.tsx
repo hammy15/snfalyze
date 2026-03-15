@@ -1,4 +1,5 @@
 'use client'
+import React from "react"
 
 import { cn } from '@/lib/utils'
 import { THERAPY_MINUTES } from '../mock-data'

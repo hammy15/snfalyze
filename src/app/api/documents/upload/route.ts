@@ -410,7 +410,7 @@ async function processDocument(documentId: string, buffer: Buffer, originalFileN
       rawText
     );
 
-    // Update with deep extraction results + AI summary columns
+    // Update with deep extraction results + AI summary columns + extraction_confidence
     await db
       .update(documents)
       .set({
@@ -421,6 +421,7 @@ async function processDocument(documentId: string, buffer: Buffer, originalFileN
         },
         aiSummary: aiAnalysis?.summary || null,
         aiKeyFindings: aiAnalysis?.keyFindings || null,
+        extractionConfidence: aiAnalysis?.confidence != null ? Math.round(aiAnalysis.confidence) : null,
       })
       .where(eq(documents.id, documentId));
 

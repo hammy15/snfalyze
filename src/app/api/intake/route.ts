@@ -3,6 +3,7 @@ import { db, deals, facilities, analysisStages, documents } from '@/db';
 import { eq } from 'drizzle-orm';
 import { classifyDocument } from '@/lib/documents/processor';
 import { analyzeDocument } from '@/lib/documents/ai-analyzer';
+import { autoMatchFacilityCCN } from '@/lib/cms/ccn-matcher';
 import pdfParse from 'pdf-parse';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
@@ -176,6 +177,13 @@ export async function PUT(request: NextRequest) {
         return facility;
       })
     );
+
+    // Auto-match CCN from CMS provider data for each facility (fire-and-forget, non-blocking)
+    for (const facility of createdFacilities) {
+      autoMatchFacilityCCN(facility.id).catch(err =>
+        console.warn(`[CCN Match] Failed for facility ${facility.id}:`, err)
+      );
+    }
 
     // Create analysis stages
     const stageTypes = [

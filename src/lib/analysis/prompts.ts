@@ -92,6 +92,51 @@ Always present BOTH views. Cascadia's asset-type view reflects operational oppor
 - **Growth Markets** (expanding, stabilizing): 0.8-1.4x revenue, 6-9x EBITDA, $15-30K/bed
 - **Value Markets** (rural, turnaround): 0.6-1.2x revenue, 4-7x EBITDA, $10-20K/bed
 
+### HOSPICE BENCHMARKS
+
+**Revenue Per Patient Day (hospice)**
+- Routine Home Care (RHC): $150-$175/day (largest volume category, ~80-90% of days)
+- Continuous Home Care (CHC): $900-$1,000/day (crisis care, rare; <2% of days)
+- General Inpatient (GIP): $750-$850/day (symptom management; <5% of days)
+- Respite Care: $170-$185/day (family relief; <5% of days)
+- Blended average: $175-$250/day across all levels (healthy operations)
+
+**Key Hospice Metrics**
+- Average Length of Stay (ALOS): 70-100 days typical; >120 days may attract OIG scrutiny
+- Median Length of Stay: 15-25 days (many patients enroll late; median << mean is normal)
+- Live Discharge Rate: <20% healthy; >25% raises Medicare reimbursement risk
+- Cap % Utilization: Hospices exceeding Medicare aggregate cap (~$32,000/beneficiary/year) face dollar-for-dollar clawback. Flag any cap usage >80%
+- Admissions per Month: Healthy hospices grow 5-15% annually in patient census
+- Average Daily Patient Census (ADPC): Scale benchmark is $1.5M-$3M revenue per 100 ADPC
+
+**Revenue Quality**
+- RHC % of Total Days: Should be 80-90%; very high GIP% suggests acuity mix issue or billing risk
+- Payer Mix: Medicare is primary (~90%); Medicaid is secondary; Private insurance rare
+- Revenue recognition: Medicare pays prospectively per beneficiary per day; no fee-for-service
+
+**Valuation: Hospice**
+- EBITDA multiple: 6-10x for well-run, growing hospices
+- Distressed/rural: 4-6x EBITDA
+- Platform/scale premium: 10-14x EBITDA for certified platforms with CON protection
+- Cap rate approach: Less common than SNF/ALF; EBITDA multiple preferred
+- Per-patient valuation: $8,000-$15,000 per active patient (ADPC × multiple)
+- Revenue multiple: 0.8-1.5x trailing 12-month revenue (lower than SNF due to RHC rate sensitivity)
+
+**Hospice-Specific Risks**
+- Medicare aggregate cap: Exceeding it triggers recoupment; biggest binary risk in hospice
+- Live discharge scrutiny: OIG / MAC audits target hospices with high live discharge rates
+- PEPPER reports: CMS sends comparative performance reports; outliers get audited
+- Diagnosis mix: "Debility" and "failure to thrive" diagnoses draw more scrutiny than cancer/cardiac
+- Staffing model: IDG (interdisciplinary group) compliance is required; nurse, social work, chaplain, aide
+- Certificate of Need (CON): 30+ states require CON for hospice. Existing providers benefit from supply barriers
+
+**Cascadia Hospice Underwriting Rules**
+- Always model cap exposure: calculate beneficiary count × ~$32,000 cap vs. actual Medicare revenue
+- Normalize for live discharge rate: >20% requires revenue haircut in underwriting
+- ALOS normalization: Annualize TTM but flag if ALOS trending down (shorter stays = lower margins)
+- Review top-10 diagnosis mix: >40% debility/FTT requires extra diligence
+- CON state hospice: Add $2,000-$5,000 per patient premium for supply-protected markets
+
 ### ALF / MEMORY CARE BENCHMARKS
 - Memory care revenue premium: 15-40% over traditional AL
 - ALF cap rates: Tier 1 (4.0-6.0%), Tier 2 (5.5-7.0%), Tier 3 (6.5-8.0%)

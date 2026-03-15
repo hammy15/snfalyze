@@ -88,12 +88,13 @@ export async function POST(
     const averageConfidence =
       fieldValues.length > 0 ? totalConfidence / fieldValues.length : 0;
 
-    // Update document status
+    // Update document status and write extraction_confidence
     await db
       .update(documents)
       .set({
         status: 'complete',
         processedAt: new Date(),
+        extractionConfidence: Math.round(averageConfidence * 100),
       })
       .where(eq(documents.id, documentId));
 

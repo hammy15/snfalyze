@@ -577,11 +577,152 @@ export async function extractFromExcel(
 
   const rollupNames = ['rollup', 'summary', 'consolidated', 'total', 'combined', 'portfolio', 'all'];
 
+  // Financial section/category keywords — sheet names matching these are P&L row labels, NOT facility names
+  const FINANCIAL_SECTION_KEYWORDS = [
+    'revenue', 'expense', 'expenses', 'income', 'nursing', 'dietary', 'housekeeping',
+    'laundry', 'activities', 'administration', 'admin', 'plant', 'maintenance',
+    'ancillary', 'therapy', 'pharmacy', 'supplies', 'utilities', 'insurance',
+    'days', 'census', 'payroll', 'labor', 'salaries', 'wages', 'benefits',
+    'total', 'subtotal', 'net', 'gross', 'operating', 'ebitda', 'ebitdar',
+    'noi', 'profit', 'loss', 'p&l', 'financial', 'summary', 'statistics',
+    'management fee', 'rent', 'lease', 'depreciation', 'amortization',
+  ];
+
+  /**
+   * Returns true if a sheet name looks like a financial P&L section/category
+   * rather than an actual facility name.
+   */
+  function isFinancialSectionName(name: string): boolean {
+    const lower = name.toLowerCase().trim();
+    // Single letter (A, B, C) — likely a facility code column, not a facility name
+    if (/^[a-z]$/.test(lower)) return true;
+    // Matches known financial keywords
+    if (FINANCIAL_SECTION_KEYWORDS.some(kw => lower === kw || lower.startsWith(kw + ' ') || lower.endsWith(' ' + kw))) return true;
+    // Pattern like "A - Ancillary" or "B Revenue" (letter + dash/space + financial word)
+    if (/^[a-z]\s*[-–]\s*\w/.test(lower)) return true;
+    if (/^[a-z]\s+\w/.test(lower) && FINANCIAL_SECTION_KEYWORDS.some(kw => lower.includes(kw))) return true;
+    return false;
+  }
+
+  // Detect if this workbook is a multi-entity consolidated P&L (all sheets are financial sections)
+  const nonRollupSheets = workbook.SheetNames.filter(n => {
+    const l = n.toLowerCase();
+    return !rollupNames.some(r => l.includes(r));
+  });
+  const sectionSheetCount = nonRollupSheets.filter(n => isFinancialSectionName(n)).length;
+  const isConsolidatedPL = nonRollupSheets.length > 0 && sectionSheetCount / nonRollupSheets.length >= 0.5;
+
+  // For consolidated P&L workbooks, parse the first non-rollup sheet as a single entity
+  // using column headers as entity names (multi-entity layout)
+  if (isConsolidatedPL) {
+    const firstSheet = nonRollupSheets[0];
+    const worksheet = workbook.Sheets[firstSheet];
+    const rawData = XLSX.utils.sheet_to_json<(string | number | null)[]>(worksheet, {
+      header: 1,
+      defval: null,
+      raw: true,
+    });
+
+    if (rawData.length > 0) {
+      const filenameCCN = extractCCNFromFilename(filename);
+      // Use filename (stripped of extension) as facility name for consolidated P&L
+      const entityName = filename.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim() || 'Portfolio';
+
+      const facility: Partial<FacilityProfile> = {
+        name: entityName,
+        facilityType: 'SNF',
+        sourceFiles: [filename],
+        ccn: filenameCCN || undefined,
+        metrics: {
+          avgDailyCensus: null,
+          occupancyRate: null,
+          payorMix: { medicare: null, medicaid: null, private: null, other: null },
+          revenuePPD: null,
+          expensePPD: null,
+          laborPPD: null,
+          netOperatingIncome: null,
+          ebitda: null,
+          ebitdaMargin: null,
+        },
+      };
+
+      // Detect date header row and periods from all sheets combined
+      for (const sheetName of nonRollupSheets) {
+        const ws = workbook.Sheets[sheetName];
+        const sheetData = XLSX.utils.sheet_to_json<(string | number | null)[]>(ws, { header: 1, defval: null, raw: true });
+
+        for (let i = 0; i < Math.min(15, sheetData.length); i++) {
+          const row = sheetData[i];
+          if (!row) continue;
+          const detected = parseDateHeaders(row);
+          if (detected.length > periods.length) {
+            periods = detected;
+          }
+        }
+
+        // Extract line items from each sheet
+        const dateHeaderRow = periods.length > 0 ? (() => {
+          for (let i = 0; i < Math.min(15, sheetData.length); i++) {
+            if (parseDateHeaders(sheetData[i] || []).length >= 3) return i;
+          }
+          return -1;
+        })() : -1;
+
+        for (let rowIdx = dateHeaderRow + 1; rowIdx < sheetData.length; rowIdx++) {
+          const row = sheetData[rowIdx];
+          if (!row || !row[0]) continue;
+          const label = String(row[0]).trim();
+          if (!label) continue;
+
+          const hasNumericValues = row.slice(1).some(cell => {
+            const num = parseNumericValue(cell);
+            return num !== null && num !== 0;
+          });
+          if (!hasNumericValues) continue;
+
+          const coaMapping = mapToCOA(label);
+          const values: MonthlyValue[] = [];
+          for (let colIdx = 1; colIdx < row.length && colIdx <= periods.length + 1; colIdx++) {
+            const periodIdx = colIdx - 1;
+            if (periodIdx < periods.length) {
+              values.push({ period: periods[periodIdx], value: parseNumericValue(row[colIdx]), isActual: true });
+            }
+          }
+          const validValues = values.filter(v => v.value !== null).map(v => v.value as number);
+          const annualized = validValues.length > 0 ? (validValues.reduce((a, b) => a + b, 0) / validValues.length) * 12 : null;
+
+          lineItems.push({
+            category: coaMapping.category as ExtractedLineItem['category'],
+            subcategory: coaMapping.subcategory,
+            label: coaMapping.name || label,
+            originalLabel: label,
+            coaCode: coaMapping.code,
+            coaName: coaMapping.name,
+            values,
+            annualized,
+            perBedDay: null,
+            percentOfRevenue: null,
+            facility: entityName,
+            sourceSheet: sheetName,
+            sourceFile: filename,
+            rowIndex: rowIdx,
+            confidence: coaMapping.code ? 0.9 : 0.5,
+          });
+        }
+      }
+
+      facilities.set(entityName, facility);
+    }
+
+    // Skip normal per-sheet processing for consolidated P&L
+  } else {
+
   for (const sheetName of workbook.SheetNames) {
     const sheetLower = sheetName.toLowerCase();
     const isRollup = rollupNames.some(r => sheetLower.includes(r));
 
     if (isRollup) continue; // Skip rollup sheets for per-facility extraction
+    if (isFinancialSectionName(sheetName)) continue; // Skip financial section sheets
 
     const worksheet = workbook.Sheets[sheetName];
     const rawData = XLSX.utils.sheet_to_json<(string | number | null)[]>(worksheet, {
@@ -722,6 +863,8 @@ export async function extractFromExcel(
 
     facilities.set(sheetName, facility);
   }
+
+  } // end else (non-consolidated P&L)
 
   return { facilities, lineItems, periods };
 }

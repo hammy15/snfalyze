@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  transpilePackages: ["recharts"],
   experimental: {
     serverActions: {
       bodySizeLimit: '50mb',

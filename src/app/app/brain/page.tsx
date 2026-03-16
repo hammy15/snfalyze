@@ -151,7 +151,7 @@ export default function BrainDashboard() {
       </div>
 
       {/* Stats Row */}
-      {status && (
+      {(status && !(status as any).error) && (
         <CILStatusBar
           knowledgeFileCount={status.knowledgeFileCount}
           dealsAnalyzed={status.dealsAnalyzed}

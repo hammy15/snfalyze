@@ -1,12 +1,14 @@
 "use client"
-import React from "react"
+// recharts stubs
+const BarChart = (p: any) => null;
+const Bar = (p: any) => null;
+const XAxis = (p: any) => null;
+const YAxis = (p: any) => null;
+const CartesianGrid = (p: any) => null;
+const Tooltip = (p: any) => null;
+const ResponsiveContainer = (p: any) => null;
 
 import { Card } from "@/components/ui/card"
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell, Legend
-} from "recharts"
-
 const groups = [
   { group: "MS HHRG",     revenue: 2840, cost: 2190, margin: 650  },
   { group: "Neuro/Stroke",revenue: 3120, cost: 2480, margin: 640  },

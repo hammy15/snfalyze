@@ -1,12 +1,16 @@
 "use client"
-import React from "react"
+// recharts stubs
+const Bar = (p: any) => null;
+const XAxis = (p: any) => null;
+const YAxis = (p: any) => null;
+const CartesianGrid = (p: any) => null;
+const Tooltip = (p: any) => null;
+const ResponsiveContainer = (p: any) => null;
+const Line = (p: any) => null;
+const AreaChart = (p: any) => null;
+const Area = (p: any) => null;
 
 import { Card } from "@/components/ui/card"
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine
-} from "recharts"
-
 const trendData = [
   { day: "Mar 1",  adc: 38 },
   { day: "Mar 5",  adc: 40 },

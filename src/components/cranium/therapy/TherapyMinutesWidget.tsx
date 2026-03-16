@@ -1,11 +1,8 @@
 'use client'
-import React from "react"
 
 import { cn } from '@/lib/utils'
 import { THERAPY_MINUTES } from '../mock-data'
 import { Activity, CheckCircle2, AlertTriangle } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ErrorBar, ReferenceLine } from 'recharts'
-
 const DISCIPLINE_COLORS = {
   PT: { bar: '#14b8a6', bg: 'bg-teal-500', text: 'text-teal-600 dark:text-teal-400', light: 'bg-teal-50 dark:bg-teal-950/20' },
   OT: { bar: '#6366f1', bg: 'bg-indigo-500', text: 'text-indigo-600 dark:text-indigo-400', light: 'bg-indigo-50 dark:bg-indigo-950/20' },

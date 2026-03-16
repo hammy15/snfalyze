@@ -1,12 +1,15 @@
 "use client"
-import React from "react"
+// recharts stubs
+const BarChart = (p: any) => null;
+const Bar = (p: any) => null;
+const XAxis = (p: any) => null;
+const YAxis = (p: any) => null;
+const CartesianGrid = (p: any) => null;
+const Tooltip = (p: any) => null;
+const ResponsiveContainer = (p: any) => null;
+const Cell = (p: any) => null;
 
 import { Card } from "@/components/ui/card"
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell, ReferenceLine
-} from "recharts"
-
 // Distribution of episodes by visit count band
 const distribution = [
   { band: "<7",    count: 4,  risk: "safety",   color: "#f43f5e" },

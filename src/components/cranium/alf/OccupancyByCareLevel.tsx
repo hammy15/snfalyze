@@ -1,8 +1,12 @@
 "use client"
-import React from "react"
+// recharts stubs
+const Tooltip = (p: any) => null;
+const ResponsiveContainer = (p: any) => null;
+const Cell = (p: any) => null;
+const PieChart = (p: any) => null;
+const Pie = (p: any) => null;
 
 import { Card } from "@/components/ui/card"
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts"
 import type { ALFOccupancyData } from "../snf-alf-data"
 
 interface Props { data: ALFOccupancyData }

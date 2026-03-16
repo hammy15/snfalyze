@@ -1,8 +1,14 @@
 "use client"
-import React from "react"
+// recharts stubs
+const BarChart = (p: any) => null;
+const Bar = (p: any) => null;
+const XAxis = (p: any) => null;
+const YAxis = (p: any) => null;
+const Tooltip = (p: any) => null;
+const ResponsiveContainer = (p: any) => null;
+const Cell = (p: any) => null;
 
 import { Card } from "@/components/ui/card"
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts"
 import type { MoveinVelocityData } from "../snf-alf-data"
 
 interface Props { data: MoveinVelocityData }

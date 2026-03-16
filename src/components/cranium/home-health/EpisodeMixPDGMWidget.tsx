@@ -1,11 +1,12 @@
 "use client"
-import React from "react"
+// recharts stubs
+const Tooltip = (p: any) => null;
+const ResponsiveContainer = (p: any) => null;
+const Cell = (p: any) => null;
+const PieChart = (p: any) => null;
+const Pie = (p: any) => null;
 
 import { Card } from "@/components/ui/card"
-import {
-  PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend
-} from "recharts"
-
 const groups = [
   { group: "MS HHRG",    code: "C1",  episodes: 48, revenue: 2840, prev: 45, color: "#6366f1" },
   { group: "Neuro/Stroke",code: "N1", episodes: 32, revenue: 3120, prev: 35, color: "#14b8a6" },

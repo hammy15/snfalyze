@@ -3,13 +3,25 @@ import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import * as schema from './schema';
 
-// Use a placeholder during build time if DATABASE_URL is not set
-// The actual connection is only used at runtime when queries are made
-const connectionString = process.env.DATABASE_URL ?? 'postgresql://build-placeholder:placeholder@localhost/placeholder';
-const sql = neon(connectionString);
+// Lazy initialization — prevents Neon DB call at module import (build-time safe)
+let _instance: ReturnType<typeof drizzle<typeof schema>> | null = null;
 
-// Create the drizzle database instance
-export const db = drizzle(sql, { schema });
+const getInstance = (): ReturnType<typeof drizzle<typeof schema>> => {
+  if (!_instance) {
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error("DATABASE_URL environment variable is not set");
+    }
+    _instance = drizzle(neon(connectionString), { schema });
+  }
+  return _instance;
+};
 
-// Export schema for use in queries
+// Proxy so all property accesses go through getInstance() at runtime only
+export const db = new Proxy({} as ReturnType<typeof drizzle<typeof schema>>, {
+  get(_target, prop) {
+    return Reflect.get(getInstance(), prop);
+  },
+}) as ReturnType<typeof drizzle<typeof schema>>;
+
 export * from './schema';

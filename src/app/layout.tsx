@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import type { Metadata, Viewport } from 'next';
 import { AuthProvider } from '@/lib/auth/context';
 import { AppShell } from '@/components/layout/app-shell';

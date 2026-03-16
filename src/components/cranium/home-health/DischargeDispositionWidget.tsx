@@ -1,12 +1,14 @@
 "use client"
-import React from "react"
+// recharts stubs
+const BarChart = (p: any) => null;
+const Bar = (p: any) => null;
+const XAxis = (p: any) => null;
+const YAxis = (p: any) => null;
+const CartesianGrid = (p: any) => null;
+const Tooltip = (p: any) => null;
+const ResponsiveContainer = (p: any) => null;
 
 import { Card } from "@/components/ui/card"
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer
-} from "recharts"
-
 const dispositions = [
   { label: "Home Independent", key: "home",    color: "#10b981" },
   { label: "Home w/ Family",   key: "family",  color: "#14b8a6" },

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { deals, facilities, capitalPartners, documents, financialPeriods, valuations, facilityCensusPeriods, facilityPayerRates } from '@/db/schema';

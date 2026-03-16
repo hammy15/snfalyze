@@ -1,11 +1,8 @@
 'use client'
-import React from "react"
 
 import { cn } from '@/lib/utils'
 import { THERAPY_MIX } from '../mock-data'
 import { Users, AlertTriangle, CheckCircle2, TrendingUp } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts'
-
 const BREAKEVEN_CENSUS = 25
 
 const CustomTooltip = ({ active, payload, label }: any) => {

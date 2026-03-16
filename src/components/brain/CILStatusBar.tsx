@@ -4,11 +4,11 @@ import { Brain, Database, Target, Zap, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CILStatusBarProps {
-  knowledgeFileCount: number;
-  dealsAnalyzed: number;
-  dealsLearned: number;
-  avgConfidence: number;
-  ipoProgress: { currentOps: number; targetOps: number };
+  knowledgeFileCount?: number | null;
+  dealsAnalyzed?: number | null;
+  dealsLearned?: number | null;
+  avgConfidence?: number | null;
+  ipoProgress?: { currentOps: number; targetOps: number } | null;
   className?: string;
 }
 
@@ -20,35 +20,41 @@ export function CILStatusBar({
   ipoProgress,
   className,
 }: CILStatusBarProps) {
+  const kf = knowledgeFileCount ?? 0;
+  const da = dealsAnalyzed ?? 0;
+  const dl = dealsLearned ?? 0;
+  const ac = avgConfidence ?? 0;
+  const ipo = ipoProgress ?? { currentOps: 0, targetOps: 130 };
+
   const stats = [
     {
       icon: Database,
       label: 'Knowledge Files',
-      value: knowledgeFileCount.toLocaleString(),
+      value: kf.toLocaleString(),
       color: 'text-blue-500',
     },
     {
       icon: Target,
       label: 'Deals Analyzed',
-      value: dealsAnalyzed.toLocaleString(),
+      value: da.toLocaleString(),
       color: 'text-primary-500',
     },
     {
       icon: Brain,
       label: 'Deals Learned',
-      value: dealsLearned.toLocaleString(),
+      value: dl.toLocaleString(),
       color: 'text-purple-500',
     },
     {
       icon: Zap,
       label: 'Avg Confidence',
-      value: `${avgConfidence}%`,
-      color: avgConfidence >= 70 ? 'text-emerald-500' : avgConfidence >= 40 ? 'text-amber-500' : 'text-red-500',
+      value: `${ac}%`,
+      color: ac >= 70 ? 'text-emerald-500' : ac >= 40 ? 'text-amber-500' : 'text-red-500',
     },
     {
       icon: TrendingUp,
       label: 'IPO Progress',
-      value: `${ipoProgress.currentOps} / ${ipoProgress.targetOps}`,
+      value: `${ipo.currentOps} / ${ipo.targetOps}`,
       color: 'text-orange-500',
     },
   ];

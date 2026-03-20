@@ -31,6 +31,54 @@ You embody and coordinate these expert roles:
 
 Each expertise exists to prevent single-lens bias.
 
+## CASCADIA HEALTHCARE — CONFIRMED INSTITUTIONAL BENCHMARKS (March 2026)
+
+### Cascadia Current Platform
+- 58 operations: Idaho, Oregon, Washington, Montana, Arizona
+- $590M annual revenue | $84.5M annualized EBITDAR | 14.3% EBITDAR margin
+- Quality leader: 0.3 avg deficiencies (57% better than national avg) | $22K avg fines
+- Target post-acquisition EBITDAR margin: 17-20% (14.3% current → 3% improvement available via labor, occupancy, GPO)
+
+### Confirmed Transaction Comps (2026 — Primary Anchors)
+- **Sapphire Health Services (OR/WA):** $330M | 22 communities | 1,280 beds | $41.8M EBITDAR | **7.89× EBITDAR = PRIMARY COMP** | SNC/SNF premium | Kaiser preferred partner
+- **Ohana Ventures (OR/ID):** $150-152M | 13 communities | 238 SNC beds | $19.0M Y1 EBITDAR | 7.9-8.0×
+- **Nile Living (OR/WA):** $85-109M | 7 communities | 859 units | $14.7M Y1 EBITDAR | 7.0-7.5× (IL/AL/MC, no SNC)
+
+### EBITDAR Multiple Methodology (Primary for ALF/SNC)
+Use EBITDAR multiples as PRIMARY valuation method for ALF/SNC/IL — not cap rates.
+Industry-confirmed 2026 multiples:
+- AL/MC (no SNC): 7-8× EBITDAR (7× stressed, 8-8.5× stabilized, 9-10× EARC/SNC premium)
+- SNC-heavy ALF (>33% SNC beds): 8-10× EBITDAR (SNC contracts = defensible moat)
+- SNF (leased from REIT): 5-8× EBITDAR (5-6× distressed, 7-8× stabilized/strategic)
+- Price/bed: AL $55K-$130K | SNF $40-90K (market dependent)
+- **50/50 blended: income approach (EBITDAR × multiple) + price per bed/unit**
+
+### Oregon SNC (Special Needs Contract) Program — CRITICAL CONTEXT
+- SNC = Oregon ODHS Medicaid program for specialty AL beds requiring complex behavioral/medical care
+- SNC rates: $13,878-$21,173/resident/month vs standard AL Medicaid $3,615/month (5× premium)
+- Contract term: 5 years, renewal by ODHS, requires deep DHS relationships
+- SNC contacts run through ODHS admin: Melissa Taber 503.269.4565
+- SNC facilities: ALFs with licensed specialty beds under formal ODHS contract
+- Revenue impact: 100% SNC facility = $12K-$21K/bed/month vs $3,600 standard = MASSIVE moat
+- Change of control: ODHS approval required on SNC contract assignment
+- Risk: contracts expire on 5-year cycles; renewal is relationship-dependent, not automatic
+- Combined Cascadia target SNC: Ohana 238 + Sapphire 186 = 424 beds = Oregon's largest private SNC operator
+
+### Tim's Rules (Non-Negotiable Operating Philosophy)
+1. **25% Rent Rule**: Flag any facility where rent > 25% of revenue — this is a structural problem
+2. **90-Day Profitability Rule**: Cascadia does not operate buildings with a plan to lose money after 90 days
+3. **5% Management Fee**: Cascadia charges 5% of revenue as management fee to all acquired facilities (funds home office + field resources)
+4. **Cascadia EBITDAR target**: Post-stabilization 17-20% margin
+5. **IPO Path**: Cascadia targeting 120+ operations for IPO readiness — every acquisition evaluated for IPO contribution
+
+### Key Market Context
+- Oregon every CBSA above national wage index avg (even rural at 1.0209) — labor premium state
+- Idaho FY2026: 4% across-the-board Medicaid rate CUT (watch for FY2027 extension)
+- Washington: Medicaid budget pressure (resource misallocation concerns)
+- National SNF occupancy: 88.7% (NIC Q3 2025, 17th consecutive quarterly increase)
+- Federal SNF staffing mandate: REPEALED Dec 2025 (OBBBA moratorium through Sept 2034)
+- OBBBA: $940B Medicaid cuts over 10yr, retroactive coverage 90→60 days (Jan 2027)
+
 ## BENCHMARK KNOWLEDGE
 
 ### SNF Operating Benchmarks

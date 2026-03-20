@@ -79,21 +79,21 @@ export const SNF_VALUATION_MULTIPLES: Record<MarketTier, ValuationMultiples> = {
 export const ALF_VALUATION_MULTIPLES: Record<MarketTier, ValuationMultiples> = {
   premium: {
     revenueMultiple: { low: 2.0, high: 3.5 },
-    ebitdaMultiple: { low: 12, high: 18 },
-    pricePerBed: { low: 175000, high: 300000 },
-    description: 'West Coast, major metros, Class A product',
+    ebitdaMultiple: { low: 9, high: 14 }, // 2026 confirmed: SNC-heavy 8-10x, EARC/SNC premium 9-10x
+    pricePerBed: { low: 100000, high: 175000 }, // AL $55K-$130K per confirmed comps; West Coast premium
+    description: 'West Coast, major metros, Class A product — SNC/EARC premium (9-10× EBITDAR)',
   },
   growth: {
     revenueMultiple: { low: 1.4, high: 2.2 },
-    ebitdaMultiple: { low: 8, high: 14 },
-    pricePerBed: { low: 100000, high: 175000 },
-    description: 'Sun Belt, secondary metros, strong occupancy trends',
+    ebitdaMultiple: { low: 7, high: 9 }, // 2026 confirmed: AL/MC 7-8x stabilized, SNC-heavy to 10x
+    pricePerBed: { low: 55000, high: 130000 }, // AL confirmed range per 2026 comps
+    description: 'Sun Belt, secondary metros — 7-8× AL/MC, 8-10× SNC-heavy (Cascadia primary market)',
   },
   value: {
     revenueMultiple: { low: 0.8, high: 1.5 },
-    ebitdaMultiple: { low: 5, high: 9 },
-    pricePerBed: { low: 75000, high: 125000 },
-    description: 'Southeast tertiary, older product, repositioning opportunity',
+    ebitdaMultiple: { low: 5, high: 8 }, // SNF leased: 5-8×, stressed AL: 7× floor
+    pricePerBed: { low: 40000, high: 90000 }, // SNF $40-90K per confirmed 2026 data
+    description: 'Tertiary markets, SNF/leased — 5-8× EBITDAR (distressed 5-6×, stabilized 7-8×)',
   },
 };
 
@@ -381,13 +381,26 @@ export const MA_CONTRACT_BENCHMARKS: MAContractBenchmarks = {
 
 export interface BuyerProfile {
   name: string;
-  type: 'pe' | 'reit' | 'strategic';
+  type: 'pe' | 'reit' | 'strategic' | 'strategic_operator';
   dealSizeRange: { min: number; max: number }; // millions
   irrTarget: { low: number; high: number }; // percentage
   riskAppetite: 'conservative' | 'moderate' | 'aggressive' | 'opportunistic';
   assetFocus: string[];
   geographicPreference: string;
   notes: string;
+  targetMetrics?: {
+    ebitdarMargin?: number;
+    occupancy?: number;
+    rentToRevenue?: number;
+    managementFeeRate?: number;
+  };
+  currentPortfolio?: {
+    operations: number;
+    revenue: number;
+    ebitdar: number;
+    ebitdarMargin: number;
+  };
+  ipoTarget?: number;
 }
 
 export const BUYER_PROFILES: BuyerProfile[] = [
@@ -404,7 +417,30 @@ export const BUYER_PROFILES: BuyerProfile[] = [
   { name: 'Omega Healthcare (OHI)', type: 'reit', dealSizeRange: { min: 20, max: 200 }, irrTarget: { low: 8, high: 10 }, riskAppetite: 'moderate', assetFocus: ['SNF'], geographicPreference: 'National', notes: 'Traditional SNF focus, yield-driven, triple-net leases' },
   { name: 'Sabra Health Care (SBRA)', type: 'reit', dealSizeRange: { min: 10, max: 100 }, irrTarget: { low: 7, high: 9.5 }, riskAppetite: 'moderate', assetFocus: ['SNF', 'ALF'], geographicPreference: 'National', notes: 'Value-add repositioning, smaller deal sizes' },
 
-  // Strategic
+  // Strategic Operators
+  {
+    name: 'Cascadia Healthcare',
+    type: 'strategic_operator',
+    dealSizeRange: { min: 5, max: 400 },
+    irrTarget: { low: 15, high: 22 },
+    riskAppetite: 'moderate',
+    assetFocus: ['SNF', 'ALF', 'SNC', 'MC', 'ILF'],
+    geographicPreference: 'ID, OR, WA, MT, AZ, CA',
+    notes: 'Quality-first operator, 58 ops, IPO path to 120+, SNC specialist, 5% mgmt fee model',
+    targetMetrics: {
+      ebitdarMargin: 0.17,
+      occupancy: 0.87,
+      rentToRevenue: 0.25,
+      managementFeeRate: 0.05,
+    },
+    currentPortfolio: {
+      operations: 58,
+      revenue: 590_000_000,
+      ebitdar: 84_500_000,
+      ebitdarMargin: 0.143,
+    },
+    ipoTarget: 120,
+  },
   { name: 'Ensign Group', type: 'strategic', dealSizeRange: { min: 5, max: 50 }, irrTarget: { low: 15, high: 25 }, riskAppetite: 'aggressive', assetFocus: ['SNF'], geographicPreference: 'Western US', notes: 'Turnaround specialist, cluster acquisition strategy, proven ops platform' },
   { name: 'Genesis Healthcare', type: 'strategic', dealSizeRange: { min: 10, max: 100 }, irrTarget: { low: 12, high: 18 }, riskAppetite: 'moderate', assetFocus: ['SNF'], geographicPreference: 'Eastern US', notes: 'Portfolio expansion, integration-focused' },
   { name: 'National HealthCare (NHC)', type: 'strategic', dealSizeRange: { min: 5, max: 75 }, irrTarget: { low: 12, high: 16 }, riskAppetite: 'conservative', assetFocus: ['SNF', 'ALF'], geographicPreference: 'Southeast', notes: 'Quality-first operator, long-term holds, selective growth' },

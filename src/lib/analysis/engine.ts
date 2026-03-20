@@ -116,20 +116,30 @@ export async function analyzeDealDualBrain(deal: AnalysisInput): Promise<{
   });
 
   // Build backward-compatible AnalysisResult from synthesis
-  const analysisResult = mapDualBrainToAnalysisResult(dualBrainResult);
+  const analysisResult = mapDualBrainToAnalysisResult(dualBrainResult, deal);
 
   return { dualBrainResult, analysisResult };
 }
 
 /**
  * Map DualBrainResult to legacy AnalysisResult for backward compatibility.
+ * Applies Cascadia confidence adjustments on top of brain synthesis.
  */
-function mapDualBrainToAnalysisResult(result: DualBrainResult): AnalysisResult {
+function mapDualBrainToAnalysisResult(result: DualBrainResult, deal?: AnalysisInput): AnalysisResult {
   const { newo, dev, synthesis } = result;
 
+  // Apply Cascadia-specific confidence adjustments
+  const { adjustedScore, adjustments } = deal
+    ? applyCascadiaConfidenceAdjustments(synthesis.confidence, deal as any)
+    : { adjustedScore: synthesis.confidence, adjustments: [] };
+
+  const adjustmentNarrative = adjustments.length > 0
+    ? `\n\n**Cascadia Confidence Adjustments:** ${adjustments.map(a => `${a.delta > 0 ? '+' : ''}${a.delta} ${a.reason}`).join(' | ')}`
+    : '';
+
   return {
-    confidenceScore: synthesis.confidence,
-    narrative: synthesis.unifiedNarrative,
+    confidenceScore: adjustedScore,
+    narrative: synthesis.unifiedNarrative + adjustmentNarrative,
     thesis: synthesis.keyInsight,
     financials: dev.valuationScenarios ? [{
       label: 'Base Case',
@@ -664,4 +674,58 @@ function assessDealRisk(deal: any): 'low' | 'medium' | 'high' {
   if (riskScore >= 7) return 'high';
   if (riskScore >= 4) return 'medium';
   return 'low';
+}
+
+// =============================================================================
+// CASCADIA CONFIDENCE SCORE ADJUSTMENT
+// Applies market-aware boosts/penalties based on confirmed deal characteristics
+// =============================================================================
+
+const CASCADIA_CORE_MARKETS = ['OR', 'WA', 'ID', 'MT', 'AZ', 'CA'];
+
+export function applyCascadiaConfidenceAdjustments(
+  baseScore: number,
+  deal: AnalysisInput & { hasT12?: boolean; hasSNC?: boolean }
+): { adjustedScore: number; adjustments: { reason: string; delta: number }[] } {
+  const adjustments: { reason: string; delta: number }[] = [];
+  let delta = 0;
+
+  // +10 if deal has confirmed T12 financials
+  const hasT12 = deal.hasT12 ||
+    deal.documents?.some((d: any) => d.type === 't12' || d.filename?.toLowerCase().includes('t12')) ||
+    deal.financialPeriods?.some((fp: any) => fp.isAnnualized === false && fp.periodEnd);
+  if (hasT12) {
+    adjustments.push({ reason: 'Confirmed T12 financials', delta: 10 });
+    delta += 10;
+  }
+
+  // +10 if deal is in Cascadia's core markets (OR, WA, ID, MT, AZ)
+  const state = deal.primaryState?.toUpperCase() || '';
+  if (CASCADIA_CORE_MARKETS.includes(state)) {
+    adjustments.push({ reason: `Core Cascadia market (${state})`, delta: 10 });
+    delta += 10;
+  } else if (state) {
+    // -15 if deal is outside core markets (first deal in new state)
+    adjustments.push({ reason: `Outside Cascadia core markets (${state}) — new geography risk`, delta: -15 });
+    delta -= 15;
+  }
+
+  // +5 if deal has SNC contracts
+  const hasSNC = deal.hasSNC ||
+    deal.assetType?.toLowerCase().includes('snc') ||
+    deal.name?.toLowerCase().includes('ohana') ||
+    deal.name?.toLowerCase().includes('sapphire');
+  if (hasSNC) {
+    adjustments.push({ reason: 'Oregon SNC contract (defensible revenue moat)', delta: 5 });
+    delta += 5;
+  }
+
+  // -10 if deal has no facilities loaded
+  if (!deal.facilities?.length) {
+    adjustments.push({ reason: 'No facilities loaded — data gap', delta: -10 });
+    delta -= 10;
+  }
+
+  const adjustedScore = Math.min(100, Math.max(10, baseScore + delta));
+  return { adjustedScore, adjustments };
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { Layers, GitCompareArrows, X, TrendingUp, DollarSign, Building2, Circle, Download } from 'lucide-react';
+import { Layers, GitCompareArrows, X, TrendingUp, DollarSign, Building2, Circle, Download, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 interface Deal {
   id: string;
@@ -15,6 +15,9 @@ interface Deal {
   confidenceScore: number;
   askingPrice: number | null;
   ebitdar: number | null;
+  ebitdarMargin: number | null;
+  rentExpense: number | null;
+  totalRevenue: number | null;
   pricePerBed: number | null;
   capRate: string | null;
   valuationLow: number | null;
@@ -36,6 +39,9 @@ const STATUS_COLUMNS = [
   { key: 'closed', label: 'Closed', color: 'border-emerald-400' },
 ];
 
+// Cascadia core markets for scoring boost
+const CASCADIA_CORE_MARKETS = ['OR', 'WA', 'ID', 'MT', 'AZ'];
+
 function formatM(n: number | null) {
   if (!n) return null;
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -48,11 +54,32 @@ function formatPPB(price: number | null, beds: number) {
   return `$${Math.round(price / beds / 1000)}K/bed`;
 }
 
+function formatPercent(n: number | null) {
+  if (n === null || n === undefined) return null;
+  return `${(n * 100).toFixed(1)}%`;
+}
+
 function getRecommendation(conf: number | null): { label: string; color: string } {
   if (!conf) return { label: '—', color: 'text-surface-300' };
   if (conf >= 75) return { label: 'Pursue', color: 'text-emerald-600' };
   if (conf >= 55) return { label: 'Conditional', color: 'text-amber-600' };
   return { label: 'Pass', color: 'text-red-500' };
+}
+
+function hasSNCIndicator(deal: Deal): boolean {
+  const name = deal.name?.toLowerCase() || '';
+  const type = deal.assetType?.toLowerCase() || '';
+  return (
+    type.includes('snc') ||
+    name.includes('ohana') ||
+    name.includes('sapphire') ||
+    name.includes('snc')
+  );
+}
+
+function hasRentRuleViolation(deal: Deal): boolean {
+  if (!deal.rentExpense || !deal.totalRevenue || deal.totalRevenue === 0) return false;
+  return deal.rentExpense / deal.totalRevenue > 0.25;
 }
 
 const HEALTH_COLORS = {
@@ -110,6 +137,28 @@ export default function PipelinePage() {
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
+      {/* Cascadia Context Bar */}
+      <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-primary-50 to-orange-50 dark:from-primary-900/20 dark:to-orange-900/20 rounded-xl border border-primary-200/50 dark:border-primary-700/30 text-xs">
+        <Building2 className="w-4 h-4 text-primary-500 flex-shrink-0" />
+        <span className="font-semibold text-primary-700 dark:text-primary-300">Cascadia Today:</span>
+        <div className="flex items-center gap-3 flex-wrap text-surface-600 dark:text-surface-300">
+          <span><span className="font-bold text-surface-800 dark:text-surface-100">58</span> ops</span>
+          <span className="text-surface-300">·</span>
+          <span><span className="font-bold text-surface-800 dark:text-surface-100">$590M</span> revenue</span>
+          <span className="text-surface-300">·</span>
+          <span><span className="font-bold text-emerald-600">14.3%</span> EBITDAR</span>
+          <span className="text-surface-300">·</span>
+          <span className="text-surface-400">Target:</span>
+          <span className="font-bold text-orange-500">125+ ops</span>
+          <span className="text-surface-300">·</span>
+          <span className="text-surface-400">EBITDAR target:</span>
+          <span className="font-bold text-primary-600">17-20%</span>
+        </div>
+        <div className="ml-auto flex-shrink-0 text-[10px] text-surface-400">
+          OR/WA/ID/MT/AZ · IPO path: 120+ ops
+        </div>
+      </div>
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-surface-800 dark:text-surface-100 flex items-center gap-2">
@@ -137,9 +186,6 @@ export default function PipelinePage() {
               Quick Compare ({compareIds.size})
             </button>
           )}
-          <div className="text-xs text-surface-400">
-            IPO Target: <span className="font-bold text-orange-500">58 → 200 ops</span>
-          </div>
         </div>
       </div>
 
@@ -188,6 +234,7 @@ export default function PipelinePage() {
                   { label: 'Asking Price', render: (d: Deal) => formatM(d.askingPrice) || '—' },
                   { label: 'Price / Bed', render: (d: Deal) => formatPPB(d.askingPrice, d.beds) || '—' },
                   { label: 'EBITDAR', render: (d: Deal) => formatM(d.ebitdar) || <span className="text-red-400 text-[9px]">No data</span> },
+                  { label: 'EBITDAR Margin', render: (d: Deal) => formatPercent(d.ebitdarMargin) || '—' },
                   { label: 'Valuation Range', render: (d: Deal) => d.valuationLow && d.valuationHigh ? `${formatM(d.valuationLow)} — ${formatM(d.valuationHigh)}` : '—' },
                   { label: 'Data Health', render: (d: Deal) => (
                     <span className="flex items-center gap-1.5">
@@ -195,6 +242,8 @@ export default function PipelinePage() {
                       <span>{d.dataCompleteness || 0}%</span>
                     </span>
                   )},
+                  { label: 'SNC', render: (d: Deal) => hasSNCIndicator(d) ? <span className="text-purple-600 font-bold">YES</span> : '—' },
+                  { label: 'Rent Rule', render: (d: Deal) => hasRentRuleViolation(d) ? <span className="text-red-500 font-bold">⚠ &gt;25%</span> : <span className="text-emerald-500">OK</span> },
                   { label: 'Status', render: (d: Deal) => d.status.replace(/_/g, ' ') },
                 ].map((row) => (
                   <tr key={row.label}>
@@ -238,6 +287,9 @@ export default function PipelinePage() {
               </button>
               {col.deals.map((deal) => {
                 const rec = getRecommendation(deal.confidenceScore);
+                const isSNC = hasSNCIndicator(deal);
+                const rentViolation = hasRentRuleViolation(deal);
+                const isCoreMkt = CASCADIA_CORE_MARKETS.includes(deal.primaryState?.toUpperCase());
                 return (
                   <Link
                     key={deal.id}
@@ -259,6 +311,26 @@ export default function PipelinePage() {
                     >
                       {compareIds.has(deal.id) && '✓'}
                     </button>
+
+                    {/* Badges row: SNC + Rent Rule + Core Market */}
+                    <div className="flex items-center gap-1 mb-1 flex-wrap">
+                      {isSNC && (
+                        <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 border border-purple-200 dark:border-purple-700/50">
+                          SNC
+                        </span>
+                      )}
+                      {isCoreMkt && (
+                        <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">
+                          Core
+                        </span>
+                      )}
+                      {rentViolation && (
+                        <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 flex items-center gap-0.5">
+                          <AlertTriangle className="w-2 h-2" />
+                          Rent&gt;25%
+                        </span>
+                      )}
+                    </div>
 
                     <div className="text-xs font-bold text-surface-700 dark:text-surface-200 truncate pr-5">
                       {deal.name}
@@ -282,6 +354,15 @@ export default function PipelinePage() {
                             {formatM(deal.ebitdar)}
                           </span>
                         )}
+                        {deal.ebitdarMargin && (
+                          <span className={cn(
+                            'text-[9px] font-medium',
+                            deal.ebitdarMargin >= 0.17 ? 'text-emerald-600' :
+                            deal.ebitdarMargin >= 0.12 ? 'text-amber-600' : 'text-red-500'
+                          )}>
+                            {formatPercent(deal.ebitdarMargin)} EBITDAR
+                          </span>
+                        )}
                         {deal.askingPrice && deal.beds > 0 && (
                           <span className="text-[9px] text-surface-400 flex items-center gap-0.5">
                             <Building2 className="w-2.5 h-2.5" />
@@ -290,6 +371,25 @@ export default function PipelinePage() {
                         )}
                       </div>
                     )}
+
+                    {/* Data Health Badges: T12, ProForma, Risk */}
+                    <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                      {deal.hasT12 && (
+                        <span className="text-[8px] font-medium px-1 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-700/30">
+                          T12 ✓
+                        </span>
+                      )}
+                      {deal.hasProforma && (
+                        <span className="text-[8px] font-medium px-1 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-700/30">
+                          ProForma ✓
+                        </span>
+                      )}
+                      {deal.hasRisk && (
+                        <span className="text-[8px] font-medium px-1 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-700/30">
+                          Risk ✓
+                        </span>
+                      )}
+                    </div>
 
                     {/* Bottom row: brain dots + confidence + data health + recommendation */}
                     <div className="flex items-center justify-between mt-2">
